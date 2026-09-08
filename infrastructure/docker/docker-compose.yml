@@ -1,0 +1,27 @@
+services:
+
+  postgres:
+    image: postgres:17-alpine
+    container_name: sanes-postgres
+
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: sanesdb
+      POSTGRES_USER: sanesadmin
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
+    ports:
+      - "55432:5432"
+
+    volumes:
+      - sanes_postgres_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sanesadmin -d sanesdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  sanes_postgres_data:

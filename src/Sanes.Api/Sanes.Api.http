@@ -1,0 +1,6 @@
+@Sanes.Api_HostAddress = http://localhost:5157
+
+GET {{Sanes.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

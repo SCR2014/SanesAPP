@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Sanes.Api/Sanes.Api.csproj" />
+    <Project Path="src/Sanes.Application/Sanes.Application.csproj" />
+    <Project Path="src/Sanes.Domain/Sanes.Domain.csproj" />
+    <Project Path="src/Sanes.Infrastructure/Sanes.Infrastructure.csproj" />
+    <Project Path="src/Sanes.Shared/Sanes.Shared.csproj" />
+    <Project Path="src/Sanes.Web/Sanes.Web.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,21 @@
+# .NET
+bin/
+obj/
+
+# Visual Studio / VS Code
+.vs/
+.vscode/
+
+# Secrets / environment
+.env
+**/.env
+
+# User files
+*.user
+*.suo
+
+# Logs
+*.log
+
+# Accidental duplicate infrastructure folder
+/infrastructure/Persistence/SanesDbContext.cs
