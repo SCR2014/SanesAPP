@@ -28,6 +28,11 @@ public class Client
 
     public bool IsActive { get; set; } = true;
 
+    public Guid? CollectionRouteId { get; set; }
+    public CollectionRoute? CollectionRoute { get; set; }
+
+    public int? CollectionRouteOrder { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }

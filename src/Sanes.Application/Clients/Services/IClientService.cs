@@ -10,6 +10,7 @@ public interface IClientService
 
     Task<List<ClientResponse>> GetAllAsync(
         Guid tenantId,
+        Guid? collectionRouteId = null,
         CancellationToken cancellationToken = default);
 
     Task<ClientResponse?> GetByIdAsync(

@@ -22,6 +22,9 @@ public class ClientResponse
     public decimal? Latitude { get; set; }
     public decimal? Longitude { get; set; }
 
+    public Guid? CollectionRouteId { get; set; }
+    public int? CollectionRouteOrder { get; set; }
+
     public string? Notes { get; set; }
 
     public bool IsActive { get; set; }

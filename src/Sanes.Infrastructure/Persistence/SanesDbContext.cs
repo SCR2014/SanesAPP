@@ -15,6 +15,7 @@ public class SanesDbContext : DbContext
     public DbSet<Client> Clients => Set<Client>();
     public DbSet<Loan> Loans => Set<Loan>();
     public DbSet<Payment> Payments => Set<Payment>();
+    public DbSet<CollectionRoute> CollectionRoutes => Set<CollectionRoute>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -133,6 +134,20 @@ public class SanesDbContext : DbContext
 
             entity.HasIndex(x => new { x.TenantId, x.Identification })
             .IsUnique();
+
+            entity.HasOne(x => x.CollectionRoute)
+                .WithMany()
+                .HasForeignKey(x => x.CollectionRouteId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(x => x.CollectionRouteId);
+
+            entity.HasIndex(x => new
+            {
+                x.TenantId,
+                x.CollectionRouteId,
+                x.CollectionRouteOrder
+            });
         });
 
         modelBuilder.Entity<Loan>(entity =>
@@ -237,6 +252,30 @@ public class SanesDbContext : DbContext
             entity.HasIndex(x => new { x.TenantId, x.LoanId });
 
             entity.HasIndex(x => new { x.TenantId, x.PaymentDate });
+        });
+
+        modelBuilder.Entity<CollectionRoute>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.Name)
+                .IsRequired()
+                .HasMaxLength(150);
+
+            entity.Property(x => x.Description)
+                .HasMaxLength(500);
+
+            entity.Property(x => x.OrderMode)
+                .IsRequired();
+
+            entity.HasOne(x => x.Tenant)
+                .WithMany()
+                .HasForeignKey(x => x.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(x => x.TenantId);
+
+            entity.HasIndex(x => new { x.TenantId, x.Name });
         });
     }
 }

@@ -47,6 +47,7 @@ public class ClientsController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<List<ClientResponse>>> GetAll(
         [FromQuery] Guid tenantId,
+        [FromQuery] Guid? collectionRouteId,
         CancellationToken cancellationToken)
     {
         if (tenantId == Guid.Empty)
@@ -59,6 +60,7 @@ public class ClientsController : ControllerBase
 
         var clients = await _clientService.GetAllAsync(
             tenantId,
+            collectionRouteId,
             cancellationToken);
 
         return Ok(clients);

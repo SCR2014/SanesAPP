@@ -49,6 +49,7 @@ public interface ILoanService
         string? search = null,
         Guid? investorId = null,
         Guid? clientId = null,
+        Guid? collectionRouteId = null,
         CancellationToken cancellationToken = default);
 
     Task<CollectionPortfolioSummaryResponse> GetCollectionPortfolioSummaryAsync(
@@ -59,5 +60,6 @@ public interface ILoanService
         string? search = null,
         Guid? investorId = null,
         Guid? clientId = null,
+        Guid? collectionRouteId = null,
         CancellationToken cancellationToken = default);
 }

@@ -1,6 +1,7 @@
 using Sanes.Application.Clients.DTOs;
 using Sanes.Application.Clients.Repositories;
 using Sanes.Application.Tenants.Repositories;
+using Sanes.Application.CollectionRoutes.Repositories;
 using Sanes.Domain.Entities;
 
 namespace Sanes.Application.Clients.Services;
@@ -9,13 +10,16 @@ public class ClientService : IClientService
 {
     private readonly IClientRepository _clientRepository;
     private readonly ITenantRepository _tenantRepository;
-
+    private readonly ICollectionRouteRepository _collectionRouteRepository;
+    
     public ClientService(
         IClientRepository clientRepository,
-        ITenantRepository tenantRepository)
+        ITenantRepository tenantRepository,
+        ICollectionRouteRepository collectionRouteRepository)
     {
         _clientRepository = clientRepository;
         _tenantRepository = tenantRepository;
+        _collectionRouteRepository = collectionRouteRepository;
     }
 
     public async Task<ClientResponse> CreateAsync(
@@ -30,6 +34,21 @@ public class ClientService : IClientService
         {
             throw new InvalidOperationException(
                 "Tenant not found or inactive.");
+        }
+
+        if (request.CollectionRouteId.HasValue)
+        {
+            var collectionRoute =
+                await _collectionRouteRepository.GetByIdAsync(
+                    request.CollectionRouteId.Value,
+                    request.TenantId,
+                    cancellationToken);
+
+            if (collectionRoute is null)
+            {
+                throw new InvalidOperationException(
+                    "Collection route not found, inactive, or does not belong to this tenant.");
+            }
         }
 
         var identification = NormalizeOptional(request.Identification);
@@ -61,6 +80,8 @@ public class ClientService : IClientService
             Address = NormalizeOptional(request.Address),
             Latitude = request.Latitude,
             Longitude = request.Longitude,
+            CollectionRouteId = request.CollectionRouteId,
+            CollectionRouteOrder = request.CollectionRouteOrder,
             Notes = NormalizeOptional(request.Notes),
             IsActive = true,
             CreatedAt = DateTime.UtcNow,
@@ -75,10 +96,12 @@ public class ClientService : IClientService
 
     public async Task<List<ClientResponse>> GetAllAsync(
         Guid tenantId,
+        Guid? collectionRouteId = null,
         CancellationToken cancellationToken = default)
     {
         var clients = await _clientRepository.GetAllAsync(
             tenantId,
+            collectionRouteId,
             cancellationToken);
 
         return clients
@@ -117,6 +140,23 @@ public class ClientService : IClientService
             return null;
         }
 
+        var previousCollectionRouteId = client.CollectionRouteId;
+
+        if (request.CollectionRouteId.HasValue)
+        {
+            var collectionRoute =
+                await _collectionRouteRepository.GetByIdAsync(
+                    request.CollectionRouteId.Value,
+                    tenantId,
+                    cancellationToken);
+
+            if (collectionRoute is null)
+            {
+                throw new InvalidOperationException(
+                    "Collection route not found, inactive, or does not belong to this tenant.");
+            }
+        }
+
         var identification = NormalizeOptional(request.Identification);
 
         if (!string.IsNullOrWhiteSpace(identification))
@@ -144,6 +184,14 @@ public class ClientService : IClientService
         client.Address = NormalizeOptional(request.Address);
         client.Latitude = request.Latitude;
         client.Longitude = request.Longitude;
+
+        client.CollectionRouteId = request.CollectionRouteId;
+
+        if (previousCollectionRouteId != request.CollectionRouteId)
+        {
+            client.CollectionRouteOrder = null;
+        }
+
         client.Notes = NormalizeOptional(request.Notes);
         client.UpdatedAt = DateTime.UtcNow;
 
@@ -221,6 +269,8 @@ public class ClientService : IClientService
             Address = client.Address,
             Latitude = client.Latitude,
             Longitude = client.Longitude,
+            CollectionRouteId = client.CollectionRouteId,
+            CollectionRouteOrder = client.CollectionRouteOrder,
             Notes = client.Notes,
             IsActive = client.IsActive,
             CreatedAt = client.CreatedAt,
