@@ -34,6 +34,8 @@ public class UpdateClientRequest : IValidatableObject
 
     public decimal? Longitude { get; set; }
 
+    public Guid? CollectionRouteId { get; set; }
+
     [MaxLength(1000)]
     public string? Notes { get; set; }
 

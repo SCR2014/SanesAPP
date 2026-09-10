@@ -266,6 +266,7 @@ public class LoansController : ControllerBase
         [FromQuery] string? search = null,
         [FromQuery] Guid? investorId = null,
         [FromQuery] Guid? clientId = null,
+        [FromQuery] Guid? collectionRouteId = null,
         CancellationToken cancellationToken = default)
     {
         if (tenantId == Guid.Empty)
@@ -300,6 +301,15 @@ public class LoansController : ControllerBase
             });
         }
 
+        if (collectionRouteId.HasValue &&
+            collectionRouteId.Value == Guid.Empty)
+        {
+            return BadRequest(new
+            {
+                message = "CollectionRouteId must be a valid identifier."
+            });
+        }
+
         try
         {
             var portfolio =
@@ -311,6 +321,7 @@ public class LoansController : ControllerBase
                     search,
                     investorId,
                     clientId,
+                    collectionRouteId,
                     cancellationToken);
 
             return Ok(portfolio);
@@ -333,6 +344,7 @@ public class LoansController : ControllerBase
         [FromQuery] string? search = null,
         [FromQuery] Guid? investorId = null,
         [FromQuery] Guid? clientId = null,
+        [FromQuery] Guid? collectionRouteId = null,
         CancellationToken cancellationToken = default)
     {
         if (tenantId == Guid.Empty)
@@ -367,6 +379,15 @@ public class LoansController : ControllerBase
             });
         }
 
+        if (collectionRouteId.HasValue &&
+            collectionRouteId.Value == Guid.Empty)
+        {
+            return BadRequest(new
+            {
+                message = "CollectionRouteId must be a valid identifier."
+            });
+        }
+
         try
         {
             var summary =
@@ -378,6 +399,7 @@ public class LoansController : ControllerBase
                     search,
                     investorId,
                     clientId,
+                    collectionRouteId,
                     cancellationToken);
 
             return Ok(summary);

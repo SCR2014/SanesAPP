@@ -37,8 +37,11 @@ public class CreateClientRequest : IValidatableObject
 
     public decimal? Longitude { get; set; }
 
+    public Guid? CollectionRouteId { get; set; }
+
     [MaxLength(1000)]
     public string? Notes { get; set; }
+    public int? CollectionRouteOrder { get; internal set; }
 
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {

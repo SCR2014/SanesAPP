@@ -1,8 +1,10 @@
 using Microsoft.EntityFrameworkCore;
 using Sanes.Application.Clients.Repositories;
+using Sanes.Application.CollectionRoutes.Repositories;
 using Sanes.Application.Tenants.Repositories;
 using Sanes.Application.Tenants.Services;
 using Sanes.Infrastructure.Clients.Repositories;
+using Sanes.Infrastructure.CollectionRoutes.Repositories;
 using Sanes.Application.Loans.Repositories;
 using Sanes.Application.Payments.Repositories;
 using Sanes.Infrastructure.Loans.Repositories;
@@ -15,6 +17,7 @@ using Sanes.Application.Investors.Services;
 using Sanes.Application.Clients.Services;
 using Sanes.Application.Loans.Services;
 using Sanes.Application.Payments.Services;
+using Sanes.Application.CollectionRoutes.Services;
 
 
 
@@ -39,7 +42,10 @@ builder.Services.AddScoped<ILoanService, LoanService>();
 builder.Services.AddScoped<IPaymentRepository, PaymentRepository>();
 builder.Services.AddScoped<IPaymentService, PaymentService>();
 
-builder.Services.AddScoped<IPaymentRepository, PaymentRepository>();
+builder.Services.AddScoped<ICollectionRouteRepository, CollectionRouteRepository>();
+builder.Services.AddScoped<ICollectionRouteService, CollectionRouteService>();
+
+builder.Services.AddScoped<ICollectionRouteRepository, CollectionRouteRepository>();
 
 builder.Services.AddControllers();
 
@@ -87,3 +93,5 @@ record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
     public int TemperatureF =>
         32 + (int)(TemperatureC / 0.5556);
 }
+
+public partial class Program { }

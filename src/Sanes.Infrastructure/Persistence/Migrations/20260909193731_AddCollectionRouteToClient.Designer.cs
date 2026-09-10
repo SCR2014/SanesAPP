@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Sanes.Infrastructure.Persistence;
@@ -11,9 +12,11 @@ using Sanes.Infrastructure.Persistence;
 namespace Sanes.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(SanesDbContext))]
-    partial class SanesDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260909193731_AddCollectionRouteToClient")]
+    partial class AddCollectionRouteToClient
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -34,9 +37,6 @@ namespace Sanes.Infrastructure.Persistence.Migrations
 
                     b.Property<Guid?>("CollectionRouteId")
                         .HasColumnType("uuid");
-
-                    b.Property<int?>("CollectionRouteOrder")
-                        .HasColumnType("integer");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -103,8 +103,6 @@ namespace Sanes.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("TenantId", "Phone");
 
-                    b.HasIndex("TenantId", "CollectionRouteId", "CollectionRouteOrder");
-
                     b.ToTable("clients", (string)null);
                 });
 
@@ -128,9 +126,6 @@ namespace Sanes.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(150)
                         .HasColumnType("character varying(150)");
-
-                    b.Property<int>("OrderMode")
-                        .HasColumnType("integer");
 
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uuid");

@@ -842,6 +842,7 @@ public class LoanService : ILoanService
         string? search = null,
         Guid? investorId = null,
         Guid? clientId = null,
+        Guid? collectionRouteId = null,
         CancellationToken cancellationToken = default)
     {
         var portfolio = await GetActivePortfolioAsync(
@@ -896,6 +897,23 @@ public class LoanService : ILoanService
                 x => x.ClientId == clientId.Value);
         }
 
+        if (collectionRouteId.HasValue)
+        {
+            var routeClients =
+                await _clientRepository.GetAllAsync(
+                    tenantId,
+                    collectionRouteId,
+                    cancellationToken);
+
+            var routeClientIds =
+                routeClients
+                    .Select(x => x.Id)
+                    .ToHashSet();
+
+            query = query.Where(
+                x => routeClientIds.Contains(x.ClientId));
+        }
+
         return query
             .OrderByDescending(x => x.IsOverdue)
             .ThenBy(x => x.NextPaymentDate)
@@ -929,6 +947,7 @@ public class LoanService : ILoanService
         string? search = null,
         Guid? investorId = null,
         Guid? clientId = null,
+        Guid? collectionRouteId = null,
         CancellationToken cancellationToken = default)
     {
         var portfolio = await GetCollectionPortfolioAsync(
@@ -939,6 +958,7 @@ public class LoanService : ILoanService
             search,
             investorId,
             clientId,
+            collectionRouteId,
             cancellationToken);
 
         return new CollectionPortfolioSummaryResponse
