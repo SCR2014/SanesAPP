@@ -19,6 +19,8 @@ public class SanesDbContext : DbContext
     public DbSet<AppUser> AppUsers => Set<AppUser>();
     public DbSet<AppUserCollectionRoute> AppUserCollectionRoutes
     => Set<AppUserCollectionRoute>();
+    public DbSet<CollectionRouteSchedule> CollectionRouteSchedules
+    => Set<CollectionRouteSchedule>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -336,6 +338,32 @@ public class SanesDbContext : DbContext
                 .OnDelete(DeleteBehavior.Restrict);
 
             entity.HasIndex(x => x.CollectionRouteId);
+        });
+
+        modelBuilder.Entity<CollectionRouteSchedule>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.DayOfWeek)
+                .IsRequired();
+
+            entity.Property(x => x.StartTime);
+
+            entity.Property(x => x.EndTime);
+
+            entity.HasOne(x => x.CollectionRoute)
+                .WithMany(x => x.Schedules)
+                .HasForeignKey(x => x.CollectionRouteId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(x => x.CollectionRouteId);
+
+            entity.HasIndex(x => new
+            {
+                x.CollectionRouteId,
+                x.DayOfWeek
+            })
+            .IsUnique();
         });
     }
 }

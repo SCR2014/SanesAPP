@@ -17,6 +17,9 @@ public class CollectionRoute
     public ICollection<AppUserCollectionRoute> AssignedUsers { get; set; }
         = new List<AppUserCollectionRoute>();
 
+    public ICollection<CollectionRouteSchedule> Schedules { get; set; }
+    = new List<CollectionRouteSchedule>();
+
     public bool IsActive { get; set; } = true;
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
