@@ -16,6 +16,9 @@ public class SanesDbContext : DbContext
     public DbSet<Loan> Loans => Set<Loan>();
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<CollectionRoute> CollectionRoutes => Set<CollectionRoute>();
+    public DbSet<AppUser> AppUsers => Set<AppUser>();
+    public DbSet<AppUserCollectionRoute> AppUserCollectionRoutes
+    => Set<AppUserCollectionRoute>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -276,6 +279,63 @@ public class SanesDbContext : DbContext
             entity.HasIndex(x => x.TenantId);
 
             entity.HasIndex(x => new { x.TenantId, x.Name });
+        });
+
+        modelBuilder.Entity<AppUser>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.Name)
+                .IsRequired()
+                .HasMaxLength(150);
+
+            entity.Property(x => x.Username)
+                .IsRequired()
+                .HasMaxLength(100);
+
+            entity.Property(x => x.Email)
+                .HasMaxLength(150);
+
+            entity.Property(x => x.Phone)
+                .HasMaxLength(30);
+
+            entity.Property(x => x.Role)
+                .IsRequired();
+
+            entity.HasOne(x => x.Tenant)
+                .WithMany()
+                .HasForeignKey(x => x.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(x => x.TenantId);
+
+            entity.HasIndex(x => new
+            {
+                x.TenantId,
+                x.Username
+            })
+            .IsUnique();
+        });
+
+        modelBuilder.Entity<AppUserCollectionRoute>(entity =>
+        {
+            entity.HasKey(x => new
+            {
+                x.AppUserId,
+                x.CollectionRouteId
+            });
+
+            entity.HasOne(x => x.AppUser)
+                .WithMany(x => x.CollectionRoutes)
+                .HasForeignKey(x => x.AppUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.CollectionRoute)
+                .WithMany(x => x.AssignedUsers)
+                .HasForeignKey(x => x.CollectionRouteId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(x => x.CollectionRouteId);
         });
     }
 }

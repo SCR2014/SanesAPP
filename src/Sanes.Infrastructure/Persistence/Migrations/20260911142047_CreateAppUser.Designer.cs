@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Sanes.Infrastructure.Persistence;
@@ -11,9 +12,11 @@ using Sanes.Infrastructure.Persistence;
 namespace Sanes.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(SanesDbContext))]
-    partial class SanesDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260911142047_CreateAppUser")]
+    partial class CreateAppUser
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -69,24 +72,6 @@ namespace Sanes.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("AppUsers");
-                });
-
-            modelBuilder.Entity("Sanes.Domain.Entities.AppUserCollectionRoute", b =>
-                {
-                    b.Property<Guid>("AppUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("CollectionRouteId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("AssignedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("AppUserId", "CollectionRouteId");
-
-                    b.HasIndex("CollectionRouteId");
-
-                    b.ToTable("AppUserCollectionRoutes");
                 });
 
             modelBuilder.Entity("Sanes.Domain.Entities.Client", b =>
@@ -431,25 +416,6 @@ namespace Sanes.Infrastructure.Persistence.Migrations
                     b.Navigation("Tenant");
                 });
 
-            modelBuilder.Entity("Sanes.Domain.Entities.AppUserCollectionRoute", b =>
-                {
-                    b.HasOne("Sanes.Domain.Entities.AppUser", "AppUser")
-                        .WithMany("CollectionRoutes")
-                        .HasForeignKey("AppUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Sanes.Domain.Entities.CollectionRoute", "CollectionRoute")
-                        .WithMany("AssignedUsers")
-                        .HasForeignKey("CollectionRouteId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("AppUser");
-
-                    b.Navigation("CollectionRoute");
-                });
-
             modelBuilder.Entity("Sanes.Domain.Entities.Client", b =>
                 {
                     b.HasOne("Sanes.Domain.Entities.CollectionRoute", "CollectionRoute")
@@ -534,16 +500,6 @@ namespace Sanes.Infrastructure.Persistence.Migrations
                     b.Navigation("Loan");
 
                     b.Navigation("Tenant");
-                });
-
-            modelBuilder.Entity("Sanes.Domain.Entities.AppUser", b =>
-                {
-                    b.Navigation("CollectionRoutes");
-                });
-
-            modelBuilder.Entity("Sanes.Domain.Entities.CollectionRoute", b =>
-                {
-                    b.Navigation("AssignedUsers");
                 });
 #pragma warning restore 612, 618
         }

@@ -18,8 +18,9 @@ using Sanes.Application.Clients.Services;
 using Sanes.Application.Loans.Services;
 using Sanes.Application.Payments.Services;
 using Sanes.Application.CollectionRoutes.Services;
-
-
+using Sanes.Application.AppUsers.Repositories;
+using Sanes.Infrastructure.AppUsers.Repositories;
+using Sanes.Application.AppUsers.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -46,6 +47,11 @@ builder.Services.AddScoped<ICollectionRouteRepository, CollectionRouteRepository
 builder.Services.AddScoped<ICollectionRouteService, CollectionRouteService>();
 
 builder.Services.AddScoped<ICollectionRouteRepository, CollectionRouteRepository>();
+
+builder.Services.AddScoped<IAppUserRepository, AppUserRepository>();
+builder.Services.AddScoped<IAppUserService, AppUserService>();
+
+builder.Services.AddScoped<IAppUserCollectionRouteRepository,AppUserCollectionRouteRepository>();
 
 builder.Services.AddControllers();
 

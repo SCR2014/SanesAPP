@@ -14,6 +14,9 @@ public class CollectionRoute
     public CollectionRouteOrderMode OrderMode { get; set; }
         = CollectionRouteOrderMode.Manual;
 
+    public ICollection<AppUserCollectionRoute> AssignedUsers { get; set; }
+        = new List<AppUserCollectionRoute>();
+
     public bool IsActive { get; set; } = true;
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
