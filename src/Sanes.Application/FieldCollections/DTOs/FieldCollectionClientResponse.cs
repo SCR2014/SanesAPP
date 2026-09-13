@@ -1,6 +1,6 @@
-namespace Sanes.Application.CollectionAgenda.DTOs;
+namespace Sanes.Application.FieldCollections.DTOs;
 
-public class CollectionAgendaClientResponse
+public class FieldCollectionClientResponse
 {
     public Guid ClientId { get; set; }
 
@@ -12,9 +12,12 @@ public class CollectionAgendaClientResponse
 
     public string? Address { get; set; }
 
-    public int? CollectionRouteOrder { get; set; }
-
     public decimal? Latitude { get; set; }
 
     public decimal? Longitude { get; set; }
+
+    public int? CollectionRouteOrder { get; set; }
+
+    public List<FieldCollectionLoanResponse> Loans { get; set; }
+        = new();
 }

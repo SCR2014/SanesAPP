@@ -2,6 +2,9 @@ using Sanes.Application.Loans.Repositories;
 using Sanes.Application.Payments.DTOs;
 using Sanes.Application.Payments.Repositories;
 using Sanes.Application.Tenants.Repositories;
+using Sanes.Application.AppUsers.Repositories;
+using Sanes.Application.CollectionRoutes.Repositories;
+using Sanes.Application.Clients.Repositories;
 using Sanes.Domain.Entities;
 using Sanes.Domain.Enums;
 
@@ -12,15 +15,27 @@ public class PaymentService : IPaymentService
     private readonly IPaymentRepository _paymentRepository;
     private readonly ILoanRepository _loanRepository;
     private readonly ITenantRepository _tenantRepository;
+    private readonly IAppUserRepository _appUserRepository;
+    private readonly ICollectionRouteRepository _collectionRouteRepository;
+    private readonly IAppUserCollectionRouteRepository _appUserCollectionRouteRepository;
+    private readonly IClientRepository _clientRepository;
 
     public PaymentService(
         IPaymentRepository paymentRepository,
         ILoanRepository loanRepository,
-        ITenantRepository tenantRepository)
+        ITenantRepository tenantRepository,
+        IAppUserRepository appUserRepository,
+        ICollectionRouteRepository collectionRouteRepository,
+        IAppUserCollectionRouteRepository appUserCollectionRouteRepository,
+        IClientRepository clientRepository)
     {
         _paymentRepository = paymentRepository;
         _loanRepository = loanRepository;
         _tenantRepository = tenantRepository;
+        _appUserRepository = appUserRepository;
+        _collectionRouteRepository = collectionRouteRepository;
+        _appUserCollectionRouteRepository = appUserCollectionRouteRepository;
+        _clientRepository = clientRepository;
     }
 
     public async Task<PaymentResponse> CreateAsync(
@@ -52,6 +67,15 @@ public class PaymentService : IPaymentService
         {
             throw new InvalidOperationException(
                 "Payments can only be registered for active loans.");
+        }
+
+        if (request.CollectedByAppUserId.HasValue ||
+            request.CollectionRouteId.HasValue)
+        {
+            await ValidateFieldCollectionContextAsync(
+                request,
+                loan,
+                cancellationToken);
         }
 
         var totalAmount =
@@ -94,6 +118,8 @@ public class PaymentService : IPaymentService
             Amount = request.Amount,
             PaymentDate = paymentDate,
             PaymentType = request.PaymentType,
+            CollectedByAppUserId = request.CollectedByAppUserId,
+            CollectionRouteId = request.CollectionRouteId,
             Notes = NormalizeOptional(request.Notes),
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
@@ -313,6 +339,10 @@ public class PaymentService : IPaymentService
             Id = payment.Id,
             TenantId = payment.TenantId,
             LoanId = payment.LoanId,
+            CollectedByAppUserId =
+                payment.CollectedByAppUserId,
+            CollectionRouteId =
+                payment.CollectionRouteId,
             Amount = payment.Amount,
             PaymentDate = payment.PaymentDate,
             PaymentType = payment.PaymentType,
@@ -320,5 +350,78 @@ public class PaymentService : IPaymentService
             CreatedAt = payment.CreatedAt,
             UpdatedAt = payment.UpdatedAt
         };
+    }
+
+    private async Task ValidateFieldCollectionContextAsync(
+        CreatePaymentRequest request,
+        Loan loan,
+        CancellationToken cancellationToken)
+    {
+        if (!request.CollectedByAppUserId.HasValue ||
+            !request.CollectionRouteId.HasValue)
+        {
+            throw new InvalidOperationException(
+                "CollectedByAppUserId and CollectionRouteId must be provided together.");
+        }
+
+        var collector =
+            await _appUserRepository.GetByIdAsync(
+                request.CollectedByAppUserId.Value,
+                request.TenantId,
+                cancellationToken);
+
+        if (collector is null)
+        {
+            throw new InvalidOperationException(
+                "Collector not found, inactive, or does not belong to the specified tenant.");
+        }
+
+        if (collector.Role != AppUserRole.Collector)
+        {
+            throw new InvalidOperationException(
+                "The selected app user is not a collector.");
+        }
+
+        var route =
+            await _collectionRouteRepository.GetByIdAsync(
+                request.CollectionRouteId.Value,
+                request.TenantId,
+                cancellationToken);
+
+        if (route is null)
+        {
+            throw new InvalidOperationException(
+                "Collection route not found, inactive, or does not belong to the specified tenant.");
+        }
+
+        var collectorAssignedToRoute =
+            await _appUserCollectionRouteRepository.ExistsAsync(
+                collector.Id,
+                route.Id,
+                cancellationToken);
+
+        if (!collectorAssignedToRoute)
+        {
+            throw new InvalidOperationException(
+                "The collector is not assigned to the specified collection route.");
+        }
+
+        var client =
+            await _clientRepository.GetByIdAsync(
+                request.TenantId,
+                loan.ClientId,
+                cancellationToken);
+
+        if (client is null)
+        {
+            throw new InvalidOperationException(
+                "Loan client not found, inactive, or does not belong to the specified tenant.");
+        }
+
+        if (client.CollectionRouteId != route.Id)
+        {
+            throw new InvalidOperationException(
+                "The loan client does not belong to the specified collection route.");
+        }
     }
 }

@@ -252,6 +252,20 @@ public class SanesDbContext : DbContext
                 .HasForeignKey(x => x.LoanId)
                 .OnDelete(DeleteBehavior.Restrict);
 
+            entity.HasOne(x => x.CollectedByAppUser)
+                .WithMany()
+                .HasForeignKey(x => x.CollectedByAppUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.CollectionRoute)
+                .WithMany()
+                .HasForeignKey(x => x.CollectionRouteId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(x => x.CollectedByAppUserId);
+
+            entity.HasIndex(x => x.CollectionRouteId);
+
             entity.HasIndex(x => x.TenantId);
 
             entity.HasIndex(x => new { x.TenantId, x.LoanId });

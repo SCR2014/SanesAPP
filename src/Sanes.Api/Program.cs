@@ -27,6 +27,7 @@ using Sanes.Application.CollectionRouteSchedules.Services;
 using Sanes.Application.CollectionAgenda.Repositories;
 using Sanes.Infrastructure.CollectionAgenda.Repositories;
 using Sanes.Application.CollectionAgenda.Services;
+using Sanes.Application.FieldCollections.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -72,6 +73,10 @@ builder.Services.AddScoped<
 builder.Services.AddScoped<
     ICollectionAgendaService,
     CollectionAgendaService>();
+
+builder.Services.AddScoped<
+    IFieldCollectionService,
+    FieldCollectionService>();
 
 builder.Services.AddControllers();
 

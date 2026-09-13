@@ -175,7 +175,12 @@ public class CollectionAgendaService : ICollectionAgendaService
                                     Address =
                                         x.Address,
                                     CollectionRouteOrder =
-                                        x.CollectionRouteOrder
+                                        x.CollectionRouteOrder,
+                                    Latitude =
+                                        x.Latitude,
+
+                                    Longitude =
+                                        x.Longitude
                                 })
                             .ToList();
 
