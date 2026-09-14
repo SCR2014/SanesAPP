@@ -5,6 +5,7 @@ namespace Sanes.Application.CollectionRouteSchedules.Services;
 public interface ICollectionRouteScheduleService
 {
     Task<CollectionRouteScheduleResponse> CreateAsync(
+        Guid tenantId,
         CreateCollectionRouteScheduleRequest request,
         CancellationToken cancellationToken = default);
 

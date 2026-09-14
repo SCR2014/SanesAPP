@@ -5,6 +5,7 @@ namespace Sanes.Application.Investors.Services;
 public interface IInvestorService
 {
     Task<InvestorResponse> CreateAsync(
+        Guid tenantId,
         CreateInvestorRequest request,
         CancellationToken cancellationToken = default);
 

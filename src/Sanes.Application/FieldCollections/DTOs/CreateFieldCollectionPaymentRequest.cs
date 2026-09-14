@@ -6,12 +6,6 @@ namespace Sanes.Application.FieldCollections.DTOs;
 public class CreateFieldCollectionPaymentRequest
 {
     [Required]
-    public Guid TenantId { get; set; }
-
-    [Required]
-    public Guid AppUserId { get; set; }
-
-    [Required]
     public Guid CollectionRouteId { get; set; }
 
     [Required]

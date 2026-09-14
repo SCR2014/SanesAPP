@@ -5,6 +5,7 @@ namespace Sanes.Application.Loans.Services;
 public interface ILoanService
 {
     Task<LoanResponse> CreateAsync(
+        Guid tenantId,
         CreateLoanRequest request,
         CancellationToken cancellationToken = default);
 

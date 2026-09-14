@@ -1,6 +1,9 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Sanes.Api.IntegrationTests.Helpers;
+using Sanes.Application.Authentication.DTOs;
 using Sanes.Application.Clients.DTOs;
 using Sanes.Application.CollectionRouteSchedules.DTOs;
 using Sanes.Application.CollectionRoutes.DTOs;
@@ -14,44 +17,55 @@ namespace Sanes.Api.IntegrationTests.FieldCollections;
 public class FieldCollectionsTests
     : IClassFixture<CustomWebApplicationFactory>
 {
-    private readonly HttpClient _client;
+    private readonly CustomWebApplicationFactory _factory;
 
     public FieldCollectionsTests(
         CustomWebApplicationFactory factory)
     {
-        _client = factory.CreateClient();
+        _factory = factory;
     }
+
+    // ============================================================
+    // DAILY COLLECTION
+    // ============================================================
 
     [Fact]
     public async Task GetDaily_ForScheduledAssignedRoute_ReturnsOperationalPortfolio()
     {
-        var tenantId = await CreateTenantAsync();
-        var routeId = await CreateRouteAsync(tenantId);
-        var collectorId = await CreateCollectorAsync(tenantId);
+        var context = await CreateContextAsync();
+
+        var routeId =
+            await CreateRouteAsync(
+                context.Client);
+
+        var collector =
+            await CreateCollectorAsync(
+                context);
 
         await AssignRouteAsync(
-            tenantId,
-            collectorId,
+            context.Client,
+            collector.Id,
             routeId);
 
         await CreateScheduleAsync(
-            tenantId,
+            context.Client,
             routeId,
             CollectionWeekDay.Monday);
 
         var investorId =
-            await CreateInvestorAsync(tenantId);
+            await CreateInvestorAsync(
+                context.Client);
 
         var clientId =
             await CreateClientAsync(
-                tenantId,
+                context.Client,
                 routeId,
                 "Field",
                 "Client");
 
         var loan =
             await CreateLoanAsync(
-                tenantId,
+                context.Client,
                 investorId,
                 clientId,
                 new DateTime(
@@ -63,10 +77,14 @@ public class FieldCollectionsTests
                     0,
                     DateTimeKind.Utc));
 
+        var collectorClient =
+            await LoginCollectorAsync(
+                context.TenantId,
+                collector);
+
         var response =
             await GetDailyAsync(
-                tenantId,
-                collectorId,
+                collectorClient,
                 new DateOnly(2026, 9, 14));
 
         Assert.Equal(
@@ -75,7 +93,8 @@ public class FieldCollectionsTests
 
         var result =
             await response.Content
-                .ReadFromJsonAsync<FieldCollectionDailyResponse>();
+                .ReadFromJsonAsync<
+                    FieldCollectionDailyResponse>();
 
         Assert.NotNull(result);
 
@@ -84,7 +103,7 @@ public class FieldCollectionsTests
             result.Date);
 
         Assert.Equal(
-            collectorId,
+            collector.Id,
             result.AppUserId);
 
         Assert.Equal(1, result.RoutesCount);
@@ -93,7 +112,9 @@ public class FieldCollectionsTests
         Assert.Equal(1300m, result.TotalBalance);
         Assert.Equal(100m, result.TotalAmountDue);
 
-        var route = Assert.Single(result.Routes);
+        var route =
+            Assert.Single(
+                result.Routes);
 
         Assert.Equal(
             routeId,
@@ -104,16 +125,33 @@ public class FieldCollectionsTests
         Assert.Equal(1300m, route.TotalBalance);
         Assert.Equal(100m, route.TotalAmountDue);
 
-        var client = Assert.Single(route.Clients);
+        var client =
+            Assert.Single(
+                route.Clients);
 
-        Assert.Equal(clientId, client.ClientId);
-        Assert.Equal("Field", client.FirstName);
-        Assert.Equal("Client", client.LastName);
-        Assert.Equal(19.45m, client.Latitude);
-        Assert.Equal(-70.69m, client.Longitude);
+        Assert.Equal(
+            clientId,
+            client.ClientId);
+
+        Assert.Equal(
+            "Field",
+            client.FirstName);
+
+        Assert.Equal(
+            "Client",
+            client.LastName);
+
+        Assert.Equal(
+            19.45m,
+            client.Latitude);
+
+        Assert.Equal(
+            -70.69m,
+            client.Longitude);
 
         var returnedLoan =
-            Assert.Single(client.Loans);
+            Assert.Single(
+                client.Loans);
 
         Assert.Equal(
             loan.Id,
@@ -131,24 +169,34 @@ public class FieldCollectionsTests
     [Fact]
     public async Task GetDaily_ForUnscheduledDay_ReturnsEmpty()
     {
-        var tenantId = await CreateTenantAsync();
-        var routeId = await CreateRouteAsync(tenantId);
-        var collectorId = await CreateCollectorAsync(tenantId);
+        var context = await CreateContextAsync();
+
+        var routeId =
+            await CreateRouteAsync(
+                context.Client);
+
+        var collector =
+            await CreateCollectorAsync(
+                context);
 
         await AssignRouteAsync(
-            tenantId,
-            collectorId,
+            context.Client,
+            collector.Id,
             routeId);
 
         await CreateScheduleAsync(
-            tenantId,
+            context.Client,
             routeId,
             CollectionWeekDay.Monday);
 
+        var collectorClient =
+            await LoginCollectorAsync(
+                context.TenantId,
+                collector);
+
         var response =
             await GetDailyAsync(
-                tenantId,
-                collectorId,
+                collectorClient,
                 new DateOnly(2026, 9, 15));
 
         Assert.Equal(
@@ -157,7 +205,8 @@ public class FieldCollectionsTests
 
         var result =
             await response.Content
-                .ReadFromJsonAsync<FieldCollectionDailyResponse>();
+                .ReadFromJsonAsync<
+                    FieldCollectionDailyResponse>();
 
         Assert.NotNull(result);
 
@@ -172,41 +221,52 @@ public class FieldCollectionsTests
     [Fact]
     public async Task GetDaily_ReturnsOnlyRoutesAssignedToCollector()
     {
-        var tenantId = await CreateTenantAsync();
+        var context = await CreateContextAsync();
 
-        var route1 = await CreateRouteAsync(tenantId);
-        var route2 = await CreateRouteAsync(tenantId);
+        var route1 =
+            await CreateRouteAsync(
+                context.Client);
+
+        var route2 =
+            await CreateRouteAsync(
+                context.Client);
 
         var collector1 =
-            await CreateCollectorAsync(tenantId);
+            await CreateCollectorAsync(
+                context);
 
         var collector2 =
-            await CreateCollectorAsync(tenantId);
+            await CreateCollectorAsync(
+                context);
 
         await AssignRouteAsync(
-            tenantId,
-            collector1,
+            context.Client,
+            collector1.Id,
             route1);
 
         await AssignRouteAsync(
-            tenantId,
-            collector2,
+            context.Client,
+            collector2.Id,
             route2);
 
         await CreateScheduleAsync(
-            tenantId,
+            context.Client,
             route1,
             CollectionWeekDay.Monday);
 
         await CreateScheduleAsync(
-            tenantId,
+            context.Client,
             route2,
             CollectionWeekDay.Monday);
 
+        var collectorClient =
+            await LoginCollectorAsync(
+                context.TenantId,
+                collector1);
+
         var response =
             await GetDailyAsync(
-                tenantId,
-                collector1,
+                collectorClient,
                 new DateOnly(2026, 9, 14));
 
         Assert.Equal(
@@ -215,11 +275,14 @@ public class FieldCollectionsTests
 
         var result =
             await response.Content
-                .ReadFromJsonAsync<FieldCollectionDailyResponse>();
+                .ReadFromJsonAsync<
+                    FieldCollectionDailyResponse>();
 
         Assert.NotNull(result);
 
-        var route = Assert.Single(result.Routes);
+        var route =
+            Assert.Single(
+                result.Routes);
 
         Assert.Equal(
             route1,
@@ -227,79 +290,109 @@ public class FieldCollectionsTests
 
         Assert.DoesNotContain(
             result.Routes,
-            x => x.CollectionRouteId == route2);
+            x =>
+                x.CollectionRouteId ==
+                route2);
     }
 
     [Fact]
-    public async Task GetDaily_WithAdministrator_ReturnsBadRequest()
+    public async Task GetDaily_WithAdministrator_ReturnsForbidden()
     {
-        var tenantId = await CreateTenantAsync();
-
-        var administratorId =
-            await CreateAppUserAsync(
-                tenantId,
-                AppUserRole.Administrator);
+        var context = await CreateContextAsync();
 
         var response =
             await GetDailyAsync(
-                tenantId,
-                administratorId,
+                context.Client,
                 new DateOnly(2026, 9, 14));
 
         Assert.Equal(
-            HttpStatusCode.BadRequest,
+            HttpStatusCode.Forbidden,
             response.StatusCode);
     }
 
     [Fact]
-    public async Task GetDaily_WithCollectorFromAnotherTenant_ReturnsBadRequest()
+    public async Task GetDaily_CollectorCannotAccessAnotherTenantData()
     {
-        var tenant1 = await CreateTenantAsync();
-        var tenant2 = await CreateTenantAsync();
+        var tenant1 = await CreateContextAsync();
+        var tenant2 = await CreateContextAsync();
 
-        var collectorId =
-            await CreateCollectorAsync(tenant1);
+        var collector =
+            await CreateCollectorAsync(
+                tenant1);
+
+        var collectorClient =
+            await LoginCollectorAsync(
+                tenant1.TenantId,
+                collector);
+
+        var routeTenant2 =
+            await CreateRouteAsync(
+                tenant2.Client);
+
+        await CreateScheduleAsync(
+            tenant2.Client,
+            routeTenant2,
+            CollectionWeekDay.Monday);
 
         var response =
             await GetDailyAsync(
-                tenant2,
-                collectorId,
+                collectorClient,
                 new DateOnly(2026, 9, 14));
 
         Assert.Equal(
-            HttpStatusCode.BadRequest,
+            HttpStatusCode.OK,
             response.StatusCode);
+
+        var result =
+            await response.Content
+                .ReadFromJsonAsync<
+                    FieldCollectionDailyResponse>();
+
+        Assert.NotNull(result);
+
+        Assert.DoesNotContain(
+            result.Routes,
+            x =>
+                x.CollectionRouteId ==
+                routeTenant2);
     }
 
     [Fact]
     public async Task GetDaily_ExcludesLoanNotDueByRequestedDate()
     {
-        var tenantId = await CreateTenantAsync();
-        var routeId = await CreateRouteAsync(tenantId);
-        var collectorId = await CreateCollectorAsync(tenantId);
+        var context = await CreateContextAsync();
+
+        var routeId =
+            await CreateRouteAsync(
+                context.Client);
+
+        var collector =
+            await CreateCollectorAsync(
+                context);
 
         await AssignRouteAsync(
-            tenantId,
-            collectorId,
+            context.Client,
+            collector.Id,
             routeId);
 
         await CreateScheduleAsync(
-            tenantId,
+            context.Client,
             routeId,
             CollectionWeekDay.Monday);
 
         var investorId =
-            await CreateInvestorAsync(tenantId);
+            await CreateInvestorAsync(
+                context.Client);
 
         var clientId =
             await CreateClientAsync(
-                tenantId,
+                context.Client,
                 routeId,
                 "Future",
                 "Loan");
 
         await CreateLoanAsync(
-            tenantId,
+            context.Client,
             investorId,
             clientId,
             new DateTime(
@@ -311,15 +404,14 @@ public class FieldCollectionsTests
                 0,
                 DateTimeKind.Utc));
 
-        /*
-         * El préstamo semanal iniciado el 14-Sep
-         * tendrá su próxima cuota después de la fecha
-         * consultada.
-         */
+        var collectorClient =
+            await LoginCollectorAsync(
+                context.TenantId,
+                collector);
+
         var response =
             await GetDailyAsync(
-                tenantId,
-                collectorId,
+                collectorClient,
                 new DateOnly(2026, 9, 14));
 
         Assert.Equal(
@@ -328,11 +420,14 @@ public class FieldCollectionsTests
 
         var result =
             await response.Content
-                .ReadFromJsonAsync<FieldCollectionDailyResponse>();
+                .ReadFromJsonAsync<
+                    FieldCollectionDailyResponse>();
 
         Assert.NotNull(result);
 
-        var route = Assert.Single(result.Routes);
+        var route =
+            Assert.Single(
+                result.Routes);
 
         Assert.Empty(route.Clients);
         Assert.Equal(0, route.ClientsCount);
@@ -343,46 +438,53 @@ public class FieldCollectionsTests
     [Fact]
     public async Task GetDaily_OrdersClientsByCollectionRouteOrder()
     {
-        var tenantId = await CreateTenantAsync();
-        var routeId = await CreateRouteAsync(tenantId);
-        var collectorId = await CreateCollectorAsync(tenantId);
+        var context = await CreateContextAsync();
+
+        var routeId =
+            await CreateRouteAsync(
+                context.Client);
+
+        var collector =
+            await CreateCollectorAsync(
+                context);
 
         await AssignRouteAsync(
-            tenantId,
-            collectorId,
+            context.Client,
+            collector.Id,
             routeId);
 
         await CreateScheduleAsync(
-            tenantId,
+            context.Client,
             routeId,
             CollectionWeekDay.Monday);
 
         var investorId =
-            await CreateInvestorAsync(tenantId);
+            await CreateInvestorAsync(
+                context.Client);
 
         var client1 =
             await CreateClientAsync(
-                tenantId,
+                context.Client,
                 routeId,
                 "First",
                 "Client");
 
         var client2 =
             await CreateClientAsync(
-                tenantId,
+                context.Client,
                 routeId,
                 "Second",
                 "Client");
 
         var client3 =
             await CreateClientAsync(
-                tenantId,
+                context.Client,
                 routeId,
                 "Third",
                 "Client");
 
         await SetManualOrderAsync(
-            tenantId,
+            context.Client,
             routeId,
             new[]
             {
@@ -402,27 +504,31 @@ public class FieldCollectionsTests
                 DateTimeKind.Utc);
 
         await CreateLoanAsync(
-            tenantId,
+            context.Client,
             investorId,
             client1,
             loanStart);
 
         await CreateLoanAsync(
-            tenantId,
+            context.Client,
             investorId,
             client2,
             loanStart);
 
         await CreateLoanAsync(
-            tenantId,
+            context.Client,
             investorId,
             client3,
             loanStart);
 
+        var collectorClient =
+            await LoginCollectorAsync(
+                context.TenantId,
+                collector);
+
         var response =
             await GetDailyAsync(
-                tenantId,
-                collectorId,
+                collectorClient,
                 new DateOnly(2026, 9, 14));
 
         Assert.Equal(
@@ -431,13 +537,18 @@ public class FieldCollectionsTests
 
         var result =
             await response.Content
-                .ReadFromJsonAsync<FieldCollectionDailyResponse>();
+                .ReadFromJsonAsync<
+                    FieldCollectionDailyResponse>();
 
         Assert.NotNull(result);
 
-        var route = Assert.Single(result.Routes);
+        var route =
+            Assert.Single(
+                result.Routes);
 
-        Assert.Equal(3, route.Clients.Count);
+        Assert.Equal(
+            3,
+            route.Clients.Count);
 
         Assert.Equal(
             client3,
@@ -453,38 +564,42 @@ public class FieldCollectionsTests
 
         Assert.Equal(
             1,
-            route.Clients[0].CollectionRouteOrder);
+            route.Clients[0]
+                .CollectionRouteOrder);
 
         Assert.Equal(
             2,
-            route.Clients[1].CollectionRouteOrder);
+            route.Clients[1]
+                .CollectionRouteOrder);
 
         Assert.Equal(
             3,
-            route.Clients[2].CollectionRouteOrder);
+            route.Clients[2]
+                .CollectionRouteOrder);
     }
+
+    // ============================================================
+    // FIELD PAYMENTS
+    // ============================================================
 
     [Fact]
     public async Task CreatePayment_WithValidFieldContext_ReturnsReceipt()
     {
-        var setup = await CreatePaymentScenarioAsync();
+        var setup =
+            await CreatePaymentScenarioAsync();
 
         var request =
-            new CreateFieldCollectionPaymentRequest
-            {
-                TenantId = setup.TenantId,
-                AppUserId = setup.CollectorId,
-                CollectionRouteId = setup.RouteId,
-                LoanId = setup.Loan.Id,
-                Amount = 100m,
-                PaymentType = PaymentType.Regular,
-                Notes = "Cobrado en domicilio"
-            };
+            CreatePaymentRequest(
+                setup,
+                100m,
+                PaymentType.Regular,
+                "Cobrado en domicilio");
 
         var response =
-            await _client.PostAsJsonAsync(
-                "/api/field-collections/payments",
-                request);
+            await setup.CollectorClient
+                .PostAsJsonAsync(
+                    "/api/field-collections/payments",
+                    request);
 
         Assert.Equal(
             HttpStatusCode.Created,
@@ -492,21 +607,46 @@ public class FieldCollectionsTests
 
         var receipt =
             await response.Content
-                .ReadFromJsonAsync<FieldCollectionPaymentResponse>();
+                .ReadFromJsonAsync<
+                    FieldCollectionPaymentResponse>();
 
         Assert.NotNull(receipt);
 
-        Assert.NotEqual(Guid.Empty, receipt.PaymentId);
-        Assert.Equal(setup.CollectorId, receipt.AppUserId);
-        Assert.Equal(setup.RouteId, receipt.CollectionRouteId);
-        Assert.Equal(setup.ClientId, receipt.ClientId);
-        Assert.Equal(setup.Loan.Id, receipt.LoanId);
+        Assert.NotEqual(
+            Guid.Empty,
+            receipt.PaymentId);
 
-        Assert.Equal(100m, receipt.Amount);
-        Assert.Equal(PaymentType.Regular, receipt.PaymentType);
+        Assert.Equal(
+            setup.Collector.Id,
+            receipt.AppUserId);
 
-        Assert.Equal(1300m, receipt.BalanceBefore);
-        Assert.Equal(1200m, receipt.BalanceAfter);
+        Assert.Equal(
+            setup.RouteId,
+            receipt.CollectionRouteId);
+
+        Assert.Equal(
+            setup.ClientId,
+            receipt.ClientId);
+
+        Assert.Equal(
+            setup.Loan.Id,
+            receipt.LoanId);
+
+        Assert.Equal(
+            100m,
+            receipt.Amount);
+
+        Assert.Equal(
+            PaymentType.Regular,
+            receipt.PaymentType);
+
+        Assert.Equal(
+            1300m,
+            receipt.BalanceBefore);
+
+        Assert.Equal(
+            1200m,
+            receipt.BalanceAfter);
 
         Assert.Equal(
             "Cobrado en domicilio",
@@ -528,36 +668,34 @@ public class FieldCollectionsTests
     [Fact]
     public async Task CreatePayment_PersistsCollectorAndRouteContext()
     {
-        var setup = await CreatePaymentScenarioAsync();
+        var setup =
+            await CreatePaymentScenarioAsync();
 
         var request =
-            new CreateFieldCollectionPaymentRequest
-            {
-                TenantId = setup.TenantId,
-                AppUserId = setup.CollectorId,
-                CollectionRouteId = setup.RouteId,
-                LoanId = setup.Loan.Id,
-                Amount = 100m,
-                PaymentType = PaymentType.Regular
-            };
+            CreatePaymentRequest(
+                setup,
+                100m,
+                PaymentType.Regular);
 
         var response =
-            await _client.PostAsJsonAsync(
-                "/api/field-collections/payments",
-                request);
+            await setup.CollectorClient
+                .PostAsJsonAsync(
+                    "/api/field-collections/payments",
+                    request);
 
         response.EnsureSuccessStatusCode();
 
         var receipt =
             await response.Content
-                .ReadFromJsonAsync<FieldCollectionPaymentResponse>();
+                .ReadFromJsonAsync<
+                    FieldCollectionPaymentResponse>();
 
         Assert.NotNull(receipt);
 
+        // Payments es un endpoint administrativo.
         var paymentResponse =
-            await _client.GetAsync(
-                $"/api/payments/{receipt.PaymentId}" +
-                $"?tenantId={setup.TenantId}");
+            await setup.AdministratorClient.GetAsync(
+                $"/api/payments/{receipt.PaymentId}");
 
         Assert.Equal(
             HttpStatusCode.OK,
@@ -571,7 +709,7 @@ public class FieldCollectionsTests
         Assert.NotNull(payment);
 
         Assert.Equal(
-            setup.CollectorId,
+            setup.Collector.Id,
             payment.CollectedByAppUserId);
 
         Assert.Equal(
@@ -582,37 +720,40 @@ public class FieldCollectionsTests
     [Fact]
     public async Task CreatePayment_UpdatesLoanFinancialState()
     {
-        var setup = await CreatePaymentScenarioAsync();
+        var setup =
+            await CreatePaymentScenarioAsync();
 
         var originalNextPaymentDate =
             setup.Loan.NextPaymentDate;
 
         var request =
-            new CreateFieldCollectionPaymentRequest
-            {
-                TenantId = setup.TenantId,
-                AppUserId = setup.CollectorId,
-                CollectionRouteId = setup.RouteId,
-                LoanId = setup.Loan.Id,
-                Amount = 100m,
-                PaymentType = PaymentType.Regular
-            };
+            CreatePaymentRequest(
+                setup,
+                100m,
+                PaymentType.Regular);
 
         var response =
-            await _client.PostAsJsonAsync(
-                "/api/field-collections/payments",
-                request);
+            await setup.CollectorClient
+                .PostAsJsonAsync(
+                    "/api/field-collections/payments",
+                    request);
 
         response.EnsureSuccessStatusCode();
 
         var receipt =
             await response.Content
-                .ReadFromJsonAsync<FieldCollectionPaymentResponse>();
+                .ReadFromJsonAsync<
+                    FieldCollectionPaymentResponse>();
 
         Assert.NotNull(receipt);
 
-        Assert.Equal(1300m, receipt.BalanceBefore);
-        Assert.Equal(1200m, receipt.BalanceAfter);
+        Assert.Equal(
+            1300m,
+            receipt.BalanceBefore);
+
+        Assert.Equal(
+            1200m,
+            receipt.BalanceAfter);
 
         Assert.Equal(
             originalNextPaymentDate.AddDays(7),
@@ -622,23 +763,20 @@ public class FieldCollectionsTests
     [Fact]
     public async Task CreatePayment_FullSettlement_MarksLoanAsPaid()
     {
-        var setup = await CreatePaymentScenarioAsync();
+        var setup =
+            await CreatePaymentScenarioAsync();
 
         var request =
-            new CreateFieldCollectionPaymentRequest
-            {
-                TenantId = setup.TenantId,
-                AppUserId = setup.CollectorId,
-                CollectionRouteId = setup.RouteId,
-                LoanId = setup.Loan.Id,
-                Amount = 1300m,
-                PaymentType = PaymentType.FullSettlement
-            };
+            CreatePaymentRequest(
+                setup,
+                1300m,
+                PaymentType.FullSettlement);
 
         var response =
-            await _client.PostAsJsonAsync(
-                "/api/field-collections/payments",
-                request);
+            await setup.CollectorClient
+                .PostAsJsonAsync(
+                    "/api/field-collections/payments",
+                    request);
 
         Assert.Equal(
             HttpStatusCode.Created,
@@ -646,18 +784,25 @@ public class FieldCollectionsTests
 
         var receipt =
             await response.Content
-                .ReadFromJsonAsync<FieldCollectionPaymentResponse>();
+                .ReadFromJsonAsync<
+                    FieldCollectionPaymentResponse>();
 
         Assert.NotNull(receipt);
 
-        Assert.Equal(1300m, receipt.BalanceBefore);
-        Assert.Equal(0m, receipt.BalanceAfter);
-        Assert.Null(receipt.NextPaymentDate);
+        Assert.Equal(
+            1300m,
+            receipt.BalanceBefore);
+
+        Assert.Equal(
+            0m,
+            receipt.BalanceAfter);
+
+        Assert.Null(
+            receipt.NextPaymentDate);
 
         var loanResponse =
-            await _client.GetAsync(
-                $"/api/loans/{setup.Loan.Id}" +
-                $"?tenantId={setup.TenantId}");
+            await setup.AdministratorClient.GetAsync(
+                $"/api/loans/{setup.Loan.Id}");
 
         Assert.Equal(
             HttpStatusCode.OK,
@@ -665,7 +810,8 @@ public class FieldCollectionsTests
 
         var loan =
             await loanResponse.Content
-                .ReadFromJsonAsync<LoanResponse>();
+                .ReadFromJsonAsync<
+                    LoanResponse>();
 
         Assert.NotNull(loan);
 
@@ -677,23 +823,20 @@ public class FieldCollectionsTests
     [Fact]
     public async Task CreatePayment_Overpayment_ReturnsBadRequest()
     {
-        var setup = await CreatePaymentScenarioAsync();
+        var setup =
+            await CreatePaymentScenarioAsync();
 
         var request =
-            new CreateFieldCollectionPaymentRequest
-            {
-                TenantId = setup.TenantId,
-                AppUserId = setup.CollectorId,
-                CollectionRouteId = setup.RouteId,
-                LoanId = setup.Loan.Id,
-                Amount = 1400m,
-                PaymentType = PaymentType.FullSettlement
-            };
+            CreatePaymentRequest(
+                setup,
+                1400m,
+                PaymentType.FullSettlement);
 
         var response =
-            await _client.PostAsJsonAsync(
-                "/api/field-collections/payments",
-                request);
+            await setup.CollectorClient
+                .PostAsJsonAsync(
+                    "/api/field-collections/payments",
+                    request);
 
         Assert.Equal(
             HttpStatusCode.BadRequest,
@@ -703,42 +846,52 @@ public class FieldCollectionsTests
     [Fact]
     public async Task CreatePayment_WithCollectorNotAssignedToRoute_ReturnsBadRequest()
     {
-        var tenantId = await CreateTenantAsync();
-        var routeId = await CreateRouteAsync(tenantId);
+        var context = await CreateContextAsync();
 
-        var collectorId =
-            await CreateCollectorAsync(tenantId);
+        var routeId =
+            await CreateRouteAsync(
+                context.Client);
+
+        var collector =
+            await CreateCollectorAsync(
+                context);
 
         var investorId =
-            await CreateInvestorAsync(tenantId);
+            await CreateInvestorAsync(
+                context.Client);
 
         var clientId =
             await CreateClientAsync(
-                tenantId,
+                context.Client,
                 routeId,
                 "Unassigned",
                 "Collector");
 
         var loan =
             await CreateLoanAsync(
-                tenantId,
+                context.Client,
                 investorId,
                 clientId,
-                DateTime.UtcNow.Date.AddDays(-7));
+                DateTime.UtcNow.Date
+                    .AddDays(-7));
+
+        var collectorClient =
+            await LoginCollectorAsync(
+                context.TenantId,
+                collector);
 
         var request =
             new CreateFieldCollectionPaymentRequest
             {
-                TenantId = tenantId,
-                AppUserId = collectorId,
                 CollectionRouteId = routeId,
                 LoanId = loan.Id,
                 Amount = 100m,
-                PaymentType = PaymentType.Regular
+                PaymentType =
+                    PaymentType.Regular
             };
 
         var response =
-            await _client.PostAsJsonAsync(
+            await collectorClient.PostAsJsonAsync(
                 "/api/field-collections/payments",
                 request);
 
@@ -750,52 +903,62 @@ public class FieldCollectionsTests
     [Fact]
     public async Task CreatePayment_WhenLoanClientBelongsToDifferentRoute_ReturnsBadRequest()
     {
-        var tenantId = await CreateTenantAsync();
+        var context = await CreateContextAsync();
 
         var assignedRoute =
-            await CreateRouteAsync(tenantId);
+            await CreateRouteAsync(
+                context.Client);
 
         var clientRoute =
-            await CreateRouteAsync(tenantId);
+            await CreateRouteAsync(
+                context.Client);
 
-        var collectorId =
-            await CreateCollectorAsync(tenantId);
+        var collector =
+            await CreateCollectorAsync(
+                context);
 
         await AssignRouteAsync(
-            tenantId,
-            collectorId,
+            context.Client,
+            collector.Id,
             assignedRoute);
 
         var investorId =
-            await CreateInvestorAsync(tenantId);
+            await CreateInvestorAsync(
+                context.Client);
 
         var clientId =
             await CreateClientAsync(
-                tenantId,
+                context.Client,
                 clientRoute,
                 "Wrong",
                 "Route");
 
         var loan =
             await CreateLoanAsync(
-                tenantId,
+                context.Client,
                 investorId,
                 clientId,
-                DateTime.UtcNow.Date.AddDays(-7));
+                DateTime.UtcNow.Date
+                    .AddDays(-7));
+
+        var collectorClient =
+            await LoginCollectorAsync(
+                context.TenantId,
+                collector);
 
         var request =
             new CreateFieldCollectionPaymentRequest
             {
-                TenantId = tenantId,
-                AppUserId = collectorId,
-                CollectionRouteId = assignedRoute,
+                CollectionRouteId =
+                    assignedRoute,
                 LoanId = loan.Id,
                 Amount = 100m,
-                PaymentType = PaymentType.Regular
+                PaymentType =
+                    PaymentType.Regular
             };
 
         var response =
-            await _client.PostAsJsonAsync(
+            await collectorClient.PostAsJsonAsync(
                 "/api/field-collections/payments",
                 request);
 
@@ -805,96 +968,103 @@ public class FieldCollectionsTests
     }
 
     [Fact]
-    public async Task CreatePayment_WithAdministrator_ReturnsBadRequest()
+    public async Task CreatePayment_WithAdministrator_ReturnsForbidden()
     {
-        var tenantId = await CreateTenantAsync();
-        var routeId = await CreateRouteAsync(tenantId);
+        var context = await CreateContextAsync();
 
-        var administratorId =
-            await CreateAppUserAsync(
-                tenantId,
-                AppUserRole.Administrator);
+        var routeId =
+            await CreateRouteAsync(
+                context.Client);
 
         var investorId =
-            await CreateInvestorAsync(tenantId);
+            await CreateInvestorAsync(
+                context.Client);
 
         var clientId =
             await CreateClientAsync(
-                tenantId,
+                context.Client,
                 routeId,
                 "Admin",
                 "Payment");
 
         var loan =
             await CreateLoanAsync(
-                tenantId,
+                context.Client,
                 investorId,
                 clientId,
-                DateTime.UtcNow.Date.AddDays(-7));
+                DateTime.UtcNow.Date
+                    .AddDays(-7));
 
         var request =
             new CreateFieldCollectionPaymentRequest
             {
-                TenantId = tenantId,
-                AppUserId = administratorId,
                 CollectionRouteId = routeId,
                 LoanId = loan.Id,
                 Amount = 100m,
-                PaymentType = PaymentType.Regular
+                PaymentType =
+                    PaymentType.Regular
             };
 
         var response =
-            await _client.PostAsJsonAsync(
+            await context.Client.PostAsJsonAsync(
                 "/api/field-collections/payments",
                 request);
 
         Assert.Equal(
-            HttpStatusCode.BadRequest,
+            HttpStatusCode.Forbidden,
             response.StatusCode);
     }
 
     [Fact]
-    public async Task CreatePayment_WithCollectorFromAnotherTenant_ReturnsBadRequest()
+    public async Task CreatePayment_CollectorCannotUseRouteFromAnotherTenant()
     {
-        var tenant1 = await CreateTenantAsync();
-        var tenant2 = await CreateTenantAsync();
+        var tenant1 = await CreateContextAsync();
+        var tenant2 = await CreateContextAsync();
 
-        var collectorId =
-            await CreateCollectorAsync(tenant1);
+        var collector =
+            await CreateCollectorAsync(
+                tenant1);
+
+        var collectorClient =
+            await LoginCollectorAsync(
+                tenant1.TenantId,
+                collector);
 
         var routeId =
-            await CreateRouteAsync(tenant2);
+            await CreateRouteAsync(
+                tenant2.Client);
 
         var investorId =
-            await CreateInvestorAsync(tenant2);
+            await CreateInvestorAsync(
+                tenant2.Client);
 
         var clientId =
             await CreateClientAsync(
-                tenant2,
+                tenant2.Client,
                 routeId,
                 "Other",
                 "Tenant");
 
         var loan =
             await CreateLoanAsync(
-                tenant2,
+                tenant2.Client,
                 investorId,
                 clientId,
-                DateTime.UtcNow.Date.AddDays(-7));
+                DateTime.UtcNow.Date
+                    .AddDays(-7));
 
         var request =
             new CreateFieldCollectionPaymentRequest
             {
-                TenantId = tenant2,
-                AppUserId = collectorId,
                 CollectionRouteId = routeId,
                 LoanId = loan.Id,
                 Amount = 100m,
-                PaymentType = PaymentType.Regular
+                PaymentType =
+                    PaymentType.Regular
             };
 
         var response =
-            await _client.PostAsJsonAsync(
+            await collectorClient.PostAsJsonAsync(
                 "/api/field-collections/payments",
                 request);
 
@@ -903,154 +1073,120 @@ public class FieldCollectionsTests
             response.StatusCode);
     }
 
-    private async Task<PaymentScenario> CreatePaymentScenarioAsync()
+    // ============================================================
+    // SCENARIO
+    // ============================================================
+
+    private async Task<PaymentScenario>
+        CreatePaymentScenarioAsync()
     {
-        var tenantId =
-            await CreateTenantAsync();
+        var context =
+            await CreateContextAsync();
 
         var routeId =
-            await CreateRouteAsync(tenantId);
+            await CreateRouteAsync(
+                context.Client);
 
-        var collectorId =
-            await CreateCollectorAsync(tenantId);
+        var collector =
+            await CreateCollectorAsync(
+                context);
 
         await AssignRouteAsync(
-            tenantId,
-            collectorId,
+            context.Client,
+            collector.Id,
             routeId);
 
         var investorId =
-            await CreateInvestorAsync(tenantId);
+            await CreateInvestorAsync(
+                context.Client);
 
         var clientId =
             await CreateClientAsync(
-                tenantId,
+                context.Client,
                 routeId,
                 "Payment",
                 "Client");
 
         var loan =
             await CreateLoanAsync(
-                tenantId,
+                context.Client,
                 investorId,
                 clientId,
-                DateTime.UtcNow.Date.AddDays(-7));
+                DateTime.UtcNow.Date
+                    .AddDays(-7));
+
+        var collectorClient =
+            await LoginCollectorAsync(
+                context.TenantId,
+                collector);
 
         return new PaymentScenario(
-            tenantId,
+            context.TenantId,
             routeId,
-            collectorId,
+            collector,
             clientId,
-            loan);
+            loan,
+            context.Client,
+            collectorClient);
     }
 
     private sealed record PaymentScenario(
         Guid TenantId,
         Guid RouteId,
-        Guid CollectorId,
+        CollectorCredentials Collector,
         Guid ClientId,
-        LoanResponse Loan);
+        LoanResponse Loan,
+        HttpClient AdministratorClient,
+        HttpClient CollectorClient);
 
-    private async Task<HttpResponseMessage> GetDailyAsync(
-        Guid tenantId,
-        Guid appUserId,
-        DateOnly date)
+    private sealed record CollectorCredentials(
+        Guid Id,
+        string Username,
+        string Password);
+
+    // ============================================================
+    // AUTHENTICATION HELPERS
+    // ============================================================
+
+    private async Task<TestTenantContext>
+        CreateContextAsync()
     {
-        return await _client.GetAsync(
-            $"/api/field-collections/daily" +
-            $"?tenantId={tenantId}" +
-            $"&appUserId={appUserId}" +
-            $"&date={date:yyyy-MM-dd}");
+        return await TestAuthenticationHelper
+            .CreateAdministratorContextAsync(
+                _factory);
     }
 
-    private async Task<Guid> CreateTenantAsync()
+    private async Task<CollectorCredentials>
+        CreateCollectorAsync(
+            TestTenantContext context)
     {
         var suffix =
-            Guid.NewGuid().ToString("N");
+            Guid.NewGuid()
+                .ToString("N");
+
+        var username =
+            $"field-{suffix}";
+
+        var password =
+            TestAuthenticationHelper
+                .DefaultPassword;
 
         var request = new
         {
-            name = $"Field Tenant {suffix}",
-            legalName = $"Field Tenant {suffix}",
-            phone = "8095551234",
-            email = $"field-{suffix}@example.com",
-            currencyCode = "DOP",
-            currencySymbol = "RD$"
-        };
-
-        var response =
-            await _client.PostAsJsonAsync(
-                "/api/tenants",
-                request);
-
-        response.EnsureSuccessStatusCode();
-
-        var json =
-            await response.Content
-                .ReadFromJsonAsync<JsonElement>();
-
-        return json
-            .GetProperty("id")
-            .GetGuid();
-    }
-
-    private async Task<Guid> CreateRouteAsync(
-        Guid tenantId)
-    {
-        var request =
-            new CreateCollectionRouteRequest
-            {
-                TenantId = tenantId,
-                Name =
-                    $"Field Route {Guid.NewGuid():N}",
-                Description =
-                    "Field collection integration test"
-            };
-
-        var response =
-            await _client.PostAsJsonAsync(
-                "/api/collection-routes",
-                request);
-
-        response.EnsureSuccessStatusCode();
-
-        var route =
-            await response.Content
-                .ReadFromJsonAsync<CollectionRouteResponse>();
-
-        Assert.NotNull(route);
-
-        return route.Id;
-    }
-
-    private async Task<Guid> CreateCollectorAsync(
-        Guid tenantId)
-    {
-        return await CreateAppUserAsync(
-            tenantId,
-            AppUserRole.Collector);
-    }
-
-    private async Task<Guid> CreateAppUserAsync(
-        Guid tenantId,
-        AppUserRole role)
-    {
-        var suffix =
-            Guid.NewGuid().ToString("N");
-
-        var request = new
-        {
-            tenantId,
-            name = $"Field User {suffix}",
-            username = $"field-{suffix}",
+            name =
+                $"Field Collector {suffix}",
+            username,
+            password,
             email =
                 $"field-user-{suffix}@example.com",
-            phone = "8095551234",
-            role = (int)role
+            phone =
+                "8095551234",
+            role =
+                (int)AppUserRole.Collector
         };
 
         var response =
-            await _client.PostAsJsonAsync(
+            await context.Client.PostAsJsonAsync(
                 "/api/app-users",
                 request);
 
@@ -1060,21 +1196,110 @@ public class FieldCollectionsTests
             await response.Content
                 .ReadFromJsonAsync<JsonElement>();
 
-        return json
-            .GetProperty("id")
-            .GetGuid();
+        return new CollectorCredentials(
+            json.GetProperty("id")
+                .GetGuid(),
+            username,
+            password);
     }
 
-    private async Task AssignRouteAsync(
-        Guid tenantId,
-        Guid collectorId,
-        Guid routeId)
+    private async Task<HttpClient>
+        LoginCollectorAsync(
+            Guid tenantId,
+            CollectorCredentials collector)
+    {
+        var loginClient =
+            _factory.CreateClient();
+
+        var response =
+            await loginClient.PostAsJsonAsync(
+                "/api/auth/login",
+                new LoginRequest
+                {
+                    TenantId = tenantId,
+                    Username =
+                        collector.Username,
+                    Password =
+                        collector.Password
+                });
+
+        response.EnsureSuccessStatusCode();
+
+        var auth =
+            await response.Content
+                .ReadFromJsonAsync<AuthResponse>();
+
+        Assert.NotNull(auth);
+
+        Assert.False(
+            string.IsNullOrWhiteSpace(
+                auth.AccessToken));
+
+        var client =
+            _factory.CreateClient();
+
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue(
+                "Bearer",
+                auth.AccessToken);
+
+        return client;
+    }
+
+    // ============================================================
+    // API HELPERS
+    // ============================================================
+
+    private static async Task<HttpResponseMessage>
+        GetDailyAsync(
+            HttpClient collectorClient,
+            DateOnly date)
+    {
+        return await collectorClient.GetAsync(
+            $"/api/field-collections/daily" +
+            $"?date={date:yyyy-MM-dd}");
+    }
+
+    private static async Task<Guid>
+        CreateRouteAsync(
+            HttpClient administratorClient)
+    {
+        var request =
+            new CreateCollectionRouteRequest
+            {
+                Name =
+                    $"Field Route {Guid.NewGuid():N}",
+                Description =
+                    "Field collection integration test"
+            };
+
+        var response =
+            await administratorClient.PostAsJsonAsync(
+                "/api/collection-routes",
+                request);
+
+        response.EnsureSuccessStatusCode();
+
+        var route =
+            await response.Content
+                .ReadFromJsonAsync<
+                    CollectionRouteResponse>();
+
+        Assert.NotNull(route);
+
+        return route.Id;
+    }
+
+    private static async Task
+        AssignRouteAsync(
+            HttpClient administratorClient,
+            Guid collectorId,
+            Guid routeId)
     {
         var response =
-            await _client.PostAsync(
+            await administratorClient.PostAsync(
                 $"/api/app-users/{collectorId}" +
-                $"/collection-routes/{routeId}" +
-                $"?tenantId={tenantId}",
+                $"/collection-routes/{routeId}",
                 null);
 
         Assert.Equal(
@@ -1082,43 +1307,45 @@ public class FieldCollectionsTests
             response.StatusCode);
     }
 
-    private async Task CreateScheduleAsync(
-        Guid tenantId,
-        Guid routeId,
-        CollectionWeekDay day)
+    private static async Task
+        CreateScheduleAsync(
+            HttpClient administratorClient,
+            Guid routeId,
+            CollectionWeekDay day)
     {
         var request =
             new CreateCollectionRouteScheduleRequest
             {
-                TenantId = tenantId,
-                CollectionRouteId = routeId,
+                CollectionRouteId =
+                    routeId,
                 DayOfWeek = day
             };
 
         var response =
-            await _client.PostAsJsonAsync(
+            await administratorClient.PostAsJsonAsync(
                 "/api/collection-route-schedules",
                 request);
 
         response.EnsureSuccessStatusCode();
     }
 
-    private async Task<Guid> CreateInvestorAsync(
-        Guid tenantId)
+    private static async Task<Guid>
+        CreateInvestorAsync(
+            HttpClient administratorClient)
     {
         var request =
             new CreateInvestorRequest
             {
-                TenantId = tenantId,
                 Name =
                     $"Field Investor {Guid.NewGuid():N}",
-                Phone = "8095551000",
+                Phone =
+                    "8095551000",
                 Identification =
                     $"INV-{Guid.NewGuid():N}"
             };
 
         var response =
-            await _client.PostAsJsonAsync(
+            await administratorClient.PostAsJsonAsync(
                 "/api/investors",
                 request);
 
@@ -1126,23 +1353,24 @@ public class FieldCollectionsTests
 
         var investor =
             await response.Content
-                .ReadFromJsonAsync<InvestorResponse>();
+                .ReadFromJsonAsync<
+                    InvestorResponse>();
 
         Assert.NotNull(investor);
 
         return investor.Id;
     }
 
-    private async Task<Guid> CreateClientAsync(
-        Guid tenantId,
-        Guid routeId,
-        string firstName,
-        string lastName)
+    private static async Task<Guid>
+        CreateClientAsync(
+            HttpClient administratorClient,
+            Guid routeId,
+            string firstName,
+            string lastName)
     {
         var request =
             new CreateClientRequest
             {
-                TenantId = tenantId,
                 FirstName = firstName,
                 LastName = lastName,
                 Phone =
@@ -1153,11 +1381,12 @@ public class FieldCollectionsTests
                     "Field Collection Test Address",
                 Latitude = 19.45m,
                 Longitude = -70.69m,
-                CollectionRouteId = routeId
+                CollectionRouteId =
+                    routeId
             };
 
         var response =
-            await _client.PostAsJsonAsync(
+            await administratorClient.PostAsJsonAsync(
                 "/api/clients",
                 request);
 
@@ -1165,23 +1394,24 @@ public class FieldCollectionsTests
 
         var client =
             await response.Content
-                .ReadFromJsonAsync<ClientResponse>();
+                .ReadFromJsonAsync<
+                    ClientResponse>();
 
         Assert.NotNull(client);
 
         return client.Id;
     }
 
-    private async Task<LoanResponse> CreateLoanAsync(
-        Guid tenantId,
-        Guid investorId,
-        Guid clientId,
-        DateTime startDate)
+    private static async Task<LoanResponse>
+        CreateLoanAsync(
+            HttpClient administratorClient,
+            Guid investorId,
+            Guid clientId,
+            DateTime startDate)
     {
         var request =
             new CreateLoanRequest
             {
-                TenantId = tenantId,
                 InvestorId = investorId,
                 ClientId = clientId,
                 PrincipalAmount = 1000m,
@@ -1195,7 +1425,7 @@ public class FieldCollectionsTests
             };
 
         var response =
-            await _client.PostAsJsonAsync(
+            await administratorClient.PostAsJsonAsync(
                 "/api/loans",
                 request);
 
@@ -1203,17 +1433,19 @@ public class FieldCollectionsTests
 
         var loan =
             await response.Content
-                .ReadFromJsonAsync<LoanResponse>();
+                .ReadFromJsonAsync<
+                    LoanResponse>();
 
         Assert.NotNull(loan);
 
         return loan;
     }
 
-    private async Task SetManualOrderAsync(
-        Guid tenantId,
-        Guid routeId,
-        IReadOnlyCollection<Guid> clientIds)
+    private static async Task
+        SetManualOrderAsync(
+            HttpClient administratorClient,
+            Guid routeId,
+            IReadOnlyCollection<Guid> clientIds)
     {
         var request = new
         {
@@ -1221,11 +1453,34 @@ public class FieldCollectionsTests
         };
 
         var response =
-            await _client.PutAsJsonAsync(
-                $"/api/collection-routes/{routeId}/clients/order" +
-                $"?tenantId={tenantId}",
+            await administratorClient.PutAsJsonAsync(
+                $"/api/collection-routes/{routeId}" +
+                "/clients/order",
                 request);
 
         response.EnsureSuccessStatusCode();
+    }
+
+    private static
+        CreateFieldCollectionPaymentRequest
+        CreatePaymentRequest(
+            PaymentScenario setup,
+            decimal amount,
+            PaymentType paymentType,
+            string? notes = null)
+    {
+        return new CreateFieldCollectionPaymentRequest
+        {
+            CollectionRouteId =
+                setup.RouteId,
+            LoanId =
+                setup.Loan.Id,
+            Amount =
+                amount,
+            PaymentType =
+                paymentType,
+            Notes =
+                notes
+        };
     }
 }

@@ -309,6 +309,9 @@ public class SanesDbContext : DbContext
                 .IsRequired()
                 .HasMaxLength(100);
 
+            entity.Property(x => x.PasswordHash)
+                .HasMaxLength(500);
+
             entity.Property(x => x.Email)
                 .HasMaxLength(150);
 

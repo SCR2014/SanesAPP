@@ -4,7 +4,6 @@ namespace Sanes.Application.CollectionRouteSchedules.DTOs;
 
 public class CreateCollectionRouteScheduleRequest
 {
-    public Guid TenantId { get; set; }
 
     public Guid CollectionRouteId { get; set; }
 

@@ -5,8 +5,6 @@ namespace Sanes.Application.Loans.DTOs;
 
 public class CreateLoanRequest : IValidatableObject
 {
-    [Required]
-    public Guid TenantId { get; set; }
 
     [Required]
     public Guid InvestorId { get; set; }
@@ -34,12 +32,6 @@ public class CreateLoanRequest : IValidatableObject
     public IEnumerable<ValidationResult> Validate(
         ValidationContext validationContext)
     {
-        if (TenantId == Guid.Empty)
-        {
-            yield return new ValidationResult(
-                "TenantId must be a valid identifier.",
-                new[] { nameof(TenantId) });
-        }
 
         if (InvestorId == Guid.Empty)
         {

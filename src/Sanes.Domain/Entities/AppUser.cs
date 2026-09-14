@@ -13,6 +13,8 @@ public class AppUser
 
     public string Username { get; set; } = string.Empty;
 
+    public string? PasswordHash { get; set; }
+
     public string? Email { get; set; }
 
     public string? Phone { get; set; }

@@ -1,18 +1,26 @@
 using Microsoft.AspNetCore.Mvc;
 using Sanes.Application.Loans.DTOs;
 using Sanes.Application.Loans.Services;
+using Microsoft.AspNetCore.Authorization;
+using Sanes.Application.Authentication.Services;
+using Sanes.Domain.Enums;
 
 namespace Sanes.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize(Roles = nameof(AppUserRole.Administrator))]
 public class LoansController : ControllerBase
 {
     private readonly ILoanService _loanService;
+    private readonly ICurrentUserService _currentUserService;
 
-    public LoansController(ILoanService loanService)
+    public LoansController(
+        ILoanService loanService,
+        ICurrentUserService currentUserService)
     {
         _loanService = loanService;
+        _currentUserService = currentUserService;
     }
 
     [HttpPost]
@@ -23,6 +31,7 @@ public class LoansController : ControllerBase
         try
         {
             var loan = await _loanService.CreateAsync(
+                _currentUserService.TenantId,
                 request,
                 cancellationToken);
 
@@ -30,8 +39,7 @@ public class LoansController : ControllerBase
                 nameof(GetById),
                 new
                 {
-                    id = loan.Id,
-                    tenantId = loan.TenantId
+                    id = loan.Id
                 },
                 loan);
         }
@@ -46,19 +54,11 @@ public class LoansController : ControllerBase
 
     [HttpGet]
     public async Task<ActionResult<List<LoanResponse>>> GetAll(
-        [FromQuery] Guid tenantId,
         CancellationToken cancellationToken)
     {
-        if (tenantId == Guid.Empty)
-        {
-            return BadRequest(new
-            {
-                message = "TenantId must be a valid identifier."
-            });
-        }
 
         var loans = await _loanService.GetAllAsync(
-            tenantId,
+            _currentUserService.TenantId,
             cancellationToken);
 
         return Ok(loans);
@@ -67,19 +67,11 @@ public class LoansController : ControllerBase
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<LoanResponse>> GetById(
         Guid id,
-        [FromQuery] Guid tenantId,
         CancellationToken cancellationToken)
     {
-        if (tenantId == Guid.Empty)
-        {
-            return BadRequest(new
-            {
-                message = "TenantId must be a valid identifier."
-            });
-        }
 
         var loan = await _loanService.GetByIdAsync(
-            tenantId,
+            _currentUserService.TenantId,
             id,
             cancellationToken);
 
@@ -94,22 +86,14 @@ public class LoansController : ControllerBase
     [HttpPut("{id:guid}")]
     public async Task<ActionResult<LoanResponse>> Update(
         Guid id,
-        [FromQuery] Guid tenantId,
         [FromBody] UpdateLoanRequest request,
         CancellationToken cancellationToken)
     {
-        if (tenantId == Guid.Empty)
-        {
-            return BadRequest(new
-            {
-                message = "TenantId must be a valid identifier."
-            });
-        }
 
         try
         {
             var loan = await _loanService.UpdateAsync(
-                tenantId,
+                _currentUserService.TenantId,
                 id,
                 request,
                 cancellationToken);
@@ -133,21 +117,13 @@ public class LoansController : ControllerBase
     [HttpPatch("{id:guid}/cancel")]
     public async Task<IActionResult> Cancel(
         Guid id,
-        [FromQuery] Guid tenantId,
         CancellationToken cancellationToken)
     {
-        if (tenantId == Guid.Empty)
-        {
-            return BadRequest(new
-            {
-                message = "TenantId must be a valid identifier."
-            });
-        }
 
         try
         {
             var cancelled = await _loanService.CancelAsync(
-                tenantId,
+                _currentUserService.TenantId,
                 id,
                 cancellationToken);
 
@@ -170,20 +146,12 @@ public class LoansController : ControllerBase
     [HttpGet("{id:guid}/summary")]
     public async Task<ActionResult<LoanFinancialSummaryResponse>> GetFinancialSummary(
         Guid id,
-        [FromQuery] Guid tenantId,
         CancellationToken cancellationToken)
     {
-        if (tenantId == Guid.Empty)
-        {
-            return BadRequest(new
-            {
-                message = "TenantId must be a valid identifier."
-            });
-        }
 
         var summary =
             await _loanService.GetFinancialSummaryAsync(
-                tenantId,
+                _currentUserService.TenantId,
                 id,
                 cancellationToken);
 
@@ -197,22 +165,15 @@ public class LoansController : ControllerBase
 
     [HttpGet("portfolio")]
     public async Task<ActionResult<List<ActiveLoanPortfolioItemResponse>>> GetActivePortfolio(
-        [FromQuery] Guid tenantId,
         CancellationToken cancellationToken)
     {
-        if (tenantId == Guid.Empty)
-        {
-            return BadRequest(new
-            {
-                message = "TenantId must be a valid identifier."
-            });
-        }
+
 
         try
         {
             var portfolio =
                 await _loanService.GetActivePortfolioAsync(
-                    tenantId,
+                    _currentUserService.TenantId,
                     cancellationToken);
 
             return Ok(portfolio);
@@ -228,22 +189,14 @@ public class LoansController : ControllerBase
 
     [HttpGet("portfolio/summary")]
     public async Task<ActionResult<ActivePortfolioSummaryResponse>> GetActivePortfolioSummary(
-        [FromQuery] Guid tenantId,
         CancellationToken cancellationToken)
     {
-        if (tenantId == Guid.Empty)
-        {
-            return BadRequest(new
-            {
-                message = "TenantId must be a valid identifier."
-            });
-        }
 
         try
         {
             var summary =
                 await _loanService.GetActivePortfolioSummaryAsync(
-                    tenantId,
+                    _currentUserService.TenantId,
                     cancellationToken);
 
             return Ok(summary);
@@ -259,7 +212,6 @@ public class LoansController : ControllerBase
 
    [HttpGet("collections")]
     public async Task<ActionResult<List<CollectionLoanItemResponse>>> GetCollectionPortfolio(
-        [FromQuery] Guid tenantId,
         [FromQuery] bool overdueOnly = false,
         [FromQuery] DateTime? collectionDate = null,
         [FromQuery] DateTime? dueDate = null,
@@ -269,13 +221,6 @@ public class LoansController : ControllerBase
         [FromQuery] Guid? collectionRouteId = null,
         CancellationToken cancellationToken = default)
     {
-        if (tenantId == Guid.Empty)
-        {
-            return BadRequest(new
-            {
-                message = "TenantId must be a valid identifier."
-            });
-        }
 
         if (collectionDate.HasValue && dueDate.HasValue)
         {
@@ -314,7 +259,7 @@ public class LoansController : ControllerBase
         {
             var portfolio =
                 await _loanService.GetCollectionPortfolioAsync(
-                    tenantId,
+                    _currentUserService.TenantId,
                     overdueOnly,
                     collectionDate,
                     dueDate,
@@ -337,7 +282,6 @@ public class LoansController : ControllerBase
 
     [HttpGet("collections/summary")]
     public async Task<ActionResult<CollectionPortfolioSummaryResponse>> GetCollectionPortfolioSummary(
-        [FromQuery] Guid tenantId,
         [FromQuery] bool overdueOnly = false,
         [FromQuery] DateTime? collectionDate = null,
         [FromQuery] DateTime? dueDate = null,
@@ -347,13 +291,6 @@ public class LoansController : ControllerBase
         [FromQuery] Guid? collectionRouteId = null,
         CancellationToken cancellationToken = default)
     {
-        if (tenantId == Guid.Empty)
-        {
-            return BadRequest(new
-            {
-                message = "TenantId must be a valid identifier."
-            });
-        }
 
         if (collectionDate.HasValue && dueDate.HasValue)
         {
@@ -392,7 +329,7 @@ public class LoansController : ControllerBase
         {
             var summary =
                 await _loanService.GetCollectionPortfolioSummaryAsync(
-                    tenantId,
+                    _currentUserService.TenantId,
                     overdueOnly,
                     collectionDate,
                     dueDate,

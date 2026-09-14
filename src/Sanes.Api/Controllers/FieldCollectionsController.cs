@@ -1,19 +1,26 @@
 using Microsoft.AspNetCore.Mvc;
 using Sanes.Application.FieldCollections.DTOs;
 using Sanes.Application.FieldCollections.Services;
+using Microsoft.AspNetCore.Authorization;
+using Sanes.Application.Authentication.Services;
+using Sanes.Domain.Enums;
 
 namespace Sanes.Api.Controllers;
 
 [ApiController]
 [Route("api/field-collections")]
+[Authorize(Roles = nameof(AppUserRole.Collector))]
 public class FieldCollectionsController : ControllerBase
 {
     private readonly IFieldCollectionService _fieldCollectionService;
+    private readonly ICurrentUserService _currentUserService;
 
     public FieldCollectionsController(
-        IFieldCollectionService fieldCollectionService)
+        IFieldCollectionService fieldCollectionService,
+        ICurrentUserService currentUserService)
     {
         _fieldCollectionService = fieldCollectionService;
+        _currentUserService = currentUserService;
     }
 
     [HttpGet("daily")]
@@ -23,8 +30,6 @@ public class FieldCollectionsController : ControllerBase
     [ProducesResponseType(
         StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<FieldCollectionDailyResponse>> GetDaily(
-        [FromQuery] Guid tenantId,
-        [FromQuery] Guid appUserId,
         [FromQuery] DateOnly date,
         CancellationToken cancellationToken)
     {
@@ -32,8 +37,8 @@ public class FieldCollectionsController : ControllerBase
         {
             var result =
                 await _fieldCollectionService.GetDailyAsync(
-                    tenantId,
-                    appUserId,
+                    _currentUserService.TenantId,
+                    _currentUserService.AppUserId,
                     date,
                     cancellationToken);
 
@@ -71,6 +76,8 @@ public class FieldCollectionsController : ControllerBase
         {
             var result =
                 await _fieldCollectionService.CreatePaymentAsync(
+                    _currentUserService.TenantId,
+                    _currentUserService.AppUserId,
                     request,
                     cancellationToken);
 

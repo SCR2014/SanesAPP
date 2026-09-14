@@ -3,7 +3,6 @@ using Sanes.Domain.Enums;
 
 public class CreateCollectionRouteRequest
 {
-    public Guid TenantId { get; set; }
 
     public string Name { get; set; } = string.Empty;
     public string? Description { get; set; }

@@ -23,11 +23,12 @@ public class ClientService : IClientService
     }
 
     public async Task<ClientResponse> CreateAsync(
+        Guid tenantId,
         CreateClientRequest request,
         CancellationToken cancellationToken = default)
     {
         var tenant = await _tenantRepository.GetByIdAsync(
-            request.TenantId,
+            tenantId,
             cancellationToken);
 
         if (tenant is null)
@@ -41,7 +42,7 @@ public class ClientService : IClientService
             var collectionRoute =
                 await _collectionRouteRepository.GetByIdAsync(
                     request.CollectionRouteId.Value,
-                    request.TenantId,
+                    tenantId,
                     cancellationToken);
 
             if (collectionRoute is null)
@@ -56,7 +57,7 @@ public class ClientService : IClientService
         if (!string.IsNullOrWhiteSpace(identification))
         {
             var exists = await _clientRepository.ExistsByIdentificationAsync(
-                request.TenantId,
+                tenantId,
                 identification,
                 cancellationToken: cancellationToken);
 
@@ -69,7 +70,7 @@ public class ClientService : IClientService
 
         var client = new Client
         {
-            TenantId = request.TenantId,
+            TenantId = tenantId,
             FirstName = request.FirstName.Trim(),
             LastName = NormalizeOptional(request.LastName),
             Phone = request.Phone.Trim(),

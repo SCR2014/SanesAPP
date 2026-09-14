@@ -1,14 +1,18 @@
+using System.ComponentModel.DataAnnotations;
 using Sanes.Domain.Enums;
 
 namespace Sanes.Application.AppUsers.DTOs;
 
 public class CreateAppUserRequest
 {
-    public Guid TenantId { get; set; }
-
     public string Name { get; set; } = string.Empty;
 
     public string Username { get; set; } = string.Empty;
+
+    [Required]
+    [MinLength(8)]
+    [MaxLength(100)]
+    public string Password { get; set; } = string.Empty;
 
     public string? Email { get; set; }
 
