@@ -1,19 +1,26 @@
 using Microsoft.AspNetCore.Mvc;
 using Sanes.Application.CollectionRoutes.DTOs;
 using Sanes.Application.CollectionRoutes.Services;
+using Microsoft.AspNetCore.Authorization;
+using Sanes.Application.Authentication.Services;
+using Sanes.Domain.Enums;
 
 namespace Sanes.Api.Controllers;
 
 [ApiController]
 [Route("api/collection-routes")]
+[Authorize(Roles = nameof(AppUserRole.Administrator))]
 public class CollectionRoutesController : ControllerBase
 {
     private readonly ICollectionRouteService _collectionRouteService;
+    private readonly ICurrentUserService _currentUserService;
 
     public CollectionRoutesController(
-        ICollectionRouteService collectionRouteService)
+        ICollectionRouteService collectionRouteService,
+        ICurrentUserService currentUserService)
     {
         _collectionRouteService = collectionRouteService;
+        _currentUserService = currentUserService;
     }
 
     [HttpPost]
@@ -24,6 +31,7 @@ public class CollectionRoutesController : ControllerBase
         try
         {
             var route = await _collectionRouteService.CreateAsync(
+                _currentUserService.TenantId,
                 request,
                 cancellationToken);
 
@@ -31,8 +39,7 @@ public class CollectionRoutesController : ControllerBase
                 nameof(GetById),
                 new
                 {
-                    id = route.Id,
-                    tenantId = route.TenantId
+                    id = route.Id
                 },
                 route);
         }
@@ -48,16 +55,11 @@ public class CollectionRoutesController : ControllerBase
 
     [HttpGet]
     public async Task<ActionResult<List<CollectionRouteResponse>>> GetAll(
-        [FromQuery] Guid tenantId,
         CancellationToken cancellationToken)
     {
-        if (tenantId == Guid.Empty)
-        {
-            return BadRequest("tenantId is required.");
-        }
 
         var routes = await _collectionRouteService.GetAllAsync(
-            tenantId,
+            _currentUserService.TenantId,
             cancellationToken);
 
         return Ok(routes);
@@ -66,17 +68,12 @@ public class CollectionRoutesController : ControllerBase
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<CollectionRouteResponse>> GetById(
         Guid id,
-        [FromQuery] Guid tenantId,
         CancellationToken cancellationToken)
     {
-        if (tenantId == Guid.Empty)
-        {
-            return BadRequest("tenantId is required.");
-        }
 
         var route = await _collectionRouteService.GetByIdAsync(
             id,
-            tenantId,
+            _currentUserService.TenantId,
             cancellationToken);
 
         if (route is null)
@@ -90,20 +87,15 @@ public class CollectionRoutesController : ControllerBase
     [HttpPut("{id:guid}")]
     public async Task<ActionResult<CollectionRouteResponse>> Update(
         Guid id,
-        [FromQuery] Guid tenantId,
         [FromBody] UpdateCollectionRouteRequest request,
         CancellationToken cancellationToken)
     {
-        if (tenantId == Guid.Empty)
-        {
-            return BadRequest("tenantId is required.");
-        }
 
         try
         {
             var route = await _collectionRouteService.UpdateAsync(
                 id,
-                tenantId,
+                _currentUserService.TenantId,
                 request,
                 cancellationToken);
 
@@ -123,17 +115,12 @@ public class CollectionRoutesController : ControllerBase
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(
         Guid id,
-        [FromQuery] Guid tenantId,
         CancellationToken cancellationToken)
     {
-        if (tenantId == Guid.Empty)
-        {
-            return BadRequest("tenantId is required.");
-        }
 
         var deleted = await _collectionRouteService.DeleteAsync(
             id,
-            tenantId,
+            _currentUserService.TenantId,
             cancellationToken);
 
         if (!deleted)
@@ -147,17 +134,12 @@ public class CollectionRoutesController : ControllerBase
     [HttpPatch("{id:guid}/reactivate")]
     public async Task<ActionResult<CollectionRouteResponse>> Reactivate(
         Guid id,
-        [FromQuery] Guid tenantId,
         CancellationToken cancellationToken)
     {
-        if (tenantId == Guid.Empty)
-        {
-            return BadRequest("tenantId is required.");
-        }
 
         var route = await _collectionRouteService.ReactivateAsync(
             id,
-            tenantId,
+            _currentUserService.TenantId,
             cancellationToken);
 
         if (route is null)
@@ -171,17 +153,9 @@ public class CollectionRoutesController : ControllerBase
     [HttpPut("{id:guid}/clients/order")]
     public async Task<IActionResult> ReorderClients(
         Guid id,
-        [FromQuery] Guid tenantId,
         [FromBody] ReorderCollectionRouteRequest request,
         CancellationToken cancellationToken)
     {
-        if (tenantId == Guid.Empty)
-        {
-            return BadRequest(new
-            {
-                message = "TenantId must be a valid identifier."
-            });
-        }
 
         if (request is null)
         {
@@ -196,7 +170,7 @@ public class CollectionRoutesController : ControllerBase
             var reordered =
                 await _collectionRouteService.ReorderClientsAsync(
                     id,
-                    tenantId,
+                    _currentUserService.TenantId,
                     request,
                     cancellationToken);
 
@@ -226,17 +200,9 @@ public class CollectionRoutesController : ControllerBase
     [HttpPost("{id:guid}/optimize")]
     public async Task<IActionResult> Optimize(
         Guid id,
-        [FromQuery] Guid tenantId,
         [FromBody] OptimizeCollectionRouteRequest request,
         CancellationToken cancellationToken)
     {
-        if (tenantId == Guid.Empty)
-        {
-            return BadRequest(new
-            {
-                message = "TenantId must be a valid identifier."
-            });
-        }
 
         if (request is null)
         {
@@ -251,7 +217,7 @@ public class CollectionRoutesController : ControllerBase
             var optimized =
                 await _collectionRouteService.OptimizeClientsAsync(
                     id,
-                    tenantId,
+                    _currentUserService.TenantId,
                     request,
                     cancellationToken);
 

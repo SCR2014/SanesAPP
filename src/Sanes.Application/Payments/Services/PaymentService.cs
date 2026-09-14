@@ -39,11 +39,12 @@ public class PaymentService : IPaymentService
     }
 
     public async Task<PaymentResponse> CreateAsync(
+        Guid tenantId,
         CreatePaymentRequest request,
         CancellationToken cancellationToken = default)
     {
         var tenant = await _tenantRepository.GetByIdAsync(
-            request.TenantId,
+            tenantId,
             cancellationToken);
 
         if (tenant is null || !tenant.IsActive)
@@ -53,7 +54,7 @@ public class PaymentService : IPaymentService
         }
 
         var loan = await _loanRepository.GetByIdForUpdateAsync(
-            request.TenantId,
+            tenantId,
             request.LoanId,
             cancellationToken);
 
@@ -73,6 +74,7 @@ public class PaymentService : IPaymentService
             request.CollectionRouteId.HasValue)
         {
             await ValidateFieldCollectionContextAsync(
+                tenantId,
                 request,
                 loan,
                 cancellationToken);
@@ -83,7 +85,7 @@ public class PaymentService : IPaymentService
 
         var totalPaidBefore =
             await _paymentRepository.GetTotalPaidAsync(
-                request.TenantId,
+                tenantId,
                 request.LoanId,
                 cancellationToken);
 
@@ -113,7 +115,7 @@ public class PaymentService : IPaymentService
 
         var payment = new Payment
         {
-            TenantId = request.TenantId,
+            TenantId = tenantId,
             LoanId = request.LoanId,
             Amount = request.Amount,
             PaymentDate = paymentDate,
@@ -353,6 +355,7 @@ public class PaymentService : IPaymentService
     }
 
     private async Task ValidateFieldCollectionContextAsync(
+        Guid tenantId,
         CreatePaymentRequest request,
         Loan loan,
         CancellationToken cancellationToken)
@@ -367,7 +370,7 @@ public class PaymentService : IPaymentService
         var collector =
             await _appUserRepository.GetByIdAsync(
                 request.CollectedByAppUserId.Value,
-                request.TenantId,
+                tenantId,
                 cancellationToken);
 
         if (collector is null)
@@ -385,7 +388,7 @@ public class PaymentService : IPaymentService
         var route =
             await _collectionRouteRepository.GetByIdAsync(
                 request.CollectionRouteId.Value,
-                request.TenantId,
+                tenantId,
                 cancellationToken);
 
         if (route is null)
@@ -408,7 +411,7 @@ public class PaymentService : IPaymentService
 
         var client =
             await _clientRepository.GetByIdAsync(
-                request.TenantId,
+                tenantId,
                 loan.ClientId,
                 cancellationToken);
 

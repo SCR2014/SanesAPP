@@ -42,6 +42,20 @@ public class AppUserRepository : IAppUserRepository
                 cancellationToken);
     }
 
+    public async Task<AppUser?> GetByUsernameAsync(
+        Guid tenantId,
+        string username,
+        CancellationToken cancellationToken = default)
+    {
+        return await _dbContext.AppUsers
+            .AsNoTracking()
+            .FirstOrDefaultAsync(
+                x =>
+                    x.TenantId == tenantId &&
+                    x.Username == username,
+                cancellationToken);
+    }
+
     public async Task<List<AppUser>> GetActiveByTenantAsync(
         Guid tenantId,
         AppUserRole? role = null,
@@ -63,6 +77,19 @@ public class AppUserRepository : IAppUserRepository
             .OrderBy(x => x.Name)
             .ThenBy(x => x.Username)
             .ToListAsync(cancellationToken);
+    }
+
+    public async Task<int> CountActiveAdministratorsAsync(
+        Guid tenantId,
+        CancellationToken cancellationToken = default)
+    {
+        return await _dbContext.AppUsers
+            .CountAsync(
+                x =>
+                    x.TenantId == tenantId &&
+                    x.IsActive &&
+                    x.Role == AppUserRole.Administrator,
+                cancellationToken);
     }
 
     public async Task<bool> UsernameExistsAsync(

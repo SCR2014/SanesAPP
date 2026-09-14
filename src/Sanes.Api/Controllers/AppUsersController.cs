@@ -1,20 +1,27 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Sanes.Api.Authentication;
 using Sanes.Application.AppUsers.DTOs;
 using Sanes.Application.AppUsers.Services;
+using Sanes.Application.Authentication.Services;
 using Sanes.Domain.Enums;
 
 namespace Sanes.Api.Controllers;
 
 [ApiController]
 [Route("api/app-users")]
+[Authorize(Roles = nameof(AppUserRole.Administrator))]
 public class AppUsersController : ControllerBase
 {
     private readonly IAppUserService _appUserService;
+    private readonly ICurrentUserService _currentUserService;
 
     public AppUsersController(
-        IAppUserService appUserService)
+        IAppUserService appUserService,
+        ICurrentUserService currentUserService)
     {
         _appUserService = appUserService;
+        _currentUserService = currentUserService;
     }
 
     [HttpPost]
@@ -26,6 +33,7 @@ public class AppUsersController : ControllerBase
         {
             var created =
                 await _appUserService.CreateAsync(
+                    _currentUserService.TenantId,
                     request,
                     cancellationToken);
 
@@ -33,8 +41,7 @@ public class AppUsersController : ControllerBase
                 nameof(GetById),
                 new
                 {
-                    id = created.Id,
-                    tenantId = created.TenantId
+                    id = created.Id
                 },
                 created);
         }
@@ -49,23 +56,14 @@ public class AppUsersController : ControllerBase
 
     [HttpGet]
     public async Task<ActionResult<List<AppUserResponse>>> GetAll(
-        [FromQuery] Guid tenantId,
         [FromQuery] AppUserRole? role,
         CancellationToken cancellationToken)
     {
-        if (tenantId == Guid.Empty)
-        {
-            return BadRequest(new
-            {
-                message = "TenantId must be a valid identifier."
-            });
-        }
-
         try
         {
             var appUsers =
                 await _appUserService.GetAllAsync(
-                    tenantId,
+                    _currentUserService.TenantId,
                     role,
                     cancellationToken);
 
@@ -83,21 +81,12 @@ public class AppUsersController : ControllerBase
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<AppUserResponse>> GetById(
         Guid id,
-        [FromQuery] Guid tenantId,
         CancellationToken cancellationToken)
     {
-        if (tenantId == Guid.Empty)
-        {
-            return BadRequest(new
-            {
-                message = "TenantId must be a valid identifier."
-            });
-        }
-
         var appUser =
             await _appUserService.GetByIdAsync(
                 id,
-                tenantId,
+                _currentUserService.TenantId,
                 cancellationToken);
 
         if (appUser is null)
@@ -111,24 +100,15 @@ public class AppUsersController : ControllerBase
     [HttpPut("{id:guid}")]
     public async Task<ActionResult<AppUserResponse>> Update(
         Guid id,
-        [FromQuery] Guid tenantId,
         [FromBody] UpdateAppUserRequest request,
         CancellationToken cancellationToken)
     {
-        if (tenantId == Guid.Empty)
-        {
-            return BadRequest(new
-            {
-                message = "TenantId must be a valid identifier."
-            });
-        }
-
         try
         {
             var updated =
                 await _appUserService.UpdateAsync(
                     id,
-                    tenantId,
+                    _currentUserService.TenantId,
                     request,
                     cancellationToken);
 
@@ -158,49 +138,41 @@ public class AppUsersController : ControllerBase
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(
         Guid id,
-        [FromQuery] Guid tenantId,
         CancellationToken cancellationToken)
     {
-        if (tenantId == Guid.Empty)
+        try
+        {
+            var deleted =
+                await _appUserService.DeleteAsync(
+                    id,
+                    _currentUserService.TenantId,
+                    cancellationToken);
+
+            if (!deleted)
+            {
+                return NotFound();
+            }
+
+            return NoContent();
+        }
+        catch (InvalidOperationException ex)
         {
             return BadRequest(new
             {
-                message = "TenantId must be a valid identifier."
+                message = ex.Message
             });
         }
-
-        var deleted =
-            await _appUserService.DeleteAsync(
-                id,
-                tenantId,
-                cancellationToken);
-
-        if (!deleted)
-        {
-            return NotFound();
-        }
-
-        return NoContent();
     }
 
     [HttpPatch("{id:guid}/reactivate")]
     public async Task<ActionResult<AppUserResponse>> Reactivate(
         Guid id,
-        [FromQuery] Guid tenantId,
         CancellationToken cancellationToken)
     {
-        if (tenantId == Guid.Empty)
-        {
-            return BadRequest(new
-            {
-                message = "TenantId must be a valid identifier."
-            });
-        }
-
         var reactivated =
             await _appUserService.ReactivateAsync(
                 id,
-                tenantId,
+                _currentUserService.TenantId,
                 cancellationToken);
 
         if (reactivated is null)
@@ -215,21 +187,12 @@ public class AppUsersController : ControllerBase
     public async Task<ActionResult<List<AppUserCollectionRouteResponse>>>
         GetCollectionRoutes(
             Guid id,
-            [FromQuery] Guid tenantId,
             CancellationToken cancellationToken)
     {
-        if (tenantId == Guid.Empty)
-        {
-            return BadRequest(new
-            {
-                message = "TenantId must be a valid identifier."
-            });
-        }
-
         var routes =
             await _appUserService.GetCollectionRoutesAsync(
                 id,
-                tenantId,
+                _currentUserService.TenantId,
                 cancellationToken);
 
         if (routes is null)
@@ -244,24 +207,15 @@ public class AppUsersController : ControllerBase
     public async Task<IActionResult> AssignCollectionRoute(
         Guid id,
         Guid routeId,
-        [FromQuery] Guid tenantId,
         CancellationToken cancellationToken)
     {
-        if (tenantId == Guid.Empty)
-        {
-            return BadRequest(new
-            {
-                message = "TenantId must be a valid identifier."
-            });
-        }
-
         try
         {
             var assigned =
                 await _appUserService.AssignCollectionRouteAsync(
                     id,
                     routeId,
-                    tenantId,
+                    _currentUserService.TenantId,
                     cancellationToken);
 
             if (!assigned)
@@ -291,22 +245,13 @@ public class AppUsersController : ControllerBase
     public async Task<IActionResult> UnassignCollectionRoute(
         Guid id,
         Guid routeId,
-        [FromQuery] Guid tenantId,
         CancellationToken cancellationToken)
     {
-        if (tenantId == Guid.Empty)
-        {
-            return BadRequest(new
-            {
-                message = "TenantId must be a valid identifier."
-            });
-        }
-
         var removed =
             await _appUserService.UnassignCollectionRouteAsync(
                 id,
                 routeId,
-                tenantId,
+                _currentUserService.TenantId,
                 cancellationToken);
 
         if (!removed)
@@ -315,5 +260,43 @@ public class AppUsersController : ControllerBase
         }
 
         return NoContent();
+    }
+
+    [HttpPatch("{id:guid}/password")]
+    public async Task<IActionResult> SetPassword(
+        Guid id,
+        [FromBody] SetAppUserPasswordRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var updated =
+                await _appUserService.SetPasswordAsync(
+                    id,
+                    _currentUserService.TenantId,
+                    request.Password,
+                    cancellationToken);
+
+            if (!updated)
+            {
+                return NotFound();
+            }
+
+            return NoContent();
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new
+            {
+                message = ex.Message
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new
+            {
+                message = ex.Message
+            });
+        }
     }
 }

@@ -25,11 +25,12 @@ public class CollectionRouteService : ICollectionRouteService
     }
 
     public async Task<CollectionRouteResponse> CreateAsync(
+        Guid tenantId,
         CreateCollectionRouteRequest request,
         CancellationToken cancellationToken = default)
     {
         var tenant = await _tenantRepository.GetByIdAsync(
-            request.TenantId,
+            tenantId,
             cancellationToken);
 
         if (tenant is null || !tenant.IsActive)
@@ -54,7 +55,7 @@ public class CollectionRouteService : ICollectionRouteService
 
         var collectionRoute = new CollectionRoute
         {
-            TenantId = request.TenantId,
+            TenantId = tenantId,
             Name = request.Name.Trim(),
             Description = string.IsNullOrWhiteSpace(request.Description)
                 ? null

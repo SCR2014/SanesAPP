@@ -5,6 +5,7 @@ namespace Sanes.Application.CollectionRoutes.Services;
 public interface ICollectionRouteService
 {
     Task<CollectionRouteResponse> CreateAsync(
+        Guid tenantId,
         CreateCollectionRouteRequest request,
         CancellationToken cancellationToken = default);
 

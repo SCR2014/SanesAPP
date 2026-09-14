@@ -6,6 +6,7 @@ namespace Sanes.Application.AppUsers.Services;
 public interface IAppUserService
 {
     Task<AppUserResponse> CreateAsync(
+        Guid tenantId,
         CreateAppUserRequest request,
         CancellationToken cancellationToken = default);
 
@@ -50,5 +51,11 @@ public interface IAppUserService
         Guid appUserId,
         Guid collectionRouteId,
         Guid tenantId,
+        CancellationToken cancellationToken = default);
+
+    Task<bool> SetPasswordAsync(
+        Guid id,
+        Guid tenantId,
+        string password,
         CancellationToken cancellationToken = default);
 }

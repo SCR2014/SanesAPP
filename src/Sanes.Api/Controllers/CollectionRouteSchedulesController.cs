@@ -1,19 +1,26 @@
 using Microsoft.AspNetCore.Mvc;
 using Sanes.Application.CollectionRouteSchedules.DTOs;
 using Sanes.Application.CollectionRouteSchedules.Services;
+using Microsoft.AspNetCore.Authorization;
+using Sanes.Application.Authentication.Services;
+using Sanes.Domain.Enums;
 
 namespace Sanes.Api.Controllers;
 
 [ApiController]
 [Route("api/collection-route-schedules")]
+[Authorize(Roles = nameof(AppUserRole.Administrator))]
 public class CollectionRouteSchedulesController : ControllerBase
 {
     private readonly ICollectionRouteScheduleService _service;
+    private readonly ICurrentUserService _currentUserService;
 
     public CollectionRouteSchedulesController(
-        ICollectionRouteScheduleService service)
+        ICollectionRouteScheduleService service,
+        ICurrentUserService currentUserService)
     {
         _service = service;
+        _currentUserService = currentUserService;
     }
 
     [HttpPost]
@@ -24,6 +31,7 @@ public class CollectionRouteSchedulesController : ControllerBase
         try
         {
             var result = await _service.CreateAsync(
+                _currentUserService.TenantId,
                 request,
                 cancellationToken);
 
@@ -32,7 +40,6 @@ public class CollectionRouteSchedulesController : ControllerBase
                 new
                 {
                     id = result.Id,
-                    tenantId = request.TenantId,
                     collectionRouteId = request.CollectionRouteId
                 },
                 result);
@@ -48,14 +55,13 @@ public class CollectionRouteSchedulesController : ControllerBase
 
     [HttpGet]
     public async Task<ActionResult<List<CollectionRouteScheduleResponse>>> GetAll(
-        [FromQuery] Guid tenantId,
         [FromQuery] Guid collectionRouteId,
         CancellationToken cancellationToken)
     {
         try
         {
             var result = await _service.GetAllAsync(
-                tenantId,
+                _currentUserService.TenantId,
                 collectionRouteId,
                 cancellationToken);
 
@@ -73,13 +79,12 @@ public class CollectionRouteSchedulesController : ControllerBase
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<CollectionRouteScheduleResponse>> GetById(
         Guid id,
-        [FromQuery] Guid tenantId,
         [FromQuery] Guid collectionRouteId,
         CancellationToken cancellationToken)
     {
         var result = await _service.GetByIdAsync(
             id,
-            tenantId,
+            _currentUserService.TenantId,
             collectionRouteId,
             cancellationToken);
 
@@ -94,7 +99,6 @@ public class CollectionRouteSchedulesController : ControllerBase
     [HttpPut("{id:guid}")]
     public async Task<ActionResult<CollectionRouteScheduleResponse>> Update(
         Guid id,
-        [FromQuery] Guid tenantId,
         [FromQuery] Guid collectionRouteId,
         [FromBody] UpdateCollectionRouteScheduleRequest request,
         CancellationToken cancellationToken)
@@ -103,7 +107,7 @@ public class CollectionRouteSchedulesController : ControllerBase
         {
             var result = await _service.UpdateAsync(
                 id,
-                tenantId,
+                _currentUserService.TenantId,
                 collectionRouteId,
                 request,
                 cancellationToken);
@@ -127,13 +131,12 @@ public class CollectionRouteSchedulesController : ControllerBase
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(
         Guid id,
-        [FromQuery] Guid tenantId,
         [FromQuery] Guid collectionRouteId,
         CancellationToken cancellationToken)
     {
         var deleted = await _service.DeleteAsync(
             id,
-            tenantId,
+            _currentUserService.TenantId,
             collectionRouteId,
             cancellationToken);
 
@@ -148,13 +151,12 @@ public class CollectionRouteSchedulesController : ControllerBase
     [HttpPatch("{id:guid}/reactivate")]
     public async Task<ActionResult<CollectionRouteScheduleResponse>> Reactivate(
         Guid id,
-        [FromQuery] Guid tenantId,
         [FromQuery] Guid collectionRouteId,
         CancellationToken cancellationToken)
     {
         var result = await _service.ReactivateAsync(
             id,
-            tenantId,
+            _currentUserService.TenantId,
             collectionRouteId,
             cancellationToken);
 

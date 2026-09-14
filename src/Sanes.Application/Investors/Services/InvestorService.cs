@@ -19,11 +19,12 @@ public class InvestorService : IInvestorService
     }
 
     public async Task<InvestorResponse> CreateAsync(
+        Guid tenantId,
         CreateInvestorRequest request,
         CancellationToken cancellationToken = default)
     {
         var tenant = await _tenantRepository.GetByIdAsync(
-            request.TenantId,
+            tenantId,
             cancellationToken);
 
         if (tenant is null)
@@ -42,7 +43,7 @@ public class InvestorService : IInvestorService
         {
             var identificationExists =
                 await _investorRepository.ExistsByIdentificationAsync(
-                    request.TenantId,
+                    tenantId,
                     identification,
                     cancellationToken: cancellationToken);
 
@@ -55,7 +56,7 @@ public class InvestorService : IInvestorService
 
         var investor = new Investor
         {
-            TenantId = request.TenantId,
+            TenantId = tenantId,
             Name = name,
             Phone = phone,
             Email = email,

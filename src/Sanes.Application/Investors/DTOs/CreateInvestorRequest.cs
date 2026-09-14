@@ -4,8 +4,6 @@ namespace Sanes.Application.Investors.DTOs;
 
 public class CreateInvestorRequest : IValidatableObject
 {
-    [Required]
-    public Guid TenantId { get; set; }
 
     [Required]
     [MaxLength(150)]
@@ -27,12 +25,6 @@ public class CreateInvestorRequest : IValidatableObject
     public IEnumerable<ValidationResult> Validate(
         ValidationContext validationContext)
     {
-        if (TenantId == Guid.Empty)
-        {
-            yield return new ValidationResult(
-                "TenantId must be a valid identifier.",
-                new[] { nameof(TenantId) });
-        }
 
         if (string.IsNullOrWhiteSpace(Name))
         {

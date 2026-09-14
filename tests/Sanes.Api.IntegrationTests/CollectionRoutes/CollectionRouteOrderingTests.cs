@@ -1,18 +1,19 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Sanes.Api.IntegrationTests.Helpers;
 
 namespace Sanes.Api.IntegrationTests.CollectionRoutes;
 
 public class CollectionRouteOrderingTests
     : IClassFixture<CustomWebApplicationFactory>
 {
-    private readonly HttpClient _client;
+    private readonly CustomWebApplicationFactory _factory;
 
     public CollectionRouteOrderingTests(
         CustomWebApplicationFactory factory)
     {
-        _client = factory.CreateClient();
+        _factory = factory;
     }
 
     // ============================================================
@@ -22,10 +23,10 @@ public class CollectionRouteOrderingTests
     [Fact]
     public async Task Create_WithManualOrderMode_ReturnsManual()
     {
-        var tenantId = await CreateTenantAsync();
+        var context = await CreateContextAsync();
 
         var route = await CreateRouteAsync(
-            tenantId,
+            context.Client,
             orderMode: 1);
 
         Assert.Equal(1, route.OrderMode);
@@ -34,10 +35,10 @@ public class CollectionRouteOrderingTests
     [Fact]
     public async Task Create_WithAutomaticOrderMode_ReturnsAutomatic()
     {
-        var tenantId = await CreateTenantAsync();
+        var context = await CreateContextAsync();
 
         var route = await CreateRouteAsync(
-            tenantId,
+            context.Client,
             orderMode: 2);
 
         Assert.Equal(2, route.OrderMode);
@@ -46,17 +47,17 @@ public class CollectionRouteOrderingTests
     [Fact]
     public async Task Create_WithInvalidOrderMode_ReturnsBadRequest()
     {
-        var tenantId = await CreateTenantAsync();
+        var context = await CreateContextAsync();
 
-        var response = await _client.PostAsJsonAsync(
-            "/api/collection-routes",
-            new
-            {
-                tenantId,
-                name = Unique("Ruta invalida"),
-                description = "OrderMode invalido",
-                orderMode = 99
-            });
+        var response =
+            await context.Client.PostAsJsonAsync(
+                "/api/collection-routes",
+                new
+                {
+                    name = Unique("Ruta invalida"),
+                    description = "OrderMode invalido",
+                    orderMode = 99
+                });
 
         Assert.Equal(
             HttpStatusCode.BadRequest,
@@ -70,29 +71,29 @@ public class CollectionRouteOrderingTests
     [Fact]
     public async Task ReorderClients_ManualRoute_AssignsSequentialOrder()
     {
-        var tenantId = await CreateTenantAsync();
+        var context = await CreateContextAsync();
 
         var route = await CreateRouteAsync(
-            tenantId,
-            orderMode: 1);
+            context.Client,
+            1);
 
         var clientA = await CreateClientAsync(
-            tenantId,
+            context.Client,
             route.Id,
             "Cliente A");
 
         var clientB = await CreateClientAsync(
-            tenantId,
+            context.Client,
             route.Id,
             "Cliente B");
 
         var clientC = await CreateClientAsync(
-            tenantId,
+            context.Client,
             route.Id,
             "Cliente C");
 
         var response = await ReorderAsync(
-            tenantId,
+            context.Client,
             route.Id,
             clientC.Id,
             clientA.Id,
@@ -103,7 +104,7 @@ public class CollectionRouteOrderingTests
             response.StatusCode);
 
         var clients = await GetRouteClientsAsync(
-            tenantId,
+            context.Client,
             route.Id);
 
         Assert.Equal(3, clients.Count);
@@ -121,29 +122,29 @@ public class CollectionRouteOrderingTests
     [Fact]
     public async Task ReorderClients_OmittedClient_SetsOrderToNull()
     {
-        var tenantId = await CreateTenantAsync();
+        var context = await CreateContextAsync();
 
         var route = await CreateRouteAsync(
-            tenantId,
-            orderMode: 1);
+            context.Client,
+            1);
 
         var clientA = await CreateClientAsync(
-            tenantId,
+            context.Client,
             route.Id,
             "Cliente A");
 
         var clientB = await CreateClientAsync(
-            tenantId,
+            context.Client,
             route.Id,
             "Cliente B");
 
         var clientC = await CreateClientAsync(
-            tenantId,
+            context.Client,
             route.Id,
             "Cliente C");
 
         var firstOrder = await ReorderAsync(
-            tenantId,
+            context.Client,
             route.Id,
             clientA.Id,
             clientB.Id,
@@ -154,7 +155,7 @@ public class CollectionRouteOrderingTests
             firstOrder.StatusCode);
 
         var secondOrder = await ReorderAsync(
-            tenantId,
+            context.Client,
             route.Id,
             clientB.Id,
             clientA.Id);
@@ -164,7 +165,7 @@ public class CollectionRouteOrderingTests
             secondOrder.StatusCode);
 
         var clients = await GetRouteClientsAsync(
-            tenantId,
+            context.Client,
             route.Id);
 
         var omittedClient =
@@ -177,19 +178,19 @@ public class CollectionRouteOrderingTests
     [Fact]
     public async Task ReorderClients_WithDuplicateIds_ReturnsBadRequest()
     {
-        var tenantId = await CreateTenantAsync();
+        var context = await CreateContextAsync();
 
         var route = await CreateRouteAsync(
-            tenantId,
-            orderMode: 1);
+            context.Client,
+            1);
 
         var client = await CreateClientAsync(
-            tenantId,
+            context.Client,
             route.Id,
             "Cliente duplicado");
 
         var response = await ReorderAsync(
-            tenantId,
+            context.Client,
             route.Id,
             client.Id,
             client.Id);
@@ -202,28 +203,28 @@ public class CollectionRouteOrderingTests
     [Fact]
     public async Task ReorderClients_WithClientFromDifferentRoute_ReturnsBadRequest()
     {
-        var tenantId = await CreateTenantAsync();
+        var context = await CreateContextAsync();
 
         var routeA = await CreateRouteAsync(
-            tenantId,
-            orderMode: 1);
+            context.Client,
+            1);
 
         var routeB = await CreateRouteAsync(
-            tenantId,
-            orderMode: 1);
+            context.Client,
+            1);
 
         var clientA = await CreateClientAsync(
-            tenantId,
+            context.Client,
             routeA.Id,
             "Cliente Ruta A");
 
         var clientB = await CreateClientAsync(
-            tenantId,
+            context.Client,
             routeB.Id,
             "Cliente Ruta B");
 
         var response = await ReorderAsync(
-            tenantId,
+            context.Client,
             routeA.Id,
             clientA.Id,
             clientB.Id);
@@ -236,29 +237,29 @@ public class CollectionRouteOrderingTests
     [Fact]
     public async Task ReorderClients_WithClientFromDifferentTenant_ReturnsBadRequest()
     {
-        var tenantA = await CreateTenantAsync();
-        var tenantB = await CreateTenantAsync();
+        var tenantA = await CreateContextAsync();
+        var tenantB = await CreateContextAsync();
 
         var routeA = await CreateRouteAsync(
-            tenantA,
-            orderMode: 1);
+            tenantA.Client,
+            1);
 
         var routeB = await CreateRouteAsync(
-            tenantB,
-            orderMode: 1);
+            tenantB.Client,
+            1);
 
         var clientA = await CreateClientAsync(
-            tenantA,
+            tenantA.Client,
             routeA.Id,
             "Cliente Tenant A");
 
         var clientB = await CreateClientAsync(
-            tenantB,
+            tenantB.Client,
             routeB.Id,
             "Cliente Tenant B");
 
         var response = await ReorderAsync(
-            tenantA,
+            tenantA.Client,
             routeA.Id,
             clientA.Id,
             clientB.Id);
@@ -271,19 +272,19 @@ public class CollectionRouteOrderingTests
     [Fact]
     public async Task ReorderClients_OnAutomaticRoute_ReturnsBadRequest()
     {
-        var tenantId = await CreateTenantAsync();
+        var context = await CreateContextAsync();
 
         var route = await CreateRouteAsync(
-            tenantId,
-            orderMode: 2);
+            context.Client,
+            2);
 
         var client = await CreateClientAsync(
-            tenantId,
+            context.Client,
             route.Id,
             "Cliente Automatic");
 
         var response = await ReorderAsync(
-            tenantId,
+            context.Client,
             route.Id,
             client.Id);
 
@@ -295,15 +296,15 @@ public class CollectionRouteOrderingTests
     [Fact]
     public async Task ReorderClients_RouteFromDifferentTenant_ReturnsNotFound()
     {
-        var tenantA = await CreateTenantAsync();
-        var tenantB = await CreateTenantAsync();
+        var tenantA = await CreateContextAsync();
+        var tenantB = await CreateContextAsync();
 
         var route = await CreateRouteAsync(
-            tenantA,
-            orderMode: 1);
+            tenantA.Client,
+            1);
 
         var response = await ReorderAsync(
-            tenantB,
+            tenantB.Client,
             route.Id);
 
         Assert.Equal(
@@ -318,36 +319,36 @@ public class CollectionRouteOrderingTests
     [Fact]
     public async Task GetClientsByRoute_ReturnsClientsInCollectionRouteOrder()
     {
-        var tenantId = await CreateTenantAsync();
+        var context = await CreateContextAsync();
 
         var route = await CreateRouteAsync(
-            tenantId,
-            orderMode: 1);
+            context.Client,
+            1);
 
         var clientA = await CreateClientAsync(
-            tenantId,
+            context.Client,
             route.Id,
             "AAA");
 
         var clientB = await CreateClientAsync(
-            tenantId,
+            context.Client,
             route.Id,
             "BBB");
 
         var clientC = await CreateClientAsync(
-            tenantId,
+            context.Client,
             route.Id,
             "CCC");
 
         await ReorderAsync(
-            tenantId,
+            context.Client,
             route.Id,
             clientC.Id,
             clientA.Id,
             clientB.Id);
 
         var clients = await GetRouteClientsAsync(
-            tenantId,
+            context.Client,
             route.Id);
 
         Assert.Equal(
@@ -363,44 +364,51 @@ public class CollectionRouteOrderingTests
     [Fact]
     public async Task GetClientsByRoute_UnorderedClientsAppearLast()
     {
-        var tenantId = await CreateTenantAsync();
+        var context = await CreateContextAsync();
 
         var route = await CreateRouteAsync(
-            tenantId,
-            orderMode: 1);
+            context.Client,
+            1);
 
         var orderedA = await CreateClientAsync(
-            tenantId,
+            context.Client,
             route.Id,
             "ZZZ Ordered A");
 
         var orderedB = await CreateClientAsync(
-            tenantId,
+            context.Client,
             route.Id,
             "YYY Ordered B");
 
         var unordered = await CreateClientAsync(
-            tenantId,
+            context.Client,
             route.Id,
             "AAA Unordered");
 
         await ReorderAsync(
-            tenantId,
+            context.Client,
             route.Id,
             orderedB.Id,
             orderedA.Id);
 
         var clients = await GetRouteClientsAsync(
-            tenantId,
+            context.Client,
             route.Id);
 
         Assert.Equal(orderedB.Id, clients[0].Id);
         Assert.Equal(orderedA.Id, clients[1].Id);
         Assert.Equal(unordered.Id, clients[2].Id);
 
-        Assert.Equal(1, clients[0].CollectionRouteOrder);
-        Assert.Equal(2, clients[1].CollectionRouteOrder);
-        Assert.Null(clients[2].CollectionRouteOrder);
+        Assert.Equal(
+            1,
+            clients[0].CollectionRouteOrder);
+
+        Assert.Equal(
+            2,
+            clients[1].CollectionRouteOrder);
+
+        Assert.Null(
+            clients[2].CollectionRouteOrder);
     }
 
     // ============================================================
@@ -410,28 +418,28 @@ public class CollectionRouteOrderingTests
     [Fact]
     public async Task UpdateClient_MovingToDifferentRoute_ClearsOrder()
     {
-        var tenantId = await CreateTenantAsync();
+        var context = await CreateContextAsync();
 
         var routeA = await CreateRouteAsync(
-            tenantId,
-            orderMode: 1);
+            context.Client,
+            1);
 
         var routeB = await CreateRouteAsync(
-            tenantId,
-            orderMode: 1);
+            context.Client,
+            1);
 
         var client = await CreateClientAsync(
-            tenantId,
+            context.Client,
             routeA.Id,
             "Cliente mover");
 
         await ReorderAsync(
-            tenantId,
+            context.Client,
             routeA.Id,
             client.Id);
 
         var updateResponse = await UpdateClientAsync(
-            tenantId,
+            context.Client,
             client,
             routeB.Id);
 
@@ -441,7 +449,7 @@ public class CollectionRouteOrderingTests
 
         var updatedClient =
             await GetClientAsync(
-                tenantId,
+                context.Client,
                 client.Id);
 
         Assert.Equal(
@@ -455,27 +463,27 @@ public class CollectionRouteOrderingTests
     [Fact]
     public async Task UpdateClient_RemainingInSameRoute_PreservesOrder()
     {
-        var tenantId = await CreateTenantAsync();
+        var context = await CreateContextAsync();
 
         var route = await CreateRouteAsync(
-            tenantId,
-            orderMode: 1);
+            context.Client,
+            1);
 
         var client = await CreateClientAsync(
-            tenantId,
+            context.Client,
             route.Id,
             "Cliente conserva");
 
         await ReorderAsync(
-            tenantId,
+            context.Client,
             route.Id,
             client.Id);
 
         var updateResponse = await UpdateClientAsync(
-            tenantId,
+            context.Client,
             client,
             route.Id,
-            firstName: "Cliente actualizado");
+            "Cliente actualizado");
 
         Assert.Equal(
             HttpStatusCode.OK,
@@ -483,7 +491,7 @@ public class CollectionRouteOrderingTests
 
         var updatedClient =
             await GetClientAsync(
-                tenantId,
+                context.Client,
                 client.Id);
 
         Assert.Equal(
@@ -498,35 +506,35 @@ public class CollectionRouteOrderingTests
     [Fact]
     public async Task Optimize_AutomaticRoute_AssignsOrderToClientsWithCoordinates()
     {
-        var tenantId = await CreateTenantAsync();
+        var context = await CreateContextAsync();
 
         var route = await CreateRouteAsync(
-            tenantId,
-            orderMode: 2);
+            context.Client,
+            2);
 
         await CreateClientAsync(
-            tenantId,
+            context.Client,
             route.Id,
             "Cliente A",
             19.451000m,
             -70.701000m);
 
         await CreateClientAsync(
-            tenantId,
+            context.Client,
             route.Id,
             "Cliente B",
             19.455000m,
             -70.705000m);
 
         await CreateClientAsync(
-            tenantId,
+            context.Client,
             route.Id,
             "Cliente C",
             19.460000m,
             -70.710000m);
 
         var response = await OptimizeAsync(
-            tenantId,
+            context.Client,
             route.Id,
             19.450000m,
             -70.700000m);
@@ -536,7 +544,7 @@ public class CollectionRouteOrderingTests
             response.StatusCode);
 
         var clients = await GetRouteClientsAsync(
-            tenantId,
+            context.Client,
             route.Id);
 
         Assert.Equal(3, clients.Count);
@@ -544,21 +552,22 @@ public class CollectionRouteOrderingTests
         Assert.Equal(
             new int?[] { 1, 2, 3 },
             clients.Select(
-                x => x.CollectionRouteOrder).ToArray());
+                x => x.CollectionRouteOrder)
+                .ToArray());
     }
 
     [Fact]
     public async Task Optimize_ClientWithoutCoordinates_RemainsUnordered()
     {
-        var tenantId = await CreateTenantAsync();
+        var context = await CreateContextAsync();
 
         var route = await CreateRouteAsync(
-            tenantId,
-            orderMode: 2);
+            context.Client,
+            2);
 
         var withCoordinates =
             await CreateClientAsync(
-                tenantId,
+                context.Client,
                 route.Id,
                 "Con coordenadas",
                 19.451000m,
@@ -566,12 +575,12 @@ public class CollectionRouteOrderingTests
 
         var withoutCoordinates =
             await CreateClientAsync(
-                tenantId,
+                context.Client,
                 route.Id,
                 "Sin coordenadas");
 
         var response = await OptimizeAsync(
-            tenantId,
+            context.Client,
             route.Id,
             19.450000m,
             -70.700000m);
@@ -581,7 +590,7 @@ public class CollectionRouteOrderingTests
             response.StatusCode);
 
         var clients = await GetRouteClientsAsync(
-            tenantId,
+            context.Client,
             route.Id);
 
         var positioned =
@@ -603,21 +612,21 @@ public class CollectionRouteOrderingTests
     [Fact]
     public async Task Optimize_OnManualRoute_ReturnsBadRequest()
     {
-        var tenantId = await CreateTenantAsync();
+        var context = await CreateContextAsync();
 
         var route = await CreateRouteAsync(
-            tenantId,
-            orderMode: 1);
+            context.Client,
+            1);
 
         await CreateClientAsync(
-            tenantId,
+            context.Client,
             route.Id,
             "Cliente Manual",
             19.451000m,
             -70.701000m);
 
         var response = await OptimizeAsync(
-            tenantId,
+            context.Client,
             route.Id,
             19.450000m,
             -70.700000m);
@@ -630,18 +639,19 @@ public class CollectionRouteOrderingTests
     [Fact]
     public async Task Optimize_WithOnlyStartLatitude_ReturnsBadRequest()
     {
-        var tenantId = await CreateTenantAsync();
+        var context = await CreateContextAsync();
 
         var route = await CreateRouteAsync(
-            tenantId,
-            orderMode: 2);
+            context.Client,
+            2);
 
-        var response = await _client.PostAsJsonAsync(
-            $"/api/collection-routes/{route.Id}/optimize?tenantId={tenantId}",
-            new
-            {
-                startLatitude = 19.45m
-            });
+        var response =
+            await context.Client.PostAsJsonAsync(
+                $"/api/collection-routes/{route.Id}/optimize",
+                new
+                {
+                    startLatitude = 19.45m
+                });
 
         Assert.Equal(
             HttpStatusCode.BadRequest,
@@ -651,18 +661,19 @@ public class CollectionRouteOrderingTests
     [Fact]
     public async Task Optimize_WithOnlyStartLongitude_ReturnsBadRequest()
     {
-        var tenantId = await CreateTenantAsync();
+        var context = await CreateContextAsync();
 
         var route = await CreateRouteAsync(
-            tenantId,
-            orderMode: 2);
+            context.Client,
+            2);
 
-        var response = await _client.PostAsJsonAsync(
-            $"/api/collection-routes/{route.Id}/optimize?tenantId={tenantId}",
-            new
-            {
-                startLongitude = -70.70m
-            });
+        var response =
+            await context.Client.PostAsJsonAsync(
+                $"/api/collection-routes/{route.Id}/optimize",
+                new
+                {
+                    startLongitude = -70.70m
+                });
 
         Assert.Equal(
             HttpStatusCode.BadRequest,
@@ -672,14 +683,14 @@ public class CollectionRouteOrderingTests
     [Fact]
     public async Task Optimize_WithInvalidLatitude_ReturnsBadRequest()
     {
-        var tenantId = await CreateTenantAsync();
+        var context = await CreateContextAsync();
 
         var route = await CreateRouteAsync(
-            tenantId,
-            orderMode: 2);
+            context.Client,
+            2);
 
         var response = await OptimizeAsync(
-            tenantId,
+            context.Client,
             route.Id,
             91m,
             -70.70m);
@@ -692,14 +703,14 @@ public class CollectionRouteOrderingTests
     [Fact]
     public async Task Optimize_WithInvalidLongitude_ReturnsBadRequest()
     {
-        var tenantId = await CreateTenantAsync();
+        var context = await CreateContextAsync();
 
         var route = await CreateRouteAsync(
-            tenantId,
-            orderMode: 2);
+            context.Client,
+            2);
 
         var response = await OptimizeAsync(
-            tenantId,
+            context.Client,
             route.Id,
             19.45m,
             -181m);
@@ -712,35 +723,35 @@ public class CollectionRouteOrderingTests
     [Fact]
     public async Task Optimize_WithStartingPoint_SelectsNearestClientFirst()
     {
-        var tenantId = await CreateTenantAsync();
+        var context = await CreateContextAsync();
 
         var route = await CreateRouteAsync(
-            tenantId,
-            orderMode: 2);
+            context.Client,
+            2);
 
         var nearest = await CreateClientAsync(
-            tenantId,
+            context.Client,
             route.Id,
             "Nearest",
             19.451000m,
             -70.701000m);
 
         await CreateClientAsync(
-            tenantId,
+            context.Client,
             route.Id,
             "Medium",
             19.470000m,
             -70.720000m);
 
         await CreateClientAsync(
-            tenantId,
+            context.Client,
             route.Id,
             "Far",
             19.500000m,
             -70.750000m);
 
         var response = await OptimizeAsync(
-            tenantId,
+            context.Client,
             route.Id,
             19.450000m,
             -70.700000m);
@@ -750,7 +761,7 @@ public class CollectionRouteOrderingTests
             response.StatusCode);
 
         var clients = await GetRouteClientsAsync(
-            tenantId,
+            context.Client,
             route.Id);
 
         Assert.Equal(
@@ -765,15 +776,15 @@ public class CollectionRouteOrderingTests
     [Fact]
     public async Task Optimize_RouteFromDifferentTenant_ReturnsNotFound()
     {
-        var tenantA = await CreateTenantAsync();
-        var tenantB = await CreateTenantAsync();
+        var tenantA = await CreateContextAsync();
+        var tenantB = await CreateContextAsync();
 
         var route = await CreateRouteAsync(
-            tenantA,
-            orderMode: 2);
+            tenantA.Client,
+            2);
 
         var response = await OptimizeAsync(
-            tenantB,
+            tenantB.Client,
             route.Id,
             19.45m,
             -70.70m);
@@ -790,31 +801,31 @@ public class CollectionRouteOrderingTests
     [Fact]
     public async Task ChangeOrderMode_ManualToAutomatic_PreservesExistingOrder()
     {
-        var tenantId = await CreateTenantAsync();
+        var context = await CreateContextAsync();
 
         var route = await CreateRouteAsync(
-            tenantId,
-            orderMode: 1);
+            context.Client,
+            1);
 
         var clientA = await CreateClientAsync(
-            tenantId,
+            context.Client,
             route.Id,
             "Cliente A");
 
         var clientB = await CreateClientAsync(
-            tenantId,
+            context.Client,
             route.Id,
             "Cliente B");
 
         await ReorderAsync(
-            tenantId,
+            context.Client,
             route.Id,
             clientB.Id,
             clientA.Id);
 
         var updateResponse =
             await UpdateRouteAsync(
-                tenantId,
+                context.Client,
                 route.Id,
                 route.Name,
                 2);
@@ -824,7 +835,7 @@ public class CollectionRouteOrderingTests
             updateResponse.StatusCode);
 
         var clients = await GetRouteClientsAsync(
-            tenantId,
+            context.Client,
             route.Id);
 
         Assert.Equal(clientB.Id, clients[0].Id);
@@ -837,28 +848,28 @@ public class CollectionRouteOrderingTests
     [Fact]
     public async Task ChangeOrderMode_AutomaticToManual_PreservesOptimizedOrder()
     {
-        var tenantId = await CreateTenantAsync();
+        var context = await CreateContextAsync();
 
         var route = await CreateRouteAsync(
-            tenantId,
-            orderMode: 2);
+            context.Client,
+            2);
 
         var clientA = await CreateClientAsync(
-            tenantId,
+            context.Client,
             route.Id,
             "Cliente cercano",
             19.451000m,
             -70.701000m);
 
         var clientB = await CreateClientAsync(
-            tenantId,
+            context.Client,
             route.Id,
             "Cliente lejano",
             19.480000m,
             -70.730000m);
 
         var optimizeResponse = await OptimizeAsync(
-            tenantId,
+            context.Client,
             route.Id,
             19.450000m,
             -70.700000m);
@@ -869,20 +880,21 @@ public class CollectionRouteOrderingTests
 
         var beforeModeChange =
             await GetRouteClientsAsync(
-                tenantId,
+                context.Client,
                 route.Id);
 
-        var beforeOrder = beforeModeChange
-            .Select(x => new
-            {
-                x.Id,
-                x.CollectionRouteOrder
-            })
-            .ToArray();
+        var beforeOrder =
+            beforeModeChange
+                .Select(x => new
+                {
+                    x.Id,
+                    x.CollectionRouteOrder
+                })
+                .ToArray();
 
         var updateResponse =
             await UpdateRouteAsync(
-                tenantId,
+                context.Client,
                 route.Id,
                 route.Name,
                 1);
@@ -893,7 +905,7 @@ public class CollectionRouteOrderingTests
 
         var afterModeChange =
             await GetRouteClientsAsync(
-                tenantId,
+                context.Client,
                 route.Id);
 
         Assert.Equal(
@@ -922,31 +934,31 @@ public class CollectionRouteOrderingTests
     [Fact]
     public async Task ChangeOrderMode_ManualAutomaticManual_PreservesOrderUntilOptimization()
     {
-        var tenantId = await CreateTenantAsync();
+        var context = await CreateContextAsync();
 
         var route = await CreateRouteAsync(
-            tenantId,
-            orderMode: 1);
+            context.Client,
+            1);
 
         var clientA = await CreateClientAsync(
-            tenantId,
+            context.Client,
             route.Id,
             "Cliente A");
 
         var clientB = await CreateClientAsync(
-            tenantId,
+            context.Client,
             route.Id,
             "Cliente B");
 
         await ReorderAsync(
-            tenantId,
+            context.Client,
             route.Id,
             clientB.Id,
             clientA.Id);
 
         var toAutomatic =
             await UpdateRouteAsync(
-                tenantId,
+                context.Client,
                 route.Id,
                 route.Name,
                 2);
@@ -957,7 +969,7 @@ public class CollectionRouteOrderingTests
 
         var backToManual =
             await UpdateRouteAsync(
-                tenantId,
+                context.Client,
                 route.Id,
                 route.Name,
                 1);
@@ -967,7 +979,7 @@ public class CollectionRouteOrderingTests
             backToManual.StatusCode);
 
         var clients = await GetRouteClientsAsync(
-            tenantId,
+            context.Client,
             route.Id);
 
         Assert.Equal(clientB.Id, clients[0].Id);
@@ -981,50 +993,37 @@ public class CollectionRouteOrderingTests
     // HELPERS
     // ============================================================
 
-    private async Task<Guid> CreateTenantAsync()
+    private async Task<TestTenantContext>
+        CreateContextAsync()
     {
-        var response = await _client.PostAsJsonAsync(
-            "/api/tenants",
-            new
-            {
-                name = Unique("Tenant Ordering"),
-                legalName = "Sanes Test SRL",
-                phone = UniquePhone(),
-                email = $"{Guid.NewGuid():N}@example.com",
-                currencyCode = "DOP",
-                currencySymbol = "RD$"
-            });
-
-        response.EnsureSuccessStatusCode();
-
-        using var json =
-            JsonDocument.Parse(
-                await response.Content.ReadAsStringAsync());
-
-        return json.RootElement
-            .GetProperty("id")
-            .GetGuid();
+        return await TestAuthenticationHelper
+            .CreateAdministratorContextAsync(
+                _factory);
     }
 
-    private async Task<RouteResult> CreateRouteAsync(
-        Guid tenantId,
-        int orderMode)
+    private static async Task<RouteResult>
+        CreateRouteAsync(
+            HttpClient client,
+            int orderMode)
     {
-        var response = await _client.PostAsJsonAsync(
-            "/api/collection-routes",
-            new
-            {
-                tenantId,
-                name = Unique("Ruta Ordering"),
-                description = "Ruta creada por integration test",
-                orderMode
-            });
+        var response =
+            await client.PostAsJsonAsync(
+                "/api/collection-routes",
+                new
+                {
+                    name =
+                        Unique("Ruta Ordering"),
+                    description =
+                        "Ruta creada por integration test",
+                    orderMode
+                });
 
         response.EnsureSuccessStatusCode();
 
         using var json =
             JsonDocument.Parse(
-                await response.Content.ReadAsStringAsync());
+                await response.Content
+                    .ReadAsStringAsync());
 
         return new RouteResult
         {
@@ -1042,39 +1041,39 @@ public class CollectionRouteOrderingTests
         };
     }
 
-    private async Task<ClientResult> CreateClientAsync(
-        Guid tenantId,
-        Guid collectionRouteId,
-        string firstName,
-        decimal? latitude = null,
-        decimal? longitude = null)
+    private static async Task<ClientResult>
+        CreateClientAsync(
+            HttpClient client,
+            Guid collectionRouteId,
+            string firstName,
+            decimal? latitude = null,
+            decimal? longitude = null)
     {
-        var phone = UniquePhone();
-
-        var response = await _client.PostAsJsonAsync(
-            "/api/clients",
-            new
-            {
-                tenantId,
-                firstName,
-                lastName = "Ordering Test",
-                phone,
-                secondaryPhone = (string?)null,
-                identificationType = (string?)null,
-                identification = (string?)null,
-                socialNumber = (string?)null,
-                address = "Santiago",
-                latitude,
-                longitude,
-                collectionRouteId,
-                notes = "Integration test"
-            });
+        var response =
+            await client.PostAsJsonAsync(
+                "/api/clients",
+                new
+                {
+                    firstName,
+                    lastName = "Ordering Test",
+                    phone = UniquePhone(),
+                    secondaryPhone = (string?)null,
+                    identificationType = (string?)null,
+                    identification = (string?)null,
+                    socialNumber = (string?)null,
+                    address = "Santiago",
+                    latitude,
+                    longitude,
+                    collectionRouteId,
+                    notes = "Integration test"
+                });
 
         response.EnsureSuccessStatusCode();
 
         using var json =
             JsonDocument.Parse(
-                await response.Content.ReadAsStringAsync());
+                await response.Content
+                    .ReadAsStringAsync());
 
         return new ClientResult
         {
@@ -1112,27 +1111,29 @@ public class CollectionRouteOrderingTests
         };
     }
 
-    private async Task<HttpResponseMessage> ReorderAsync(
-        Guid tenantId,
-        Guid routeId,
-        params Guid[] clientIds)
+    private static async Task<HttpResponseMessage>
+        ReorderAsync(
+            HttpClient client,
+            Guid routeId,
+            params Guid[] clientIds)
     {
-        return await _client.PutAsJsonAsync(
-            $"/api/collection-routes/{routeId}/clients/order?tenantId={tenantId}",
+        return await client.PutAsJsonAsync(
+            $"/api/collection-routes/{routeId}/clients/order",
             new
             {
                 clientIds
             });
     }
 
-    private async Task<HttpResponseMessage> OptimizeAsync(
-        Guid tenantId,
-        Guid routeId,
-        decimal? startLatitude = null,
-        decimal? startLongitude = null)
+    private static async Task<HttpResponseMessage>
+        OptimizeAsync(
+            HttpClient client,
+            Guid routeId,
+            decimal? startLatitude = null,
+            decimal? startLongitude = null)
     {
-        return await _client.PostAsJsonAsync(
-            $"/api/collection-routes/{routeId}/optimize?tenantId={tenantId}",
+        return await client.PostAsJsonAsync(
+            $"/api/collection-routes/{routeId}/optimize",
             new
             {
                 startLatitude,
@@ -1140,18 +1141,22 @@ public class CollectionRouteOrderingTests
             });
     }
 
-    private async Task<List<ClientResult>> GetRouteClientsAsync(
-        Guid tenantId,
-        Guid routeId)
+    private static async Task<List<ClientResult>>
+        GetRouteClientsAsync(
+            HttpClient client,
+            Guid routeId)
     {
-        var response = await _client.GetAsync(
-            $"/api/clients?tenantId={tenantId}&collectionRouteId={routeId}");
+        var response =
+            await client.GetAsync(
+                $"/api/clients" +
+                $"?collectionRouteId={routeId}");
 
         response.EnsureSuccessStatusCode();
 
         using var json =
             JsonDocument.Parse(
-                await response.Content.ReadAsStringAsync());
+                await response.Content
+                    .ReadAsStringAsync());
 
         return json.RootElement
             .EnumerateArray()
@@ -1159,59 +1164,78 @@ public class CollectionRouteOrderingTests
             .ToList();
     }
 
-    private async Task<ClientResult> GetClientAsync(
-        Guid tenantId,
-        Guid clientId)
+    private static async Task<ClientResult>
+        GetClientAsync(
+            HttpClient client,
+            Guid clientId)
     {
-        var response = await _client.GetAsync(
-            $"/api/clients/{clientId}?tenantId={tenantId}");
+        var response =
+            await client.GetAsync(
+                $"/api/clients/{clientId}");
 
         response.EnsureSuccessStatusCode();
 
         using var json =
             JsonDocument.Parse(
-                await response.Content.ReadAsStringAsync());
+                await response.Content
+                    .ReadAsStringAsync());
 
-        return MapClient(json.RootElement);
+        return MapClient(
+            json.RootElement);
     }
 
-    private async Task<HttpResponseMessage> UpdateClientAsync(
-        Guid tenantId,
-        ClientResult client,
-        Guid? collectionRouteId,
-        string? firstName = null)
+    private static async Task<HttpResponseMessage>
+        UpdateClientAsync(
+            HttpClient client,
+            ClientResult existingClient,
+            Guid? collectionRouteId,
+            string? firstName = null)
     {
-        return await _client.PutAsJsonAsync(
-            $"/api/clients/{client.Id}?tenantId={tenantId}",
+        return await client.PutAsJsonAsync(
+            $"/api/clients/{existingClient.Id}",
             new
             {
-                firstName = firstName ?? client.FirstName,
-                lastName = "Ordering Test Updated",
-                phone = client.Phone,
-                secondaryPhone = (string?)null,
-                identificationType = (string?)null,
-                identification = (string?)null,
-                socialNumber = (string?)null,
-                address = "Santiago actualizado",
-                latitude = client.Latitude,
-                longitude = client.Longitude,
+                firstName =
+                    firstName ??
+                    existingClient.FirstName,
+                lastName =
+                    "Ordering Test Updated",
+                phone =
+                    existingClient.Phone,
+                secondaryPhone =
+                    (string?)null,
+                identificationType =
+                    (string?)null,
+                identification =
+                    (string?)null,
+                socialNumber =
+                    (string?)null,
+                address =
+                    "Santiago actualizado",
+                latitude =
+                    existingClient.Latitude,
+                longitude =
+                    existingClient.Longitude,
                 collectionRouteId,
-                notes = "Updated from integration test"
+                notes =
+                    "Updated from integration test"
             });
     }
 
-    private async Task<HttpResponseMessage> UpdateRouteAsync(
-        Guid tenantId,
-        Guid routeId,
-        string name,
-        int orderMode)
+    private static async Task<HttpResponseMessage>
+        UpdateRouteAsync(
+            HttpClient client,
+            Guid routeId,
+            string name,
+            int orderMode)
     {
-        return await _client.PutAsJsonAsync(
-            $"/api/collection-routes/{routeId}?tenantId={tenantId}",
+        return await client.PutAsJsonAsync(
+            $"/api/collection-routes/{routeId}",
             new
             {
                 name,
-                description = "Updated ordering test",
+                description =
+                    "Updated ordering test",
                 orderMode
             });
     }
@@ -1318,7 +1342,8 @@ public class CollectionRouteOrderingTests
     private static string Unique(
         string prefix)
     {
-        return $"{prefix} {Guid.NewGuid():N}";
+        return
+            $"{prefix} {Guid.NewGuid():N}";
     }
 
     private static string UniquePhone()
@@ -1335,8 +1360,8 @@ public class CollectionRouteOrderingTests
     {
         public Guid Id { get; set; }
 
-        public string Name { get; set; }
-            = string.Empty;
+        public string Name { get; set; } =
+            string.Empty;
 
         public int OrderMode { get; set; }
     }
@@ -1345,11 +1370,11 @@ public class CollectionRouteOrderingTests
     {
         public Guid Id { get; set; }
 
-        public string FirstName { get; set; }
-            = string.Empty;
+        public string FirstName { get; set; } =
+            string.Empty;
 
-        public string Phone { get; set; }
-            = string.Empty;
+        public string Phone { get; set; } =
+            string.Empty;
 
         public Guid? CollectionRouteId { get; set; }
 

@@ -1,48 +1,47 @@
 using System.Net;
 using System.Net.Http.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Sanes.Api.IntegrationTests.Helpers;
 using Sanes.Application.Clients.DTOs;
 using Sanes.Domain.Entities;
 using Sanes.Infrastructure.Persistence;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Sanes.Api.IntegrationTests.Clients;
 
 public class ClientsTests
     : IClassFixture<CustomWebApplicationFactory>
 {
-    private static readonly Guid TenantId =
-        Guid.Parse("8d3fa46b-1553-413d-a30f-60638832a130");
-
-    private readonly HttpClient _client;
     private readonly CustomWebApplicationFactory _factory;
 
     public ClientsTests(
         CustomWebApplicationFactory factory)
     {
         _factory = factory;
-        _client = factory.CreateClient();
     }
 
     [Fact]
     public async Task Create_WithValidCollectionRoute_SavesCollectionRouteId()
     {
-        await EnsureTestTenantAsync();
+        var context = await CreateContextAsync();
 
-        var route = await CreateRouteAsync();
+        var route =
+            await CreateRouteAsync(
+                context.TenantId);
 
         var request = new CreateClientRequest
         {
-            TenantId = TenantId,
             FirstName = "Cliente",
             LastName = "Ruta",
-            Phone = $"809{Random.Shared.Next(1000000, 9999999)}",
+            Phone =
+                $"809{Random.Shared.Next(1000000, 9999999)}",
             CollectionRouteId = route.Id
         };
 
-        var response = await _client.PostAsJsonAsync(
-            "/api/clients",
-            request);
+        var response =
+            await context.Client.PostAsJsonAsync(
+                "/api/clients",
+                request);
 
         Assert.Equal(
             HttpStatusCode.Created,
@@ -53,6 +52,11 @@ public class ClientsTests
                 .ReadFromJsonAsync<ClientResponse>();
 
         Assert.NotNull(client);
+
+        Assert.Equal(
+            context.TenantId,
+            client.TenantId);
+
         Assert.Equal(
             route.Id,
             client.CollectionRouteId);
@@ -61,20 +65,21 @@ public class ClientsTests
     [Fact]
     public async Task Create_WithNonExistingCollectionRoute_ReturnsBadRequest()
     {
-        await EnsureTestTenantAsync();
+        var context = await CreateContextAsync();
 
         var request = new CreateClientRequest
         {
-            TenantId = TenantId,
             FirstName = "Cliente",
             LastName = "Ruta Inexistente",
-            Phone = $"809{Random.Shared.Next(1000000, 9999999)}",
+            Phone =
+                $"809{Random.Shared.Next(1000000, 9999999)}",
             CollectionRouteId = Guid.NewGuid()
         };
 
-        var response = await _client.PostAsJsonAsync(
-            "/api/clients",
-            request);
+        var response =
+            await context.Client.PostAsJsonAsync(
+                "/api/clients",
+                request);
 
         Assert.Equal(
             HttpStatusCode.BadRequest,
@@ -84,99 +89,57 @@ public class ClientsTests
     [Fact]
     public async Task Create_WithCollectionRouteFromDifferentTenant_ReturnsBadRequest()
     {
-        await EnsureTestTenantAsync();
+        var tenant1 = await CreateContextAsync();
+        var tenant2 = await CreateContextAsync();
 
-        var otherTenantId = Guid.NewGuid();
+        var otherRoute =
+            await CreateRouteAsync(
+                tenant2.TenantId);
 
-        using (var scope = _factory.Services.CreateScope())
+        var request = new CreateClientRequest
         {
-            var dbContext =
-                scope.ServiceProvider
-                    .GetRequiredService<SanesDbContext>();
+            FirstName = "Cliente",
+            LastName = "Otro Tenant",
+            Phone =
+                $"809{Random.Shared.Next(1000000, 9999999)}",
+            CollectionRouteId = otherRoute.Id
+        };
 
-            dbContext.Tenants.Add(
-                new Tenant
-                {
-                    Id = otherTenantId,
-                    Name = "Other Tenant",
-                    LegalName = "Other Tenant SRL",
-                    Phone = "8095551111",
-                    Email = $"other-{Guid.NewGuid():N}@sanes.local",
-                    CurrencyCode = "DOP",
-                    CurrencySymbol = "RD$",
-                    IsActive = true,
-                    CreatedAt = DateTime.UtcNow,
-                    UpdatedAt = DateTime.UtcNow
-                });
-
-            var otherRoute = new CollectionRoute
-            {
-                TenantId = otherTenantId,
-                Name = $"Ruta Otro Tenant {Guid.NewGuid():N}",
-                Description = "Ruta perteneciente a otro tenant",
-                IsActive = true,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
-            };
-
-            dbContext.CollectionRoutes.Add(otherRoute);
-
-            await dbContext.SaveChangesAsync();
-
-            var request = new CreateClientRequest
-            {
-                TenantId = TenantId,
-                FirstName = "Cliente",
-                LastName = "Otro Tenant",
-                Phone = $"809{Random.Shared.Next(1000000, 9999999)}",
-                CollectionRouteId = otherRoute.Id
-            };
-
-            var response = await _client.PostAsJsonAsync(
+        var response =
+            await tenant1.Client.PostAsJsonAsync(
                 "/api/clients",
                 request);
 
-            Assert.Equal(
-                HttpStatusCode.BadRequest,
-                response.StatusCode);
-        }
+        Assert.Equal(
+            HttpStatusCode.BadRequest,
+            response.StatusCode);
     }
 
     [Fact]
     public async Task Create_WithInactiveCollectionRoute_ReturnsBadRequest()
     {
-        await EnsureTestTenantAsync();
+        var context = await CreateContextAsync();
 
-        var route = await CreateRouteAsync();
+        var route =
+            await CreateRouteAsync(
+                context.TenantId);
 
-        using (var scope = _factory.Services.CreateScope())
-        {
-            var dbContext =
-                scope.ServiceProvider
-                    .GetRequiredService<SanesDbContext>();
-
-            var routeToDeactivate =
-                await dbContext.CollectionRoutes
-                    .SingleAsync(x => x.Id == route.Id);
-
-            routeToDeactivate.IsActive = false;
-            routeToDeactivate.UpdatedAt = DateTime.UtcNow;
-
-            await dbContext.SaveChangesAsync();
-        }
+        await DeactivateRouteAsync(
+            route.Id);
 
         var request = new CreateClientRequest
         {
-            TenantId = TenantId,
             FirstName = "Cliente",
             LastName = "Ruta Inactiva",
-            Phone = $"809{Random.Shared.Next(1000000, 9999999)}",
+            Phone =
+                $"809{Random.Shared.Next(1000000, 9999999)}",
             CollectionRouteId = route.Id
         };
 
-        var response = await _client.PostAsJsonAsync(
-            "/api/clients",
-            request);
+        var response =
+            await context.Client.PostAsJsonAsync(
+                "/api/clients",
+                request);
 
         Assert.Equal(
             HttpStatusCode.BadRequest,
@@ -186,51 +149,30 @@ public class ClientsTests
     [Fact]
     public async Task Update_WithValidCollectionRoute_ChangesCollectionRouteId()
     {
-        await EnsureTestTenantAsync();
+        var context = await CreateContextAsync();
 
-        var firstRoute = await CreateRouteAsync();
-        var secondRoute = await CreateRouteAsync();
+        var firstRoute =
+            await CreateRouteAsync(
+                context.TenantId);
 
-        var createRequest = new CreateClientRequest
-        {
-            TenantId = TenantId,
-            FirstName = "Cliente",
-            LastName = "Actualizar Ruta",
-            Phone = $"809{Random.Shared.Next(1000000, 9999999)}",
-            CollectionRouteId = firstRoute.Id
-        };
-
-        var createResponse = await _client.PostAsJsonAsync(
-            "/api/clients",
-            createRequest);
-
-        createResponse.EnsureSuccessStatusCode();
+        var secondRoute =
+            await CreateRouteAsync(
+                context.TenantId);
 
         var createdClient =
-            await createResponse.Content
-                .ReadFromJsonAsync<ClientResponse>();
+            await CreateClientAsync(
+                context.Client,
+                firstRoute.Id);
 
-        Assert.NotNull(createdClient);
+        var updateRequest =
+            CreateUpdateRequest(
+                createdClient,
+                secondRoute.Id);
 
-        var updateRequest = new UpdateClientRequest
-        {
-            FirstName = createdClient.FirstName,
-            LastName = createdClient.LastName,
-            Phone = createdClient.Phone,
-            SecondaryPhone = createdClient.SecondaryPhone,
-            IdentificationType = createdClient.IdentificationType,
-            Identification = createdClient.Identification,
-            SocialNumber = createdClient.SocialNumber,
-            Address = createdClient.Address,
-            Latitude = createdClient.Latitude,
-            Longitude = createdClient.Longitude,
-            Notes = createdClient.Notes,
-            CollectionRouteId = secondRoute.Id
-        };
-
-        var updateResponse = await _client.PutAsJsonAsync(
-            $"/api/clients/{createdClient.Id}?tenantId={TenantId}",
-            updateRequest);
+        var updateResponse =
+            await context.Client.PutAsJsonAsync(
+                $"/api/clients/{createdClient.Id}",
+                updateRequest);
 
         Assert.Equal(
             HttpStatusCode.OK,
@@ -250,50 +192,26 @@ public class ClientsTests
     [Fact]
     public async Task Update_WithNonExistingCollectionRoute_ReturnsBadRequest()
     {
-        await EnsureTestTenantAsync();
+        var context = await CreateContextAsync();
 
-        var route = await CreateRouteAsync();
-
-        var createRequest = new CreateClientRequest
-        {
-            TenantId = TenantId,
-            FirstName = "Cliente",
-            LastName = "Update Ruta Inexistente",
-            Phone = $"809{Random.Shared.Next(1000000, 9999999)}",
-            CollectionRouteId = route.Id
-        };
-
-        var createResponse = await _client.PostAsJsonAsync(
-            "/api/clients",
-            createRequest);
-
-        createResponse.EnsureSuccessStatusCode();
+        var route =
+            await CreateRouteAsync(
+                context.TenantId);
 
         var createdClient =
-            await createResponse.Content
-                .ReadFromJsonAsync<ClientResponse>();
+            await CreateClientAsync(
+                context.Client,
+                route.Id);
 
-        Assert.NotNull(createdClient);
+        var updateRequest =
+            CreateUpdateRequest(
+                createdClient,
+                Guid.NewGuid());
 
-        var updateRequest = new UpdateClientRequest
-        {
-            FirstName = createdClient.FirstName,
-            LastName = createdClient.LastName,
-            Phone = createdClient.Phone,
-            SecondaryPhone = createdClient.SecondaryPhone,
-            IdentificationType = createdClient.IdentificationType,
-            Identification = createdClient.Identification,
-            SocialNumber = createdClient.SocialNumber,
-            Address = createdClient.Address,
-            Latitude = createdClient.Latitude,
-            Longitude = createdClient.Longitude,
-            Notes = createdClient.Notes,
-            CollectionRouteId = Guid.NewGuid()
-        };
-
-        var updateResponse = await _client.PutAsJsonAsync(
-            $"/api/clients/{createdClient.Id}?tenantId={TenantId}",
-            updateRequest);
+        var updateResponse =
+            await context.Client.PutAsJsonAsync(
+                $"/api/clients/{createdClient.Id}",
+                updateRequest);
 
         Assert.Equal(
             HttpStatusCode.BadRequest,
@@ -303,53 +221,30 @@ public class ClientsTests
     [Fact]
     public async Task Update_WithNullCollectionRoute_RemovesCollectionRoute()
     {
-        await EnsureTestTenantAsync();
+        var context = await CreateContextAsync();
 
-        var route = await CreateRouteAsync();
-
-        var createRequest = new CreateClientRequest
-        {
-            TenantId = TenantId,
-            FirstName = "Cliente",
-            LastName = "Sin Ruta",
-            Phone = $"809{Random.Shared.Next(1000000, 9999999)}",
-            CollectionRouteId = route.Id
-        };
-
-        var createResponse = await _client.PostAsJsonAsync(
-            "/api/clients",
-            createRequest);
-
-        createResponse.EnsureSuccessStatusCode();
+        var route =
+            await CreateRouteAsync(
+                context.TenantId);
 
         var createdClient =
-            await createResponse.Content
-                .ReadFromJsonAsync<ClientResponse>();
+            await CreateClientAsync(
+                context.Client,
+                route.Id);
 
-        Assert.NotNull(createdClient);
         Assert.Equal(
             route.Id,
             createdClient.CollectionRouteId);
 
-        var updateRequest = new UpdateClientRequest
-        {
-            FirstName = createdClient.FirstName,
-            LastName = createdClient.LastName,
-            Phone = createdClient.Phone,
-            SecondaryPhone = createdClient.SecondaryPhone,
-            IdentificationType = createdClient.IdentificationType,
-            Identification = createdClient.Identification,
-            SocialNumber = createdClient.SocialNumber,
-            Address = createdClient.Address,
-            Latitude = createdClient.Latitude,
-            Longitude = createdClient.Longitude,
-            Notes = createdClient.Notes,
-            CollectionRouteId = null
-        };
+        var updateRequest =
+            CreateUpdateRequest(
+                createdClient,
+                null);
 
-        var updateResponse = await _client.PutAsJsonAsync(
-            $"/api/clients/{createdClient.Id}?tenantId={TenantId}",
-            updateRequest);
+        var updateResponse =
+            await context.Client.PutAsJsonAsync(
+                $"/api/clients/{createdClient.Id}",
+                updateRequest);
 
         Assert.Equal(
             HttpStatusCode.OK,
@@ -360,22 +255,36 @@ public class ClientsTests
                 .ReadFromJsonAsync<ClientResponse>();
 
         Assert.NotNull(updatedClient);
-        Assert.Null(updatedClient.CollectionRouteId);
+        Assert.Null(
+            updatedClient.CollectionRouteId);
     }
 
     [Fact]
     public async Task GetAll_WithCollectionRoute_ReturnsOnlyClientsFromThatRoute()
     {
-        await EnsureTestTenantAsync();
+        var context = await CreateContextAsync();
 
-        var route1 = await CreateRouteAsync();
-        var route2 = await CreateRouteAsync();
+        var route1 =
+            await CreateRouteAsync(
+                context.TenantId);
 
-        var clientRoute1 = await CreateClientAsync(route1.Id);
-        await CreateClientAsync(route2.Id);
+        var route2 =
+            await CreateRouteAsync(
+                context.TenantId);
 
-        var response = await _client.GetAsync(
-            $"/api/clients?tenantId={TenantId}&collectionRouteId={route1.Id}");
+        var clientRoute1 =
+            await CreateClientAsync(
+                context.Client,
+                route1.Id);
+
+        await CreateClientAsync(
+            context.Client,
+            route2.Id);
+
+        var response =
+            await context.Client.GetAsync(
+                $"/api/clients" +
+                $"?collectionRouteId={route1.Id}");
 
         Assert.Equal(
             HttpStatusCode.OK,
@@ -383,7 +292,8 @@ public class ClientsTests
 
         var clients =
             await response.Content
-                .ReadFromJsonAsync<List<ClientResponse>>();
+                .ReadFromJsonAsync<
+                    List<ClientResponse>>();
 
         Assert.NotNull(clients);
 
@@ -393,7 +303,9 @@ public class ClientsTests
 
         Assert.DoesNotContain(
             clients,
-            x => x.CollectionRouteId == route2.Id);
+            x =>
+                x.CollectionRouteId ==
+                route2.Id);
 
         Assert.All(
             clients,
@@ -405,16 +317,29 @@ public class ClientsTests
     [Fact]
     public async Task GetAll_WithoutCollectionRoute_ReturnsClientsFromDifferentRoutes()
     {
-        await EnsureTestTenantAsync();
+        var context = await CreateContextAsync();
 
-        var route1 = await CreateRouteAsync();
-        var route2 = await CreateRouteAsync();
+        var route1 =
+            await CreateRouteAsync(
+                context.TenantId);
 
-        var clientRoute1 = await CreateClientAsync(route1.Id);
-        var clientRoute2 = await CreateClientAsync(route2.Id);
+        var route2 =
+            await CreateRouteAsync(
+                context.TenantId);
 
-        var response = await _client.GetAsync(
-            $"/api/clients?tenantId={TenantId}");
+        var clientRoute1 =
+            await CreateClientAsync(
+                context.Client,
+                route1.Id);
+
+        var clientRoute2 =
+            await CreateClientAsync(
+                context.Client,
+                route2.Id);
+
+        var response =
+            await context.Client.GetAsync(
+                "/api/clients");
 
         Assert.Equal(
             HttpStatusCode.OK,
@@ -422,7 +347,8 @@ public class ClientsTests
 
         var clients =
             await response.Content
-                .ReadFromJsonAsync<List<ClientResponse>>();
+                .ReadFromJsonAsync<
+                    List<ClientResponse>>();
 
         Assert.NotNull(clients);
 
@@ -433,17 +359,26 @@ public class ClientsTests
         Assert.Contains(
             clients,
             x => x.Id == clientRoute2.Id);
+
+        Assert.All(
+            clients,
+            x => Assert.Equal(
+                context.TenantId,
+                x.TenantId));
     }
 
     [Fact]
     public async Task GetAll_WithNonExistingCollectionRoute_ReturnsEmptyList()
     {
-        await EnsureTestTenantAsync();
+        var context = await CreateContextAsync();
 
-        var nonExistingRouteId = Guid.NewGuid();
+        var nonExistingRouteId =
+            Guid.NewGuid();
 
-        var response = await _client.GetAsync(
-            $"/api/clients?tenantId={TenantId}&collectionRouteId={nonExistingRouteId}");
+        var response =
+            await context.Client.GetAsync(
+                $"/api/clients" +
+                $"?collectionRouteId={nonExistingRouteId}");
 
         Assert.Equal(
             HttpStatusCode.OK,
@@ -451,7 +386,8 @@ public class ClientsTests
 
         var clients =
             await response.Content
-                .ReadFromJsonAsync<List<ClientResponse>>();
+                .ReadFromJsonAsync<
+                    List<ClientResponse>>();
 
         Assert.NotNull(clients);
         Assert.Empty(clients);
@@ -460,52 +396,21 @@ public class ClientsTests
     [Fact]
     public async Task GetAll_WithCollectionRouteFromDifferentTenant_DoesNotExposeClients()
     {
-        await EnsureTestTenantAsync();
+        var tenant1 = await CreateContextAsync();
+        var tenant2 = await CreateContextAsync();
 
-        var otherTenantId = Guid.NewGuid();
-        Guid otherRouteId;
+        var otherRoute =
+            await CreateRouteAsync(
+                tenant2.TenantId);
 
-        using (var scope = _factory.Services.CreateScope())
-        {
-            var dbContext =
-                scope.ServiceProvider
-                    .GetRequiredService<SanesDbContext>();
+        await CreateClientAsync(
+            tenant2.Client,
+            otherRoute.Id);
 
-            var otherTenant = new Tenant
-            {
-                Id = otherTenantId,
-                Name = $"Other Tenant {Guid.NewGuid():N}",
-                LegalName = "Other Tenant SRL",
-                Phone = "8095552222",
-                Email = $"other-{Guid.NewGuid():N}@sanes.local",
-                CurrencyCode = "DOP",
-                CurrencySymbol = "RD$",
-                IsActive = true,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
-            };
-
-            dbContext.Tenants.Add(otherTenant);
-
-            var otherRoute = new CollectionRoute
-            {
-                TenantId = otherTenantId,
-                Name = $"Ruta Otro Tenant {Guid.NewGuid():N}",
-                Description = "Ruta de otro tenant",
-                IsActive = true,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
-            };
-
-            dbContext.CollectionRoutes.Add(otherRoute);
-
-            await dbContext.SaveChangesAsync();
-
-            otherRouteId = otherRoute.Id;
-        }
-
-        var response = await _client.GetAsync(
-            $"/api/clients?tenantId={TenantId}&collectionRouteId={otherRouteId}");
+        var response =
+            await tenant1.Client.GetAsync(
+                $"/api/clients" +
+                $"?collectionRouteId={otherRoute.Id}");
 
         Assert.Equal(
             HttpStatusCode.OK,
@@ -513,13 +418,72 @@ public class ClientsTests
 
         var clients =
             await response.Content
-                .ReadFromJsonAsync<List<ClientResponse>>();
+                .ReadFromJsonAsync<
+                    List<ClientResponse>>();
 
         Assert.NotNull(clients);
         Assert.Empty(clients);
     }
 
-    private async Task<CollectionRoute> CreateRouteAsync()
+    [Fact]
+    public async Task GetById_ClientFromDifferentTenant_ReturnsNotFound()
+    {
+        var tenant1 = await CreateContextAsync();
+        var tenant2 = await CreateContextAsync();
+
+        var client =
+            await CreateClientAsync(
+                tenant1.Client);
+
+        var response =
+            await tenant2.Client.GetAsync(
+                $"/api/clients/{client.Id}");
+
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Update_ClientFromDifferentTenant_ReturnsNotFound()
+    {
+        var tenant1 = await CreateContextAsync();
+        var tenant2 = await CreateContextAsync();
+
+        var client =
+            await CreateClientAsync(
+                tenant1.Client);
+
+        var request =
+            CreateUpdateRequest(
+                client,
+                client.CollectionRouteId);
+
+        var response =
+            await tenant2.Client.PutAsJsonAsync(
+                $"/api/clients/{client.Id}",
+                request);
+
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            response.StatusCode);
+    }
+
+    // ============================================================
+    // HELPERS
+    // ============================================================
+
+    private async Task<TestTenantContext>
+        CreateContextAsync()
+    {
+        return await TestAuthenticationHelper
+            .CreateAdministratorContextAsync(
+                _factory);
+    }
+
+    private async Task<CollectionRoute>
+        CreateRouteAsync(
+            Guid tenantId)
     {
         using var scope =
             _factory.Services.CreateScope();
@@ -530,9 +494,11 @@ public class ClientsTests
 
         var route = new CollectionRoute
         {
-            TenantId = TenantId,
-            Name = $"Ruta Test {Guid.NewGuid():N}",
-            Description = "Ruta para integration test",
+            TenantId = tenantId,
+            Name =
+                $"Ruta Test {Guid.NewGuid():N}",
+            Description =
+                "Ruta para integration test",
             IsActive = true,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
@@ -545,7 +511,8 @@ public class ClientsTests
         return route;
     }
 
-    private async Task EnsureTestTenantAsync()
+    private async Task DeactivateRouteAsync(
+        Guid routeId)
     {
         using var scope =
             _factory.Services.CreateScope();
@@ -554,59 +521,73 @@ public class ClientsTests
             scope.ServiceProvider
                 .GetRequiredService<SanesDbContext>();
 
-        var exists =
-            await dbContext.Tenants.AnyAsync(
-                x => x.Id == TenantId);
+        var route =
+            await dbContext.CollectionRoutes
+                .SingleAsync(
+                    x => x.Id == routeId);
 
-        if (exists)
-        {
-            return;
-        }
-
-        dbContext.Tenants.Add(
-            new Tenant
-            {
-                Id = TenantId,
-                Name = "Sanes Integration Tests",
-                LegalName = "Sanes Integration Tests SRL",
-                Phone = "8095550000",
-                Email = "integration-tests@sanes.local",
-                CurrencyCode = "DOP",
-                CurrencySymbol = "RD$",
-                IsActive = true,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
-            });
+        route.IsActive = false;
+        route.UpdatedAt = DateTime.UtcNow;
 
         await dbContext.SaveChangesAsync();
     }
 
-    private async Task<ClientResponse> CreateClientAsync(
-        Guid? collectionRouteId = null)
+    private static async Task<ClientResponse>
+        CreateClientAsync(
+            HttpClient client,
+            Guid? collectionRouteId = null)
     {
-        await EnsureTestTenantAsync();
-
         var request = new CreateClientRequest
         {
-            TenantId = TenantId,
             FirstName = "Cliente",
-            LastName = $"Test {Guid.NewGuid():N}",
-            Phone = $"809{Random.Shared.Next(1000000, 9999999)}",
-            CollectionRouteId = collectionRouteId
+            LastName =
+                $"Test {Guid.NewGuid():N}",
+            Phone =
+                $"809{Random.Shared.Next(1000000, 9999999)}",
+            CollectionRouteId =
+                collectionRouteId
         };
 
-        var response = await _client.PostAsJsonAsync(
-            "/api/clients",
-            request);
+        var response =
+            await client.PostAsJsonAsync(
+                "/api/clients",
+                request);
 
         response.EnsureSuccessStatusCode();
 
-        var client =
+        var createdClient =
             await response.Content
                 .ReadFromJsonAsync<ClientResponse>();
 
-        Assert.NotNull(client);
+        Assert.NotNull(createdClient);
 
-        return client;
+        return createdClient;
+    }
+
+    private static UpdateClientRequest
+        CreateUpdateRequest(
+            ClientResponse client,
+            Guid? collectionRouteId)
+    {
+        return new UpdateClientRequest
+        {
+            FirstName = client.FirstName,
+            LastName = client.LastName,
+            Phone = client.Phone,
+            SecondaryPhone =
+                client.SecondaryPhone,
+            IdentificationType =
+                client.IdentificationType,
+            Identification =
+                client.Identification,
+            SocialNumber =
+                client.SocialNumber,
+            Address = client.Address,
+            Latitude = client.Latitude,
+            Longitude = client.Longitude,
+            Notes = client.Notes,
+            CollectionRouteId =
+                collectionRouteId
+        };
     }
 }

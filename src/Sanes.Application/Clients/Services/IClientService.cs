@@ -5,6 +5,7 @@ namespace Sanes.Application.Clients.Services;
 public interface IClientService
 {
     Task<ClientResponse> CreateAsync(
+        Guid tenantId,
         CreateClientRequest request,
         CancellationToken cancellationToken = default);
 

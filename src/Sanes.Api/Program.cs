@@ -28,12 +28,200 @@ using Sanes.Application.CollectionAgenda.Repositories;
 using Sanes.Infrastructure.CollectionAgenda.Repositories;
 using Sanes.Application.CollectionAgenda.Services;
 using Sanes.Application.FieldCollections.Services;
+using Sanes.Application.Authentication.Services;
+using Sanes.Infrastructure.Authentication.Services;
+using System.Security.Claims;
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using Sanes.Infrastructure.Authentication;
+using Sanes.Api.Authentication;
+using Sanes.Application.Provisioning.Services;
+using Sanes.Infrastructure.Provisioning;
+using Sanes.Infrastructure.Provisioning.Services;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.Configure<JwtSettings>(
+    builder.Configuration.GetSection(
+        JwtSettings.SectionName));
+
+var jwtSettings =
+    builder.Configuration
+        .GetSection(JwtSettings.SectionName)
+        .Get<JwtSettings>()
+    ?? throw new InvalidOperationException(
+        "JWT configuration is missing.");
+
+if (string.IsNullOrWhiteSpace(jwtSettings.Key))
+{
+    throw new InvalidOperationException(
+        "JWT signing key is not configured.");
+}
 
 builder.Services.AddDbContext<SanesDbContext>(options =>
     options.UseNpgsql(
         builder.Configuration.GetConnectionString("DefaultConnection")));
+
+builder.Services
+    .AddAuthentication(options =>
+    {
+        options.DefaultAuthenticateScheme =
+            JwtBearerDefaults.AuthenticationScheme;
+
+        options.DefaultChallengeScheme =
+            JwtBearerDefaults.AuthenticationScheme;
+    })
+    .AddJwtBearer(options =>
+    {
+
+        options.TokenValidationParameters =
+            new TokenValidationParameters
+            {
+                ValidateIssuer = true,
+                ValidateAudience = true,
+                ValidateLifetime = true,
+                ValidateIssuerSigningKey = true,
+
+                ValidIssuer =
+                    jwtSettings.Issuer,
+
+                ValidAudience =
+                    jwtSettings.Audience,
+
+                IssuerSigningKey =
+                    new SymmetricSecurityKey(
+                        Encoding.UTF8.GetBytes(
+                            jwtSettings.Key)),
+
+                ClockSkew =
+                    TimeSpan.Zero,
+
+                NameClaimType =
+                    ClaimTypes.Name,
+
+                RoleClaimType =
+                    ClaimTypes.Role
+            };
+
+        options.Events =
+            new JwtBearerEvents
+            {
+                OnTokenValidated =
+                    async context =>
+                    {
+                        var principal =
+                            context.Principal;
+
+                        if (principal is null)
+                        {
+                            context.Fail(
+                                "Invalid authentication token.");
+
+                            return;
+                        }
+
+                        var tenantIdValue =
+                            principal.FindFirstValue(
+                                "tenant_id");
+
+                        var appUserIdValue =
+                            principal.FindFirstValue(
+                                ClaimTypes.NameIdentifier)
+                            ??
+                            principal.FindFirstValue(
+                                "sub");
+
+                        var roleValue =
+                            principal.FindFirstValue(
+                                ClaimTypes.Role);
+
+                        if (!Guid.TryParse(
+                                tenantIdValue,
+                                out var tenantId)
+                            ||
+                            !Guid.TryParse(
+                                appUserIdValue,
+                                out var appUserId)
+                            ||
+                            string.IsNullOrWhiteSpace(
+                                roleValue))
+                        {
+                            context.Fail(
+                                "Invalid authentication token.");
+
+                            return;
+                        }
+
+                        var dbContext =
+                            context.HttpContext
+                                .RequestServices
+                                .GetRequiredService<
+                                    SanesDbContext>();
+
+                        var tenantIsActive =
+                            await dbContext.Tenants
+                                .AsNoTracking()
+                                .AnyAsync(
+                                    x =>
+                                        x.Id == tenantId
+                                        &&
+                                        x.IsActive,
+                                    context.HttpContext
+                                        .RequestAborted);
+
+                        if (!tenantIsActive)
+                        {
+                            context.Fail(
+                                "Authentication principal is inactive.");
+
+                            return;
+                        }
+
+                        var appUser =
+                            await dbContext.AppUsers
+                                .AsNoTracking()
+                                .Where(
+                                    x =>
+                                        x.Id == appUserId
+                                        &&
+                                        x.TenantId == tenantId
+                                        &&
+                                        x.IsActive)
+                                .Select(
+                                    x => new
+                                    {
+                                        x.Role
+                                    })
+                                .SingleOrDefaultAsync(
+                                    context.HttpContext
+                                        .RequestAborted);
+
+                        if (appUser is null)
+                        {
+                            context.Fail(
+                                "Authentication principal is inactive.");
+
+                            return;
+                        }
+
+                        if (!string.Equals(
+                                appUser.Role.ToString(),
+                                roleValue,
+                                StringComparison.Ordinal))
+                        {
+                            context.Fail(
+                                "Authentication principal has changed.");
+                        }
+                    }
+            };
+    });
+
+builder.Services.Configure<ProvisioningSettings>(
+    builder.Configuration.GetSection(
+        ProvisioningSettings.SectionName));   
+
+builder.Services.AddAuthorization();
 
 builder.Services.AddScoped<ITenantRepository, TenantRepository>();
 builder.Services.AddScoped<ITenantService, TenantService>();
@@ -52,8 +240,6 @@ builder.Services.AddScoped<IPaymentService, PaymentService>();
 
 builder.Services.AddScoped<ICollectionRouteRepository, CollectionRouteRepository>();
 builder.Services.AddScoped<ICollectionRouteService, CollectionRouteService>();
-
-builder.Services.AddScoped<ICollectionRouteRepository, CollectionRouteRepository>();
 
 builder.Services.AddScoped<IAppUserRepository, AppUserRepository>();
 builder.Services.AddScoped<IAppUserService, AppUserService>();
@@ -78,6 +264,20 @@ builder.Services.AddScoped<
     IFieldCollectionService,
     FieldCollectionService>();
 
+builder.Services.AddScoped<IPasswordService, PasswordService>();
+builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
+builder.Services.AddScoped<IAuthService, AuthService>();
+
+builder.Services.AddScoped<
+    IProvisioningService,
+    ProvisioningService>();
+
+builder.Services.AddHttpContextAccessor();
+
+builder.Services.AddScoped<
+    ICurrentUserService,
+    CurrentUserService>();
+
 builder.Services.AddControllers();
 
 // Add services to the container.
@@ -93,6 +293,9 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapControllers();
 

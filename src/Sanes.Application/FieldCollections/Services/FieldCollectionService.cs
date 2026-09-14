@@ -273,6 +273,8 @@ public class FieldCollectionService : IFieldCollectionService
         };
     }
     public async Task<FieldCollectionPaymentResponse> CreatePaymentAsync(
+        Guid tenantId,
+        Guid appUserId,
         CreateFieldCollectionPaymentRequest request,
         CancellationToken cancellationToken = default)
     {
@@ -283,16 +285,14 @@ public class FieldCollectionService : IFieldCollectionService
         */
         var payment =
             await _paymentService.CreateAsync(
+                tenantId,
                 new CreatePaymentRequest
                 {
-                    TenantId =
-                        request.TenantId,
-
                     LoanId =
                         request.LoanId,
 
                     CollectedByAppUserId =
-                        request.AppUserId,
+                        appUserId,
 
                     CollectionRouteId =
                         request.CollectionRouteId,
@@ -313,7 +313,7 @@ public class FieldCollectionService : IFieldCollectionService
 
         var financialSummary =
             await _loanService.GetFinancialSummaryAsync(
-                request.TenantId,
+                tenantId,
                 request.LoanId,
                 cancellationToken);
 
@@ -325,19 +325,19 @@ public class FieldCollectionService : IFieldCollectionService
 
         var collector =
             await _appUserRepository.GetByIdAsync(
-                request.AppUserId,
-                request.TenantId,
+                appUserId,
+                tenantId,
                 cancellationToken);
 
         var route =
             await _collectionRouteRepository.GetByIdAsync(
                 request.CollectionRouteId,
-                request.TenantId,
+                tenantId,
                 cancellationToken);
 
         var loan =
             await _loanService.GetByIdAsync(
-                request.TenantId,
+                tenantId,
                 request.LoanId,
                 cancellationToken);
 
@@ -351,7 +351,7 @@ public class FieldCollectionService : IFieldCollectionService
 
         var client =
             await _clientRepository.GetByIdAsync(
-                request.TenantId,
+                tenantId,
                 loan.ClientId,
                 cancellationToken);
 

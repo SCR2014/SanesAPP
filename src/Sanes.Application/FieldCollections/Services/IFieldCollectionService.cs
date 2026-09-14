@@ -11,6 +11,8 @@ public interface IFieldCollectionService
         CancellationToken cancellationToken = default);
 
     Task<FieldCollectionPaymentResponse> CreatePaymentAsync(
+        Guid tenantId,
+        Guid appUserId,
         CreateFieldCollectionPaymentRequest request,
         CancellationToken cancellationToken = default);
 }

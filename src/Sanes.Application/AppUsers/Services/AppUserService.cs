@@ -3,6 +3,7 @@ using Sanes.Application.AppUsers.DTOs;
 using Sanes.Application.AppUsers.Repositories;
 using Sanes.Application.Tenants.Repositories;
 using Sanes.Application.CollectionRoutes.Repositories;
+using Sanes.Application.Authentication.Services;
 using Sanes.Domain.Entities;
 using Sanes.Domain.Enums;
 
@@ -18,37 +19,43 @@ public class AppUserService : IAppUserService
 
     private readonly ICollectionRouteRepository
         _collectionRouteRepository;
+    
+    private readonly IPasswordService _passwordService;
 
     public AppUserService(
         IAppUserRepository appUserRepository,
         ITenantRepository tenantRepository,
         IAppUserCollectionRouteRepository appUserCollectionRouteRepository,
+        IPasswordService passwordService,
         ICollectionRouteRepository collectionRouteRepository)
     {
         _appUserRepository = appUserRepository;
         _tenantRepository = tenantRepository;
         _appUserCollectionRouteRepository =
         appUserCollectionRouteRepository;
+        _passwordService = passwordService;
     _collectionRouteRepository = collectionRouteRepository;
     }
 
     public async Task<AppUserResponse> CreateAsync(
+        Guid tenantId,
         CreateAppUserRequest request,
         CancellationToken cancellationToken = default)
     {
         ValidateName(request.Name);
         ValidateUsername(request.Username);
+        ValidatePassword(request.Password);
         ValidateEmail(request.Email);
         ValidateRole(request.Role);
 
-        if (request.TenantId == Guid.Empty)
+        if (tenantId == Guid.Empty)
         {
             throw new ArgumentException(
                 "TenantId must be a valid identifier.");
         }
 
         var tenant = await _tenantRepository.GetByIdAsync(
-            request.TenantId,
+            tenantId,
             cancellationToken);
 
         if (tenant is null)
@@ -62,7 +69,7 @@ public class AppUserService : IAppUserService
 
         var usernameExists =
             await _appUserRepository.UsernameExistsAsync(
-                request.TenantId,
+                tenantId,
                 normalizedUsername,
                 cancellationToken: cancellationToken);
 
@@ -77,9 +84,11 @@ public class AppUserService : IAppUserService
         var appUser = new AppUser
         {
             Id = Guid.NewGuid(),
-            TenantId = request.TenantId,
+            TenantId = tenantId,
             Name = request.Name.Trim(),
             Username = normalizedUsername,
+            PasswordHash = _passwordService.HashPassword(
+                request.Password),
             Email = NormalizeOptional(request.Email),
             Phone = NormalizeOptional(request.Phone),
             Role = request.Role,
@@ -180,6 +189,22 @@ public class AppUserService : IAppUserService
             return null;
         }
 
+        if (appUser.Role == AppUserRole.Administrator &&
+            request.Role != AppUserRole.Administrator)
+        {
+            var activeAdministrators =
+                await _appUserRepository
+                    .CountActiveAdministratorsAsync(
+                        tenantId,
+                        cancellationToken);
+
+            if (activeAdministrators <= 1)
+            {
+                throw new InvalidOperationException(
+                    "The last active administrator cannot change role.");
+            }
+        }
+
         if (appUser.Role == AppUserRole.Collector &&
             request.Role != AppUserRole.Collector)
         {
@@ -245,6 +270,21 @@ public class AppUserService : IAppUserService
             !appUser.IsActive)
         {
             return false;
+        }
+
+        if (appUser.Role == AppUserRole.Administrator)
+        {
+            var activeAdministrators =
+                await _appUserRepository
+                    .CountActiveAdministratorsAsync(
+                        tenantId,
+                        cancellationToken);
+
+            if (activeAdministrators <= 1)
+            {
+                throw new InvalidOperationException(
+                    "The last active administrator cannot be deactivated.");
+            }
         }
 
         appUser.IsActive = false;
@@ -462,6 +502,48 @@ public class AppUserService : IAppUserService
         return true;
     }
 
+    public async Task<bool> SetPasswordAsync(
+        Guid id,
+        Guid tenantId,
+        string password,
+        CancellationToken cancellationToken = default)
+    {
+        if (id == Guid.Empty ||
+            tenantId == Guid.Empty)
+        {
+            return false;
+        }
+
+        ValidatePassword(password);
+
+        var appUser =
+            await _appUserRepository.GetByIdIncludingInactiveAsync(
+                id,
+                tenantId,
+                cancellationToken);
+
+        if (appUser is null)
+        {
+            return false;
+        }
+
+        if (!appUser.IsActive)
+        {
+            throw new InvalidOperationException(
+                "Password cannot be changed for an inactive app user.");
+        }
+
+        appUser.PasswordHash =
+            _passwordService.HashPassword(password);
+
+        appUser.UpdatedAt = DateTime.UtcNow;
+
+        await _appUserRepository.SaveChangesAsync(
+            cancellationToken);
+
+        return true;
+    }
+
     private static void ValidateName(
         string? name)
     {
@@ -491,6 +573,28 @@ public class AppUserService : IAppUserService
         {
             throw new ArgumentException(
                 "Username cannot exceed 100 characters.");
+        }
+    }
+
+    private static void ValidatePassword(
+        string? password)
+    {
+        if (string.IsNullOrWhiteSpace(password))
+        {
+            throw new ArgumentException(
+                "Password is required.");
+        }
+
+        if (password.Length < 8)
+        {
+            throw new ArgumentException(
+                "Password must contain at least 8 characters.");
+        }
+
+        if (password.Length > 100)
+        {
+            throw new ArgumentException(
+                "Password cannot exceed 100 characters.");
         }
     }
 

@@ -1,19 +1,26 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Sanes.Application.Authentication.Services;
 using Sanes.Application.Payments.DTOs;
 using Sanes.Application.Payments.Services;
+using Sanes.Domain.Enums;
 
 namespace Sanes.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize(Roles = nameof(AppUserRole.Administrator))]
 public class PaymentsController : ControllerBase
 {
     private readonly IPaymentService _paymentService;
+    private readonly ICurrentUserService _currentUserService;
 
     public PaymentsController(
-        IPaymentService paymentService)
+        IPaymentService paymentService,
+        ICurrentUserService currentUserService)
     {
         _paymentService = paymentService;
+        _currentUserService = currentUserService;
     }
 
     [HttpPost]
@@ -25,6 +32,7 @@ public class PaymentsController : ControllerBase
         {
             var payment =
                 await _paymentService.CreateAsync(
+                    _currentUserService.TenantId,
                     request,
                     cancellationToken);
 
@@ -32,8 +40,7 @@ public class PaymentsController : ControllerBase
                 nameof(GetById),
                 new
                 {
-                    id = payment.Id,
-                    tenantId = payment.TenantId
+                    id = payment.Id
                 },
                 payment);
         }
@@ -48,18 +55,9 @@ public class PaymentsController : ControllerBase
 
     [HttpGet]
     public async Task<ActionResult<List<PaymentResponse>>> GetAllByLoan(
-        [FromQuery] Guid tenantId,
         [FromQuery] Guid loanId,
         CancellationToken cancellationToken)
     {
-        if (tenantId == Guid.Empty)
-        {
-            return BadRequest(new
-            {
-                message = "TenantId must be a valid identifier."
-            });
-        }
-
         if (loanId == Guid.Empty)
         {
             return BadRequest(new
@@ -72,7 +70,7 @@ public class PaymentsController : ControllerBase
         {
             var payments =
                 await _paymentService.GetAllByLoanAsync(
-                    tenantId,
+                    _currentUserService.TenantId,
                     loanId,
                     cancellationToken);
 
@@ -90,20 +88,11 @@ public class PaymentsController : ControllerBase
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<PaymentResponse>> GetById(
         Guid id,
-        [FromQuery] Guid tenantId,
         CancellationToken cancellationToken)
     {
-        if (tenantId == Guid.Empty)
-        {
-            return BadRequest(new
-            {
-                message = "TenantId must be a valid identifier."
-            });
-        }
-
         var payment =
             await _paymentService.GetByIdAsync(
-                tenantId,
+                _currentUserService.TenantId,
                 id,
                 cancellationToken);
 

@@ -32,11 +32,12 @@ public class LoanService : ILoanService
 }
 
     public async Task<LoanResponse> CreateAsync(
+        Guid tenantId,
         CreateLoanRequest request,
         CancellationToken cancellationToken = default)
     {
         var tenant = await _tenantRepository.GetByIdAsync(
-            request.TenantId,
+            tenantId,
             cancellationToken);
 
         if (tenant is null || !tenant.IsActive)
@@ -46,7 +47,7 @@ public class LoanService : ILoanService
         }
 
         var investor = await _investorRepository.GetByIdAsync(
-            request.TenantId,
+            tenantId,
             request.InvestorId,
             cancellationToken);
 
@@ -57,7 +58,7 @@ public class LoanService : ILoanService
         }
 
         var client = await _clientRepository.GetByIdAsync(
-            request.TenantId,
+            tenantId,
             request.ClientId,
             cancellationToken);
 
@@ -71,7 +72,7 @@ public class LoanService : ILoanService
 
         var loan = new Loan
         {
-            TenantId = request.TenantId,
+            TenantId = tenantId,
             InvestorId = request.InvestorId,
             ClientId = request.ClientId,
 

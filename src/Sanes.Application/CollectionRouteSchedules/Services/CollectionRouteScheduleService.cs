@@ -24,11 +24,12 @@ public class CollectionRouteScheduleService
     }
 
     public async Task<CollectionRouteScheduleResponse> CreateAsync(
+        Guid tenantId,
         CreateCollectionRouteScheduleRequest request,
         CancellationToken cancellationToken = default)
     {
         ValidateIdentifiers(
-            request.TenantId,
+            tenantId,
             request.CollectionRouteId);
 
         ValidateDayOfWeek(request.DayOfWeek);
@@ -40,7 +41,7 @@ public class CollectionRouteScheduleService
         var collectionRoute =
             await _collectionRouteRepository.GetByIdAsync(
                 request.CollectionRouteId,
-                request.TenantId,
+                tenantId,
                 cancellationToken);
 
         if (collectionRoute is null)
