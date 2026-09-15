@@ -1,4 +1,5 @@
 namespace Sanes.Domain.Entities;
+using Sanes.Domain.Enums;
 
 public class Tenant
 {
@@ -12,6 +13,15 @@ public class Tenant
 
     public string CurrencyCode { get; set; } = "USD";
     public string CurrencySymbol { get; set; } = "$";
+
+    public bool DefaultLateFeeEnabled { get; set; } = false;
+
+    public LateFeeCalculationType DefaultLateFeeCalculationType { get; set; }
+        = LateFeeCalculationType.FixedAmountPerInstallment;
+
+    public decimal DefaultLateFeeAmount { get; set; } = 0m;
+
+    public int DefaultLateFeeGraceDays { get; set; } = 0;
 
     public bool IsActive { get; set; } = true;
 

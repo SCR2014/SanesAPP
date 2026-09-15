@@ -39,6 +39,9 @@ using Sanes.Api.Authentication;
 using Sanes.Application.Provisioning.Services;
 using Sanes.Infrastructure.Provisioning;
 using Sanes.Infrastructure.Provisioning.Services;
+using Sanes.Application.LateFees.Repositories;
+using Sanes.Infrastructure.LateFees.Repositories;
+using Sanes.Application.LateFees.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -237,6 +240,23 @@ builder.Services.AddScoped<ILoanService, LoanService>();
 
 builder.Services.AddScoped<IPaymentRepository, PaymentRepository>();
 builder.Services.AddScoped<IPaymentService, PaymentService>();
+
+builder.Services.AddScoped<
+    IPaymentAllocationRepository,
+    PaymentAllocationRepository>();
+
+builder.Services.AddScoped<ILateFeeRepository, LateFeeRepository>();
+builder.Services.AddScoped<
+    ILateFeeAccrualService,
+    LateFeeAccrualService>();
+
+builder.Services.AddScoped<
+    ILateFeeBalanceService,
+    LateFeeBalanceService>();
+
+builder.Services.AddScoped<
+    ILateFeeAdministrationService,
+    LateFeeAdministrationService>();
 
 builder.Services.AddScoped<ICollectionRouteRepository, CollectionRouteRepository>();
 builder.Services.AddScoped<ICollectionRouteService, CollectionRouteService>();

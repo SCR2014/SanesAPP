@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Sanes.Domain.Entities;
+using Sanes.Domain.Enums;
 
 namespace Sanes.Infrastructure.Persistence;
 
@@ -15,6 +16,12 @@ public class SanesDbContext : DbContext
     public DbSet<Client> Clients => Set<Client>();
     public DbSet<Loan> Loans => Set<Loan>();
     public DbSet<Payment> Payments => Set<Payment>();
+    public DbSet<PaymentAllocation> PaymentAllocations =>
+    Set<PaymentAllocation>();
+    public DbSet<LateFeeCharge> LateFeeCharges =>
+        Set<LateFeeCharge>();
+    public DbSet<LateFeeAdjustment> LateFeeAdjustments =>
+        Set<LateFeeAdjustment>();
     public DbSet<CollectionRoute> CollectionRoutes => Set<CollectionRoute>();
     public DbSet<AppUser> AppUsers => Set<AppUser>();
     public DbSet<AppUserCollectionRoute> AppUserCollectionRoutes
@@ -52,6 +59,20 @@ public class SanesDbContext : DbContext
             entity.Property(x => x.CurrencySymbol)
                 .HasMaxLength(10)
                 .IsRequired();
+
+            entity.Property(x => x.DefaultLateFeeEnabled)
+                .HasDefaultValue(false);
+
+            entity.Property(x => x.DefaultLateFeeCalculationType)
+                .HasDefaultValue(LateFeeCalculationType.FixedAmountPerInstallment)
+                .HasSentinel((LateFeeCalculationType)0);
+
+            entity.Property(x => x.DefaultLateFeeAmount)
+                .HasPrecision(18, 2)
+                .HasDefaultValue(0m);
+
+            entity.Property(x => x.DefaultLateFeeGraceDays)
+                .HasDefaultValue(0);
         });
 
         modelBuilder.Entity<Investor>(entity =>
@@ -175,6 +196,20 @@ public class SanesDbContext : DbContext
             entity.Property(x => x.PaymentFrequency)
                 .IsRequired();
 
+            entity.Property(x => x.LateFeeEnabled)
+                .HasDefaultValue(false);
+
+            entity.Property(x => x.LateFeeCalculationType)
+                .HasDefaultValue(LateFeeCalculationType.FixedAmountPerInstallment)
+                .HasSentinel((LateFeeCalculationType)0);
+
+            entity.Property(x => x.LateFeeAmount)
+                .HasPrecision(18, 2)
+                .HasDefaultValue(0m);
+
+            entity.Property(x => x.LateFeeGraceDays)
+                .HasDefaultValue(0);
+
             entity.Property(x => x.StartDate)
                 .IsRequired();
 
@@ -271,6 +306,162 @@ public class SanesDbContext : DbContext
             entity.HasIndex(x => new { x.TenantId, x.LoanId });
 
             entity.HasIndex(x => new { x.TenantId, x.PaymentDate });
+        });
+
+        modelBuilder.Entity<PaymentAllocation>(entity =>
+        {
+            entity.ToTable("payment_allocations");
+
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.AllocationType)
+                .IsRequired();
+
+            entity.Property(x => x.Amount)
+                .HasPrecision(18, 2)
+                .IsRequired();
+
+            entity.Property(x => x.CreatedAt)
+                .IsRequired();
+
+            entity.HasOne(x => x.Tenant)
+                .WithMany()
+                .HasForeignKey(x => x.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.Payment)
+                .WithMany(x => x.Allocations)
+                .HasForeignKey(x => x.PaymentId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.LateFeeCharge)
+                .WithMany(x => x.PaymentAllocations)
+                .HasForeignKey(x => x.LateFeeChargeId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(x => x.TenantId);
+
+            entity.HasIndex(x => new
+            {
+                x.TenantId,
+                x.PaymentId
+            });
+
+            entity.HasIndex(x => new
+            {
+                x.TenantId,
+                x.LateFeeChargeId
+            });
+        });
+
+        modelBuilder.Entity<LateFeeCharge>(entity =>
+        {
+            entity.ToTable("late_fee_charges");
+
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.InstallmentNumber)
+                .IsRequired();
+
+            entity.Property(x => x.InstallmentDueDate)
+                .IsRequired();
+
+            entity.Property(x => x.EffectiveDate)
+                .IsRequired();
+
+            entity.Property(x => x.CalculationType)
+                .IsRequired();
+
+            entity.Property(x => x.Amount)
+                .HasPrecision(18, 2)
+                .IsRequired();
+
+            entity.Property(x => x.CreatedAt)
+                .IsRequired();
+
+            entity.HasOne(x => x.Tenant)
+                .WithMany()
+                .HasForeignKey(x => x.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.Loan)
+                .WithMany()
+                .HasForeignKey(x => x.LoanId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(x => x.TenantId);
+
+            entity.HasIndex(x => new
+            {
+                x.TenantId,
+                x.LoanId
+            });
+
+            entity.HasIndex(x => new
+            {
+                x.TenantId,
+                x.LoanId,
+                x.InstallmentNumber
+            });
+
+            entity.HasIndex(x => new
+            {
+                x.TenantId,
+                x.LoanId,
+                x.InstallmentNumber,
+                x.EffectiveDate
+            })
+            .IsUnique();
+        });
+
+        modelBuilder.Entity<LateFeeAdjustment>(entity =>
+        {
+            entity.ToTable("late_fee_adjustments");
+
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.AdjustmentType)
+                .IsRequired();
+
+            entity.Property(x => x.Amount)
+                .HasPrecision(18, 2)
+                .IsRequired();
+
+            entity.Property(x => x.Reason)
+                .HasMaxLength(500)
+                .IsRequired();
+
+            entity.Property(x => x.CreatedAt)
+                .IsRequired();
+
+            entity.HasOne(x => x.Tenant)
+                .WithMany()
+                .HasForeignKey(x => x.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.LateFeeCharge)
+                .WithMany(x => x.Adjustments)
+                .HasForeignKey(x => x.LateFeeChargeId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.AppUser)
+                .WithMany()
+                .HasForeignKey(x => x.AppUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(x => x.TenantId);
+
+            entity.HasIndex(x => new
+            {
+                x.TenantId,
+                x.LateFeeChargeId
+            });
+
+            entity.HasIndex(x => new
+            {
+                x.TenantId,
+                x.AppUserId
+            });
         });
 
         modelBuilder.Entity<CollectionRoute>(entity =>

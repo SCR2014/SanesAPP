@@ -637,6 +637,30 @@ public class FieldCollectionsTests
             receipt.Amount);
 
         Assert.Equal(
+            0m,
+            receipt.AppliedToLateFees);
+
+        Assert.Equal(
+            100m,
+            receipt.AppliedToLoan);
+
+        Assert.Equal(
+            0m,
+            receipt.LateFeeBalanceBefore);
+
+        Assert.Equal(
+            0m,
+            receipt.LateFeeBalanceAfter);
+
+        Assert.Equal(
+            1300m,
+            receipt.TotalOutstandingBefore);
+
+        Assert.Equal(
+            1200m,
+            receipt.TotalOutstandingAfter);
+
+        Assert.Equal(
             PaymentType.Regular,
             receipt.PaymentType);
 
@@ -1073,12 +1097,198 @@ public class FieldCollectionsTests
             response.StatusCode);
     }
 
+    [Fact]
+    public async Task CreatePayment_WithLateFee_AppliesLateFeeFirstAndReturnsCorrectReceipt()
+    {
+        /*
+        * Weekly:
+        *
+        * StartDate = hoy - 8
+        * DueDate   = hoy - 1
+        * Mora      = efectiva hoy
+        *
+        * Contractual balance = 1300
+        * Late fee            =   20
+        * Total outstanding   = 1320
+        */
+        var setup =
+            await CreatePaymentScenarioAsync(
+                lateFeeEnabled: true,
+                lateFeeAmount: 20m,
+                startDate:
+                    DateTime.UtcNow.Date
+                        .AddDays(-8));
+
+        var originalNextPaymentDate =
+            setup.Loan.NextPaymentDate;
+
+        /*
+        * El cliente entrega:
+        *
+        * RD$20  -> mora
+        * RD$100 -> préstamo
+        */
+        var request =
+            CreatePaymentRequest(
+                setup,
+                120m,
+                PaymentType.Regular,
+                "Pago de cuota y mora");
+
+        var response =
+            await setup.CollectorClient
+                .PostAsJsonAsync(
+                    "/api/field-collections/payments",
+                    request);
+
+        Assert.Equal(
+            HttpStatusCode.Created,
+            response.StatusCode);
+
+        var receipt =
+            await response.Content
+                .ReadFromJsonAsync<
+                    FieldCollectionPaymentResponse>();
+
+        Assert.NotNull(receipt);
+
+        Assert.Equal(
+            120m,
+            receipt.Amount);
+
+        Assert.Equal(
+            20m,
+            receipt.AppliedToLateFees);
+
+        Assert.Equal(
+            100m,
+            receipt.AppliedToLoan);
+
+        Assert.Equal(
+            1300m,
+            receipt.BalanceBefore);
+
+        Assert.Equal(
+            1200m,
+            receipt.BalanceAfter);
+
+        Assert.Equal(
+            20m,
+            receipt.LateFeeBalanceBefore);
+
+        Assert.Equal(
+            0m,
+            receipt.LateFeeBalanceAfter);
+
+        Assert.Equal(
+            1320m,
+            receipt.TotalOutstandingBefore);
+
+        Assert.Equal(
+            1200m,
+            receipt.TotalOutstandingAfter);
+
+        Assert.Equal(
+            originalNextPaymentDate.AddDays(7),
+            receipt.NextPaymentDate);
+
+        Assert.Equal(
+            "Pago de cuota y mora",
+            receipt.Notes);
+    }
+    [Fact]
+    public async Task CreatePayment_PayingOnlyLateFee_DoesNotAdvanceLoanSchedule()
+    {
+        var setup =
+            await CreatePaymentScenarioAsync(
+                lateFeeEnabled: true,
+                lateFeeAmount: 20m,
+                startDate:
+                    DateTime.UtcNow.Date
+                        .AddDays(-8));
+
+        var originalNextPaymentDate =
+            setup.Loan.NextPaymentDate;
+
+        var request =
+            CreatePaymentRequest(
+                setup,
+                20m,
+                PaymentType.Partial,
+                "Pago solamente de mora");
+
+        var response =
+            await setup.CollectorClient
+                .PostAsJsonAsync(
+                    "/api/field-collections/payments",
+                    request);
+
+        Assert.Equal(
+            HttpStatusCode.Created,
+            response.StatusCode);
+
+        var receipt =
+            await response.Content
+                .ReadFromJsonAsync<
+                    FieldCollectionPaymentResponse>();
+
+        Assert.NotNull(receipt);
+
+        Assert.Equal(
+            20m,
+            receipt.Amount);
+
+        Assert.Equal(
+            20m,
+            receipt.AppliedToLateFees);
+
+        Assert.Equal(
+            0m,
+            receipt.AppliedToLoan);
+
+        Assert.Equal(
+            1300m,
+            receipt.BalanceBefore);
+
+        Assert.Equal(
+            1300m,
+            receipt.BalanceAfter);
+
+        Assert.Equal(
+            20m,
+            receipt.LateFeeBalanceBefore);
+
+        Assert.Equal(
+            0m,
+            receipt.LateFeeBalanceAfter);
+
+        Assert.Equal(
+            1320m,
+            receipt.TotalOutstandingBefore);
+
+        Assert.Equal(
+            1300m,
+            receipt.TotalOutstandingAfter);
+
+        /*
+        * Como absolutamente nada fue aplicado al contrato,
+        * la fecha de la próxima cuota debe permanecer igual.
+        */
+        Assert.Equal(
+            originalNextPaymentDate,
+            receipt.NextPaymentDate);
+    }
+
     // ============================================================
     // SCENARIO
     // ============================================================
 
     private async Task<PaymentScenario>
-        CreatePaymentScenarioAsync()
+        CreatePaymentScenarioAsync(
+            bool lateFeeEnabled = false,
+            decimal lateFeeAmount = 0m,
+            int lateFeeGraceDays = 0,
+            DateTime? startDate = null)
     {
         var context =
             await CreateContextAsync();
@@ -1112,8 +1322,12 @@ public class FieldCollectionsTests
                 context.Client,
                 investorId,
                 clientId,
-                DateTime.UtcNow.Date
-                    .AddDays(-7));
+                startDate ??
+                    DateTime.UtcNow.Date
+                        .AddDays(-7),
+                lateFeeEnabled,
+                lateFeeAmount,
+                lateFeeGraceDays);
 
         var collectorClient =
             await LoginCollectorAsync(
@@ -1403,11 +1617,14 @@ public class FieldCollectionsTests
     }
 
     private static async Task<LoanResponse>
-        CreateLoanAsync(
-            HttpClient administratorClient,
-            Guid investorId,
-            Guid clientId,
-            DateTime startDate)
+    CreateLoanAsync(
+        HttpClient administratorClient,
+        Guid investorId,
+        Guid clientId,
+        DateTime startDate,
+        bool lateFeeEnabled = false,
+        decimal lateFeeAmount = 0m,
+        int lateFeeGraceDays = 0)
     {
         var request =
             new CreateLoanRequest
@@ -1419,6 +1636,18 @@ public class FieldCollectionsTests
                 TotalInstallments = 13,
                 PaymentFrequency =
                     PaymentFrequency.Weekly,
+                LateFeeEnabled =
+                    lateFeeEnabled,
+
+                LateFeeCalculationType =
+                    LateFeeCalculationType
+                        .FixedAmountPerInstallment,
+
+                LateFeeAmount =
+                    lateFeeAmount,
+
+                LateFeeGraceDays =
+                    lateFeeGraceDays,
                 StartDate = startDate,
                 Notes =
                     "Field collection integration test"
