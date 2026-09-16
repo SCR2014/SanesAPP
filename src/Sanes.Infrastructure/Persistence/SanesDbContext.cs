@@ -15,6 +15,8 @@ public class SanesDbContext : DbContext
     public DbSet<Investor> Investors => Set<Investor>();
     public DbSet<Client> Clients => Set<Client>();
     public DbSet<Loan> Loans => Set<Loan>();
+    public DbSet<LoanGuarantee> LoanGuarantees =>
+        Set<LoanGuarantee>();
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<PaymentAllocation> PaymentAllocations =>
     Set<PaymentAllocation>();
@@ -79,6 +81,9 @@ public class SanesDbContext : DbContext
 
             entity.Property(x => x.DefaultLateFeeGraceDays)
                 .HasDefaultValue(0);
+
+            entity.Property(x => x.GuaranteeRequiredFromAmount)
+                .HasPrecision(18, 2);
         });
 
         modelBuilder.Entity<Investor>(entity =>
@@ -216,6 +221,12 @@ public class SanesDbContext : DbContext
             entity.Property(x => x.LateFeeGraceDays)
                 .HasDefaultValue(0);
 
+            entity.Property(x => x.GuaranteeRequired)
+                .HasDefaultValue(false);
+
+            entity.Property(x => x.GuaranteeThresholdAtCreation)
+                .HasPrecision(18, 2);
+
             entity.Property(x => x.StartDate)
                 .IsRequired();
 
@@ -262,6 +273,49 @@ public class SanesDbContext : DbContext
                 x.TenantId,
                 x.Status
             });
+        });
+
+        modelBuilder.Entity<LoanGuarantee>(entity =>
+        {
+            entity.ToTable("loan_guarantees");
+
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.Type)
+                .IsRequired();
+
+            entity.Property(x => x.Reference)
+                .HasMaxLength(150)
+                .IsRequired();
+
+            entity.Property(x => x.Description)
+                .HasMaxLength(1000);
+
+            entity.Property(x => x.CreatedAt)
+                .IsRequired();
+
+            entity.Property(x => x.UpdatedAt)
+                .IsRequired();
+
+            entity.HasOne(x => x.Tenant)
+                .WithMany()
+                .HasForeignKey(x => x.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.Loan)
+                .WithOne(x => x.Guarantee)
+                .HasForeignKey<LoanGuarantee>(
+                    x => x.LoanId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(x => x.TenantId);
+
+            entity.HasIndex(x => new
+            {
+                x.TenantId,
+                x.LoanId
+            })
+            .IsUnique();
         });
 
         modelBuilder.Entity<Payment>(entity =>

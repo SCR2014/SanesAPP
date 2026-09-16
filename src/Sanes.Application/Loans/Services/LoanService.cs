@@ -61,6 +61,31 @@ public class LoanService : ILoanService
                 request,
                 tenant);
 
+        var guaranteeThreshold =
+            tenant.GuaranteeRequiredFromAmount;
+
+        var guaranteeThresholdValue =
+            guaranteeThreshold.GetValueOrDefault();
+
+        var guaranteeRequired =
+            guaranteeThreshold.HasValue &&
+            request.PrincipalAmount >=
+                guaranteeThresholdValue;
+
+        if (
+            guaranteeRequired &&
+            request.Guarantee is null)
+        {
+            throw new InvalidOperationException(
+                $"A guarantee is required for loans with principal amounts greater than or equal to {guaranteeThresholdValue:0.00}.");
+        }
+
+        if (request.Guarantee is not null)
+        {
+            ValidateGuarantee(
+                request.Guarantee);
+        }
+
         var investor = await _investorRepository.GetByIdAsync(
             tenantId,
             request.InvestorId,
@@ -85,6 +110,8 @@ public class LoanService : ILoanService
 
         var startDate = NormalizeUtc(request.StartDate);
 
+        var now = DateTime.UtcNow;
+
         var loan = new Loan
         {
             TenantId = tenantId,
@@ -107,6 +134,12 @@ public class LoanService : ILoanService
             LateFeeGraceDays =
                 lateFeePolicy.GraceDays,
 
+            GuaranteeRequired =
+                guaranteeRequired,
+
+            GuaranteeThresholdAtCreation =
+                guaranteeThreshold,
+
             StartDate = startDate,
             NextPaymentDate = CalculateNextPaymentDate(
                 startDate,
@@ -115,9 +148,41 @@ public class LoanService : ILoanService
             Status = LoanStatus.Active,
             Notes = NormalizeOptional(request.Notes),
 
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
+            CreatedAt = now,
+            UpdatedAt = now
         };
+
+        if (request.Guarantee is not null)
+        {
+            loan.Guarantee =
+                new LoanGuarantee
+                {
+                    TenantId =
+                        tenantId,
+
+                    LoanId =
+                        loan.Id,
+
+                    Loan =
+                        loan,
+
+                    Type =
+                        request.Guarantee.Type,
+
+                    Reference =
+                        request.Guarantee.Reference.Trim(),
+
+                    Description =
+                        NormalizeOptional(
+                            request.Guarantee.Description),
+
+                    CreatedAt =
+                        now,
+
+                    UpdatedAt =
+                        now
+                };
+        }
 
         await _loanRepository.AddAsync(
             loan,
@@ -179,9 +244,33 @@ public class LoanService : ILoanService
                 "Only active loans can be updated.");
         }
 
+        /*
+        * La política del Tenant no se vuelve a consultar.
+        *
+        * Se utiliza el threshold que quedó congelado
+        * cuando nació el préstamo.
+        */
+        var guaranteeThreshold =
+            loan.GuaranteeThresholdAtCreation;
+
+        var guaranteeRequired =
+            guaranteeThreshold.HasValue &&
+            request.PrincipalAmount >=
+                guaranteeThreshold.GetValueOrDefault();
+
+        if (
+            guaranteeRequired &&
+            loan.Guarantee is null)
+        {
+            throw new InvalidOperationException(
+                $"A guarantee is required before increasing the principal amount to {request.PrincipalAmount:0.00}.");
+        }
+
         var startDate = NormalizeUtc(request.StartDate);
 
         loan.PrincipalAmount = request.PrincipalAmount;
+        loan.GuaranteeRequired =
+            guaranteeRequired;
         loan.InstallmentAmount = request.InstallmentAmount;
         loan.TotalInstallments = request.TotalInstallments;
         loan.PaymentFrequency = request.PaymentFrequency;
@@ -571,6 +660,36 @@ public class LoanService : ILoanService
             LateFeeGraceDays =
                 loan.LateFeeGraceDays,
 
+            GuaranteeRequired =
+                loan.GuaranteeRequired,
+
+            GuaranteeThresholdAtCreation =
+                loan.GuaranteeThresholdAtCreation,
+
+            Guarantee =
+                loan.Guarantee is null
+                    ? null
+                    : new LoanGuaranteeResponse
+                    {
+                        Id =
+                            loan.Guarantee.Id,
+
+                        Type =
+                            loan.Guarantee.Type,
+
+                        Reference =
+                            loan.Guarantee.Reference,
+
+                        Description =
+                            loan.Guarantee.Description,
+
+                        CreatedAt =
+                            loan.Guarantee.CreatedAt,
+
+                        UpdatedAt =
+                            loan.Guarantee.UpdatedAt
+                    },
+
             StartDate = loan.StartDate,
             NextPaymentDate = loan.NextPaymentDate,
 
@@ -710,6 +829,39 @@ public class LoanService : ILoanService
         }
 
         return expectedInstallments;
+    }
+
+    private static void ValidateGuarantee(
+    CreateLoanGuaranteeRequest guarantee)
+    {
+        if (!Enum.IsDefined(
+                typeof(LoanGuaranteeType),
+                guarantee.Type))
+        {
+            throw new InvalidOperationException(
+                "Guarantee type is invalid.");
+        }
+
+        if (string.IsNullOrWhiteSpace(
+                guarantee.Reference))
+        {
+            throw new InvalidOperationException(
+                "Guarantee reference is required.");
+        }
+
+        if (guarantee.Reference.Trim().Length > 150)
+        {
+            throw new InvalidOperationException(
+                "Guarantee reference cannot exceed 150 characters.");
+        }
+
+        if (
+            guarantee.Description is not null &&
+            guarantee.Description.Trim().Length > 1000)
+        {
+            throw new InvalidOperationException(
+                "Guarantee description cannot exceed 1000 characters.");
+        }
     }
 
     public async Task<List<ActiveLoanPortfolioItemResponse>> GetActivePortfolioAsync(

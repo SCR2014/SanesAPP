@@ -312,6 +312,10 @@ builder.Services.AddScoped<
     IEarlySettlementService,
     EarlySettlementService>();
 
+builder.Services.AddScoped<
+    ILoanGuaranteeService,
+    LoanGuaranteeService>();
+
 builder.Services.AddHttpContextAccessor();
 
 builder.Services.AddControllers();

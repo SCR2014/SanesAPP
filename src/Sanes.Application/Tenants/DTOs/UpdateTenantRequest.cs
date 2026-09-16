@@ -36,6 +36,12 @@ public class UpdateTenantRequest : IValidatableObject
 
     public int DefaultLateFeeGraceDays { get; set; } = 0;
 
+    /*
+    * null deshabilita la exigencia automática
+    * de garantía para nuevos préstamos.
+    */
+    public decimal? GuaranteeRequiredFromAmount { get; set; }
+
     public IEnumerable<ValidationResult> Validate(
         ValidationContext validationContext)
     {
@@ -93,5 +99,18 @@ public class UpdateTenantRequest : IValidatableObject
                 "DefaultLateFeeAmount must be greater than zero when late fees are enabled.",
                 new[] { nameof(DefaultLateFeeAmount) });
         }
+
+        if (
+            GuaranteeRequiredFromAmount.HasValue &&
+            GuaranteeRequiredFromAmount.Value <= 0)
+        {
+            yield return new ValidationResult(
+                "GuaranteeRequiredFromAmount must be greater than zero when configured.",
+                new[]
+                {
+                    nameof(GuaranteeRequiredFromAmount)
+                });
+        }
+
     }
 }
