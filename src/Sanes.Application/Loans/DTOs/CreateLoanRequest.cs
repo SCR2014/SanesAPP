@@ -31,6 +31,15 @@ public class CreateLoanRequest : IValidatableObject
 
     public int? LateFeeGraceDays { get; set; }
 
+    /*
+    * Opcional cuando el préstamo está por debajo
+    * del umbral del Tenant.
+    *
+    * Obligatoria cuando PrincipalAmount alcanza
+    * o supera GuaranteeRequiredFromAmount.
+    */
+    public CreateLoanGuaranteeRequest? Guarantee { get; set; }
+
     public DateTime StartDate { get; set; }
 
     [MaxLength(1000)]

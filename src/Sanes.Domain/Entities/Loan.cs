@@ -32,6 +32,20 @@ public class Loan
 
     public int LateFeeGraceDays { get; set; } = 0;
 
+    /*
+    * Snapshot de la política de garantía
+    * existente cuando se creó el préstamo.
+    */
+    public bool GuaranteeRequired { get; set; } = false;
+
+    public decimal? GuaranteeThresholdAtCreation { get; set; }
+
+    /*
+    * En este MVP un préstamo puede tener
+    * como máximo un registro de garantía.
+    */
+    public LoanGuarantee? Guarantee { get; set; }
+
     public ICollection<LoanBalanceAdjustment> BalanceAdjustments { get; set; }
     = new List<LoanBalanceAdjustment>();
 

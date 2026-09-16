@@ -23,6 +23,17 @@ public class Tenant
 
     public int DefaultLateFeeGraceDays { get; set; } = 0;
 
+    /*
+    * Monto de principal a partir del cual
+    * el Tenant exige garantía.
+    *
+    * null = no existe exigencia automática.
+    *
+    * El valor se expresa en la moneda
+    * configurada para el Tenant.
+    */
+    public decimal? GuaranteeRequiredFromAmount { get; set; }
+
     public bool IsActive { get; set; } = true;
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

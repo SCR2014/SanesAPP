@@ -23,6 +23,8 @@ public class TenantDto
 
     public int DefaultLateFeeGraceDays { get; set; }
 
+    public decimal? GuaranteeRequiredFromAmount { get; set; }
+
     public bool IsActive { get; set; }
 
     public DateTime CreatedAt { get; set; }

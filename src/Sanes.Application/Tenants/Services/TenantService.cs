@@ -24,6 +24,9 @@ public class TenantService : ITenantService
             request.DefaultLateFeeAmount,
             request.DefaultLateFeeGraceDays);
 
+        ValidateGuaranteePolicy(
+            request.GuaranteeRequiredFromAmount);
+
         var name = request.Name.Trim();
         var legalName = request.LegalName?.Trim();
         var phone = request.Phone?.Trim();
@@ -50,7 +53,10 @@ public class TenantService : ITenantService
                 request.DefaultLateFeeAmount,
 
             DefaultLateFeeGraceDays =
-                request.DefaultLateFeeGraceDays
+                request.DefaultLateFeeGraceDays,
+
+            GuaranteeRequiredFromAmount =
+                request.GuaranteeRequiredFromAmount
         };
 
         await _tenantRepository.AddAsync(
@@ -107,6 +113,9 @@ public class TenantService : ITenantService
             request.DefaultLateFeeAmount,
             request.DefaultLateFeeGraceDays);
 
+        ValidateGuaranteePolicy(
+            request.GuaranteeRequiredFromAmount);
+
         tenant.Name = request.Name.Trim();
         tenant.LegalName = request.LegalName?.Trim();
         tenant.Phone = request.Phone?.Trim();
@@ -127,6 +136,9 @@ public class TenantService : ITenantService
 
         tenant.DefaultLateFeeGraceDays =
             request.DefaultLateFeeGraceDays;
+
+        tenant.GuaranteeRequiredFromAmount =
+            request.GuaranteeRequiredFromAmount;
 
         tenant.UpdatedAt = DateTime.UtcNow;
 
@@ -221,6 +233,18 @@ public class TenantService : ITenantService
         }
     }
 
+    private static void ValidateGuaranteePolicy(
+        decimal? requiredFromAmount)
+    {
+        if (
+            requiredFromAmount.HasValue &&
+            requiredFromAmount.Value <= 0)
+        {
+            throw new InvalidOperationException(
+                "Guarantee required from amount must be greater than zero when configured.");
+        }
+    }
+
     private static TenantDto Map(Tenant tenant)
     {
         return new TenantDto
@@ -247,6 +271,9 @@ public class TenantService : ITenantService
 
             DefaultLateFeeGraceDays =
                 tenant.DefaultLateFeeGraceDays,
+
+            GuaranteeRequiredFromAmount =
+                tenant.GuaranteeRequiredFromAmount,
 
             IsActive = tenant.IsActive,
 
