@@ -16,6 +16,10 @@ public class CollectionLoanItemResponse
 
     public decimal Balance { get; set; }
 
+    public decimal LateFeeBalance { get; set; }
+
+    public decimal TotalOutstanding { get; set; }
+
     public decimal InstallmentAmount { get; set; }
 
     public decimal NextInstallmentAmountDue { get; set; }
@@ -29,6 +33,10 @@ public class CollectionLoanItemResponse
     public int OverdueInstallments { get; set; }
 
     public decimal OverdueAmount { get; set; }
+
+    public decimal TotalOverdueAmountDue { get; set; }
+
+    public bool HasOutstandingLateFees { get; set; }
 
     public decimal PercentagePaid { get; set; }
 

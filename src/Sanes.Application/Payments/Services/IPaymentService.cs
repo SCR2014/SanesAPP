@@ -5,6 +5,7 @@ namespace Sanes.Application.Payments.Services;
 public interface IPaymentService
 {
     Task<PaymentResponse> CreateAsync(
+        Guid tenantId,
         CreatePaymentRequest request,
         CancellationToken cancellationToken = default);
 

@@ -16,6 +16,10 @@ public class PaymentResponse
 
     public PaymentType PaymentType { get; set; }
 
+    public Guid? CollectedByAppUserId { get; set; }
+
+    public Guid? CollectionRouteId { get; set; }
+
     public string? Notes { get; set; }
 
     public DateTime CreatedAt { get; set; }

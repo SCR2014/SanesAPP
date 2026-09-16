@@ -24,6 +24,14 @@ public class LoanResponse
 
     public PaymentFrequency PaymentFrequency { get; set; }
 
+    public bool LateFeeEnabled { get; set; }
+
+    public LateFeeCalculationType LateFeeCalculationType { get; set; }
+
+    public decimal LateFeeAmount { get; set; }
+
+    public int LateFeeGraceDays { get; set; }
+
     public DateTime StartDate { get; set; }
 
     public DateTime NextPaymentDate { get; set; }

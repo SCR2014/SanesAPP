@@ -6,9 +6,6 @@ namespace Sanes.Application.Loans.DTOs;
 public class CreateLoanRequest : IValidatableObject
 {
     [Required]
-    public Guid TenantId { get; set; }
-
-    [Required]
     public Guid InvestorId { get; set; }
 
     [Required]
@@ -26,6 +23,14 @@ public class CreateLoanRequest : IValidatableObject
     [Required]
     public PaymentFrequency PaymentFrequency { get; set; }
 
+    public bool? LateFeeEnabled { get; set; }
+
+    public LateFeeCalculationType? LateFeeCalculationType { get; set; }
+
+    public decimal? LateFeeAmount { get; set; }
+
+    public int? LateFeeGraceDays { get; set; }
+
     public DateTime StartDate { get; set; }
 
     [MaxLength(1000)]
@@ -34,13 +39,6 @@ public class CreateLoanRequest : IValidatableObject
     public IEnumerable<ValidationResult> Validate(
         ValidationContext validationContext)
     {
-        if (TenantId == Guid.Empty)
-        {
-            yield return new ValidationResult(
-                "TenantId must be a valid identifier.",
-                new[] { nameof(TenantId) });
-        }
-
         if (InvestorId == Guid.Empty)
         {
             yield return new ValidationResult(
@@ -60,6 +58,43 @@ public class CreateLoanRequest : IValidatableObject
             yield return new ValidationResult(
                 "PaymentFrequency is invalid.",
                 new[] { nameof(PaymentFrequency) });
+        }
+
+        if (
+            LateFeeCalculationType.HasValue &&
+            !Enum.IsDefined(
+                typeof(LateFeeCalculationType),
+                LateFeeCalculationType.Value))
+        {
+            yield return new ValidationResult(
+                "LateFeeCalculationType is invalid.",
+                new[] { nameof(LateFeeCalculationType) });
+        }
+
+        if (LateFeeAmount.HasValue && LateFeeAmount.Value < 0)
+        {
+            yield return new ValidationResult(
+                "LateFeeAmount cannot be negative.",
+                new[] { nameof(LateFeeAmount) });
+        }
+
+        if (LateFeeGraceDays.HasValue && LateFeeGraceDays.Value < 0)
+        {
+            yield return new ValidationResult(
+                "LateFeeGraceDays cannot be negative.",
+                new[] { nameof(LateFeeGraceDays) });
+        }
+
+        if (
+            LateFeeEnabled == true &&
+            LateFeeCalculationType ==
+                Sanes.Domain.Enums.LateFeeCalculationType.FixedAmountPerInstallment &&
+            LateFeeAmount.HasValue &&
+            LateFeeAmount.Value <= 0)
+        {
+            yield return new ValidationResult(
+                "LateFeeAmount must be greater than zero when fixed late fees are enabled.",
+                new[] { nameof(LateFeeAmount) });
         }
 
         if (

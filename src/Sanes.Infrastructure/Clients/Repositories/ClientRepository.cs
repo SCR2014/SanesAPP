@@ -23,13 +23,30 @@ public class ClientRepository : IClientRepository
 
     public async Task<List<Client>> GetAllAsync(
         Guid tenantId,
+        Guid? collectionRouteId = null,
         CancellationToken cancellationToken = default)
     {
-        return await _dbContext.Clients
+        var query = _dbContext.Clients
             .AsNoTracking()
             .Where(x =>
                 x.TenantId == tenantId &&
-                x.IsActive)
+                x.IsActive);
+
+        if (collectionRouteId.HasValue)
+            query = query.Where(
+                x => x.CollectionRouteId == collectionRouteId.Value);
+
+        if (collectionRouteId.HasValue)
+        {
+            return await query
+                .OrderBy(x => x.CollectionRouteOrder == null)
+                .ThenBy(x => x.CollectionRouteOrder)
+                .ThenBy(x => x.FirstName)
+                .ThenBy(x => x.LastName)
+                .ToListAsync(cancellationToken);
+        }
+
+        return await query
             .OrderBy(x => x.FirstName)
             .ThenBy(x => x.LastName)
             .ToListAsync(cancellationToken);
@@ -82,6 +99,19 @@ public class ClientRepository : IClientRepository
         }
 
         return await query.AnyAsync(cancellationToken);
+    }
+
+    public async Task<List<Client>> GetByCollectionRouteForUpdateAsync(
+        Guid tenantId,
+        Guid collectionRouteId,
+        CancellationToken cancellationToken = default)
+    {
+        return await _dbContext.Clients
+            .Where(x =>
+                x.TenantId == tenantId &&
+                x.CollectionRouteId == collectionRouteId &&
+                x.IsActive)
+            .ToListAsync(cancellationToken);
     }
 
     public async Task SaveChangesAsync(

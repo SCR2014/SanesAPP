@@ -1,18 +1,26 @@
 using Microsoft.AspNetCore.Mvc;
 using Sanes.Application.Clients.DTOs;
 using Sanes.Application.Clients.Services;
+using Microsoft.AspNetCore.Authorization;
+using Sanes.Application.Authentication.Services;
+using Sanes.Domain.Enums;
 
 namespace Sanes.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize(Roles = nameof(AppUserRole.Administrator))]
 public class ClientsController : ControllerBase
 {
     private readonly IClientService _clientService;
+    private readonly ICurrentUserService _currentUserService;
 
-    public ClientsController(IClientService clientService)
+    public ClientsController(
+        IClientService clientService,
+        ICurrentUserService currentUserService)
     {
         _clientService = clientService;
+        _currentUserService = currentUserService;
     }
 
     [HttpPost]
@@ -23,6 +31,7 @@ public class ClientsController : ControllerBase
         try
         {
             var client = await _clientService.CreateAsync(
+                _currentUserService.TenantId,
                 request,
                 cancellationToken);
 
@@ -30,8 +39,7 @@ public class ClientsController : ControllerBase
                 nameof(GetById),
                 new
                 {
-                    id = client.Id,
-                    tenantId = client.TenantId
+                    id = client.Id
                 },
                 client);
         }
@@ -46,19 +54,13 @@ public class ClientsController : ControllerBase
 
     [HttpGet]
     public async Task<ActionResult<List<ClientResponse>>> GetAll(
-        [FromQuery] Guid tenantId,
+        [FromQuery] Guid? collectionRouteId,
         CancellationToken cancellationToken)
     {
-        if (tenantId == Guid.Empty)
-        {
-            return BadRequest(new
-            {
-                message = "TenantId must be a valid identifier."
-            });
-        }
 
         var clients = await _clientService.GetAllAsync(
-            tenantId,
+            _currentUserService.TenantId,
+            collectionRouteId,
             cancellationToken);
 
         return Ok(clients);
@@ -67,19 +69,11 @@ public class ClientsController : ControllerBase
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<ClientResponse>> GetById(
         Guid id,
-        [FromQuery] Guid tenantId,
         CancellationToken cancellationToken)
     {
-        if (tenantId == Guid.Empty)
-        {
-            return BadRequest(new
-            {
-                message = "TenantId must be a valid identifier."
-            });
-        }
 
         var client = await _clientService.GetByIdAsync(
-            tenantId,
+            _currentUserService.TenantId,
             id,
             cancellationToken);
 
@@ -94,22 +88,14 @@ public class ClientsController : ControllerBase
     [HttpPut("{id:guid}")]
     public async Task<ActionResult<ClientResponse>> Update(
         Guid id,
-        [FromQuery] Guid tenantId,
         [FromBody] UpdateClientRequest request,
         CancellationToken cancellationToken)
     {
-        if (tenantId == Guid.Empty)
-        {
-            return BadRequest(new
-            {
-                message = "TenantId must be a valid identifier."
-            });
-        }
 
         try
         {
             var client = await _clientService.UpdateAsync(
-                tenantId,
+                _currentUserService.TenantId,
                 id,
                 request,
                 cancellationToken);
@@ -133,19 +119,11 @@ public class ClientsController : ControllerBase
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(
         Guid id,
-        [FromQuery] Guid tenantId,
         CancellationToken cancellationToken)
     {
-        if (tenantId == Guid.Empty)
-        {
-            return BadRequest(new
-            {
-                message = "TenantId must be a valid identifier."
-            });
-        }
 
         var deleted = await _clientService.DeleteAsync(
-            tenantId,
+            _currentUserService.TenantId,
             id,
             cancellationToken);
 
@@ -160,19 +138,11 @@ public class ClientsController : ControllerBase
     [HttpPatch("{id:guid}/reactivate")]
     public async Task<IActionResult> Reactivate(
         Guid id,
-        [FromQuery] Guid tenantId,
         CancellationToken cancellationToken)
     {
-        if (tenantId == Guid.Empty)
-        {
-            return BadRequest(new
-            {
-                message = "TenantId must be a valid identifier."
-            });
-        }
 
         var reactivated = await _clientService.ReactivateAsync(
-            tenantId,
+            _currentUserService.TenantId,
             id,
             cancellationToken);
 

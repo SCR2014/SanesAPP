@@ -10,6 +10,7 @@ public interface IClientRepository
 
     Task<List<Client>> GetAllAsync(
         Guid tenantId,
+        Guid? collectionRouteId = null,
         CancellationToken cancellationToken = default);
 
     Task<Client?> GetByIdAsync(
@@ -26,6 +27,11 @@ public interface IClientRepository
         Guid tenantId,
         string identification,
         Guid? excludeClientId = null,
+        CancellationToken cancellationToken = default);
+
+    Task<List<Client>> GetByCollectionRouteForUpdateAsync(
+        Guid tenantId,
+        Guid collectionRouteId,
         CancellationToken cancellationToken = default);
 
     Task SaveChangesAsync(

@@ -12,9 +12,15 @@ public class ActivePortfolioSummaryResponse
 
     public decimal TotalBalance { get; set; }
 
+    public decimal TotalLateFeeBalance { get; set; }
+
+    public decimal TotalOutstanding { get; set; }
+
     public int OverdueLoansCount { get; set; }
 
     public decimal TotalOverdueAmount { get; set; }
+
+    public decimal TotalOverdueAmountDue { get; set; }
 
     public decimal CollectionPercentage { get; set; }
 }

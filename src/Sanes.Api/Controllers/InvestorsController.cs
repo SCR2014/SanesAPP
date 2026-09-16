@@ -1,18 +1,24 @@
 using Microsoft.AspNetCore.Mvc;
 using Sanes.Application.Investors.DTOs;
 using Sanes.Application.Investors.Services;
+using Microsoft.AspNetCore.Authorization;
+using Sanes.Application.Authentication.Services;
+using Sanes.Domain.Enums;
 
 namespace Sanes.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize(Roles = nameof(AppUserRole.Administrator))]
 public class InvestorsController : ControllerBase
 {
     private readonly IInvestorService _investorService;
+    private readonly ICurrentUserService _currentUserService;
 
-    public InvestorsController(IInvestorService investorService)
+    public InvestorsController(IInvestorService investorService, ICurrentUserService currentUserService)
     {
         _investorService = investorService;
+        _currentUserService = currentUserService;
     }
 
     [HttpPost]
@@ -23,6 +29,7 @@ public class InvestorsController : ControllerBase
         try
         {
             var investor = await _investorService.CreateAsync(
+                _currentUserService.TenantId,
                 request,
                 cancellationToken);
 
@@ -30,8 +37,7 @@ public class InvestorsController : ControllerBase
                 nameof(GetById),
                 new
                 {
-                    id = investor.Id,
-                    tenantId = investor.TenantId
+                    id = investor.Id
                 },
                 investor);
         }
@@ -46,11 +52,10 @@ public class InvestorsController : ControllerBase
 
     [HttpGet]
     public async Task<ActionResult<List<InvestorResponse>>> GetAll(
-        [FromQuery] Guid tenantId,
         CancellationToken cancellationToken)
     {
         var investors = await _investorService.GetAllAsync(
-            tenantId,
+            _currentUserService.TenantId,
             cancellationToken);
 
         return Ok(investors);
@@ -59,11 +64,10 @@ public class InvestorsController : ControllerBase
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<InvestorResponse>> GetById(
         Guid id,
-        [FromQuery] Guid tenantId,
         CancellationToken cancellationToken)
     {
         var investor = await _investorService.GetByIdAsync(
-            tenantId,
+            _currentUserService.TenantId,
             id,
             cancellationToken);
 
@@ -78,14 +82,13 @@ public class InvestorsController : ControllerBase
     [HttpPut("{id:guid}")]
     public async Task<ActionResult<InvestorResponse>> Update(
         Guid id,
-        [FromQuery] Guid tenantId,
         [FromBody] UpdateInvestorRequest request,
         CancellationToken cancellationToken)
     {
         try
         {
             var investor = await _investorService.UpdateAsync(
-                tenantId,
+                _currentUserService.TenantId,
                 id,
                 request,
                 cancellationToken);
@@ -109,11 +112,10 @@ public class InvestorsController : ControllerBase
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(
         Guid id,
-        [FromQuery] Guid tenantId,
         CancellationToken cancellationToken)
     {
         var deleted = await _investorService.DeleteAsync(
-            tenantId,
+            _currentUserService.TenantId,
             id,
             cancellationToken);
 
@@ -128,11 +130,10 @@ public class InvestorsController : ControllerBase
     [HttpPatch("{id:guid}/reactivate")]
     public async Task<IActionResult> Reactivate(
         Guid id,
-        [FromQuery] Guid tenantId,
         CancellationToken cancellationToken)
     {
         var reactivated = await _investorService.ReactivateAsync(
-            tenantId,
+            _currentUserService.TenantId,
             id,
             cancellationToken);
 

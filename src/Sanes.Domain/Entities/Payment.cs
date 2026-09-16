@@ -12,6 +12,12 @@ public class Payment
     public Guid LoanId { get; set; }
     public Loan Loan { get; set; } = null!;
 
+    public Guid? CollectedByAppUserId { get; set; }
+    public AppUser? CollectedByAppUser { get; set; }
+
+    public Guid? CollectionRouteId { get; set; }
+    public CollectionRoute? CollectionRoute { get; set; }
+
     public decimal Amount { get; set; }
 
     public DateTime PaymentDate { get; set; }
@@ -23,4 +29,7 @@ public class Payment
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+    public ICollection<PaymentAllocation> Allocations { get; set; }
+        = new List<PaymentAllocation>();
 }

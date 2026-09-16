@@ -4,6 +4,7 @@ using Sanes.Application.Loans.DTOs;
 using Sanes.Application.Loans.Repositories;
 using Sanes.Application.Tenants.Repositories;
 using Sanes.Application.Payments.Repositories;
+using Sanes.Application.LateFees.Services;
 using Sanes.Domain.Entities;
 using Sanes.Domain.Enums;
 
@@ -15,28 +16,35 @@ public class LoanService : ILoanService
     private readonly ITenantRepository _tenantRepository;
     private readonly IInvestorRepository _investorRepository;
     private readonly IClientRepository _clientRepository;
-    private readonly IPaymentRepository _paymentRepository;
+    private readonly IPaymentAllocationRepository _paymentAllocationRepository;
+    private readonly ILateFeeAccrualService _lateFeeAccrualService;
+    private readonly ILateFeeBalanceService _lateFeeBalanceService;
 
     public LoanService(
     ILoanRepository loanRepository,
     ITenantRepository tenantRepository,
     IInvestorRepository investorRepository,
     IClientRepository clientRepository,
-    IPaymentRepository paymentRepository)
+    IPaymentAllocationRepository paymentAllocationRepository,
+    ILateFeeAccrualService lateFeeAccrualService,
+    ILateFeeBalanceService lateFeeBalanceService)
 {
     _loanRepository = loanRepository;
     _tenantRepository = tenantRepository;
     _investorRepository = investorRepository;
     _clientRepository = clientRepository;
-    _paymentRepository = paymentRepository;
+    _paymentAllocationRepository = paymentAllocationRepository;
+    _lateFeeAccrualService = lateFeeAccrualService;
+    _lateFeeBalanceService = lateFeeBalanceService;
 }
 
     public async Task<LoanResponse> CreateAsync(
+        Guid tenantId,
         CreateLoanRequest request,
         CancellationToken cancellationToken = default)
     {
         var tenant = await _tenantRepository.GetByIdAsync(
-            request.TenantId,
+            tenantId,
             cancellationToken);
 
         if (tenant is null || !tenant.IsActive)
@@ -45,8 +53,13 @@ public class LoanService : ILoanService
                 "Tenant not found or inactive.");
         }
 
+        var lateFeePolicy =
+            ResolveLateFeePolicy(
+                request,
+                tenant);
+
         var investor = await _investorRepository.GetByIdAsync(
-            request.TenantId,
+            tenantId,
             request.InvestorId,
             cancellationToken);
 
@@ -57,7 +70,7 @@ public class LoanService : ILoanService
         }
 
         var client = await _clientRepository.GetByIdAsync(
-            request.TenantId,
+            tenantId,
             request.ClientId,
             cancellationToken);
 
@@ -71,7 +84,7 @@ public class LoanService : ILoanService
 
         var loan = new Loan
         {
-            TenantId = request.TenantId,
+            TenantId = tenantId,
             InvestorId = request.InvestorId,
             ClientId = request.ClientId,
 
@@ -79,6 +92,17 @@ public class LoanService : ILoanService
             InstallmentAmount = request.InstallmentAmount,
             TotalInstallments = request.TotalInstallments,
             PaymentFrequency = request.PaymentFrequency,
+            LateFeeEnabled =
+                lateFeePolicy.Enabled,
+
+            LateFeeCalculationType =
+                lateFeePolicy.CalculationType,
+
+            LateFeeAmount =
+                lateFeePolicy.Amount,
+
+            LateFeeGraceDays =
+                lateFeePolicy.GraceDays,
 
             StartDate = startDate,
             NextPaymentDate = CalculateNextPaymentDate(
@@ -208,6 +232,12 @@ public class LoanService : ILoanService
         Guid loanId,
         CancellationToken cancellationToken = default)
     {
+        await _lateFeeAccrualService.AccrueForLoanAsync(
+            tenantId,
+            loanId,
+            DateTime.UtcNow,
+            cancellationToken);
+
         var loan = await _loanRepository.GetByIdAsync(
             tenantId,
             loanId,
@@ -225,7 +255,7 @@ public class LoanService : ILoanService
             totalAmount - loan.PrincipalAmount;
 
         var amountPaid =
-            await _paymentRepository.GetTotalPaidAsync(
+            await _paymentAllocationRepository.GetTotalAppliedToLoanAsync(
                 tenantId,
                 loanId,
                 cancellationToken);
@@ -237,6 +267,18 @@ public class LoanService : ILoanService
         {
             balance = 0;
         }
+
+        var lateFeeBalance =
+            await _lateFeeBalanceService.GetOutstandingBalanceAsync(
+                tenantId,
+                loanId,
+                cancellationToken);
+
+        var totalOutstanding =
+            balance + lateFeeBalance;
+
+        var hasOutstandingLateFees =
+            lateFeeBalance > 0;
 
         var completedInstallments = 0;
         var remainingInstallments = loan.TotalInstallments;
@@ -350,6 +392,9 @@ public class LoanService : ILoanService
             }
         }
 
+        var totalOverdueAmountDue =
+            overdueAmount + lateFeeBalance;
+
         return new LoanFinancialSummaryResponse
         {
             LoanId = loan.Id,
@@ -368,6 +413,12 @@ public class LoanService : ILoanService
 
             Balance =
                 balance,
+
+            LateFeeBalance =
+                lateFeeBalance,
+
+            TotalOutstanding =
+                totalOutstanding,
 
             InstallmentAmount =
                 loan.InstallmentAmount,
@@ -404,6 +455,12 @@ public class LoanService : ILoanService
 
             OverdueAmount =
                 overdueAmount,
+
+            TotalOverdueAmountDue =
+                totalOverdueAmountDue,
+
+            HasOutstandingLateFees =
+                hasOutstandingLateFees,
 
             PaymentFrequency =
                 loan.PaymentFrequency,
@@ -489,6 +546,19 @@ public class LoanService : ILoanService
             InterestAmount = interestAmount,
 
             PaymentFrequency = loan.PaymentFrequency,
+
+            LateFeeEnabled =
+                loan.LateFeeEnabled,
+
+            LateFeeCalculationType =
+                loan.LateFeeCalculationType,
+
+            LateFeeAmount =
+                loan.LateFeeAmount,
+
+            LateFeeGraceDays =
+                loan.LateFeeGraceDays,
+
             StartDate = loan.StartDate,
             NextPaymentDate = loan.NextPaymentDate,
 
@@ -498,6 +568,85 @@ public class LoanService : ILoanService
             CreatedAt = loan.CreatedAt,
             UpdatedAt = loan.UpdatedAt
         };
+    }
+
+    private static (
+        bool Enabled,
+        LateFeeCalculationType CalculationType,
+        decimal Amount,
+        int GraceDays)
+        ResolveLateFeePolicy(
+            CreateLoanRequest request,
+            Tenant tenant)
+    {
+        var enabled =
+            request.LateFeeEnabled
+            ?? tenant.DefaultLateFeeEnabled;
+
+        var calculationType =
+            request.LateFeeCalculationType
+            ?? tenant.DefaultLateFeeCalculationType;
+
+        var amount =
+            request.LateFeeAmount
+            ?? tenant.DefaultLateFeeAmount;
+
+        var graceDays =
+            request.LateFeeGraceDays
+            ?? tenant.DefaultLateFeeGraceDays;
+
+        ValidateLateFeePolicy(
+            enabled,
+            calculationType,
+            amount,
+            graceDays);
+
+        return (
+            enabled,
+            calculationType,
+            amount,
+            graceDays);
+    }
+
+    private static void ValidateLateFeePolicy(
+        bool enabled,
+        LateFeeCalculationType calculationType,
+        decimal amount,
+        int graceDays)
+    {
+        if (!Enum.IsDefined(
+                typeof(LateFeeCalculationType),
+                calculationType))
+        {
+            throw new InvalidOperationException(
+                "Late fee calculation type is invalid.");
+        }
+
+        if (
+            calculationType !=
+            LateFeeCalculationType.FixedAmountPerInstallment)
+        {
+            throw new InvalidOperationException(
+                "Only fixed late fees are currently supported.");
+        }
+
+        if (amount < 0)
+        {
+            throw new InvalidOperationException(
+                "Late fee amount cannot be negative.");
+        }
+
+        if (graceDays < 0)
+        {
+            throw new InvalidOperationException(
+                "Late fee grace days cannot be negative.");
+        }
+
+        if (enabled && amount <= 0)
+        {
+            throw new InvalidOperationException(
+                "Late fee amount must be greater than zero when late fees are enabled.");
+        }
     }
 
     private static DateTime AddFrequency(
@@ -565,6 +714,11 @@ public class LoanService : ILoanService
                 "Tenant not found or inactive.");
         }
 
+        await _lateFeeAccrualService.AccrueForTenantAsync(
+            tenantId,
+            DateTime.UtcNow,
+            cancellationToken);
+
         var loans = await _loanRepository.GetActiveByTenantAsync(
             tenantId,
             cancellationToken);
@@ -574,10 +728,17 @@ public class LoanService : ILoanService
             .ToList();
 
         var totalPaidByLoan =
-            await _paymentRepository.GetTotalPaidByLoansAsync(
+            await _paymentAllocationRepository.GetTotalAppliedToLoansAsync(
                 tenantId,
                 loanIds,
                 cancellationToken);
+
+        var lateFeeBalanceByLoan =
+            await _lateFeeBalanceService
+                .GetOutstandingBalancesByLoansAsync(
+                    tenantId,
+                    loanIds,
+                    cancellationToken);
 
         var result = new List<ActiveLoanPortfolioItemResponse>();
 
@@ -602,6 +763,19 @@ public class LoanService : ILoanService
             {
                 balance = 0;
             }
+
+            var lateFeeBalance =
+                lateFeeBalanceByLoan.TryGetValue(
+                    loan.Id,
+                    out var outstandingLateFees)
+                    ? outstandingLateFees
+                    : 0m;
+
+            var totalOutstanding =
+                balance + lateFeeBalance;
+
+            var hasOutstandingLateFees =
+                lateFeeBalance > 0;
 
             var completedInstallments = 0;
             var remainingInstallments = loan.TotalInstallments;
@@ -707,6 +881,9 @@ public class LoanService : ILoanService
                 }
             }
 
+            var totalOverdueAmountDue =
+                overdueAmount + lateFeeBalance;
+
             result.Add(
                 new ActiveLoanPortfolioItemResponse
                 {
@@ -739,6 +916,12 @@ public class LoanService : ILoanService
                     Balance =
                         balance,
 
+                    LateFeeBalance =
+                        lateFeeBalance,
+
+                    TotalOutstanding =
+                        totalOutstanding,
+
                     InstallmentAmount =
                         loan.InstallmentAmount,
 
@@ -765,6 +948,12 @@ public class LoanService : ILoanService
 
                     OverdueAmount =
                         overdueAmount,
+
+                    TotalOverdueAmountDue =
+                        totalOverdueAmountDue,
+
+                    HasOutstandingLateFees =
+                        hasOutstandingLateFees,
 
                     PercentagePaid =
                         percentagePaid,
@@ -806,6 +995,15 @@ public class LoanService : ILoanService
                 2);
         }
 
+        var totalLateFeeBalance =
+            portfolio.Sum(x => x.LateFeeBalance);
+
+        var totalOutstanding =
+            portfolio.Sum(x => x.TotalOutstanding);
+
+        var totalOverdueAmountDue =
+            portfolio.Sum(x => x.TotalOverdueAmountDue);
+
         return new ActivePortfolioSummaryResponse
         {
             ActiveLoansCount =
@@ -823,11 +1021,20 @@ public class LoanService : ILoanService
             TotalBalance =
                 portfolio.Sum(x => x.Balance),
 
+            TotalLateFeeBalance =
+                totalLateFeeBalance,
+
+            TotalOutstanding =
+                totalOutstanding,
+
             OverdueLoansCount =
                 portfolio.Count(x => x.IsOverdue),
 
             TotalOverdueAmount =
                 portfolio.Sum(x => x.OverdueAmount),
+
+            TotalOverdueAmountDue =
+                totalOverdueAmountDue,
 
             CollectionPercentage =
                 collectionPercentage
@@ -842,6 +1049,7 @@ public class LoanService : ILoanService
         string? search = null,
         Guid? investorId = null,
         Guid? clientId = null,
+        Guid? collectionRouteId = null,
         CancellationToken cancellationToken = default)
     {
         var portfolio = await GetActivePortfolioAsync(
@@ -852,7 +1060,9 @@ public class LoanService : ILoanService
 
         if (overdueOnly)
         {
-            query = query.Where(x => x.IsOverdue);
+            query = query.Where(x =>
+                x.IsOverdue ||
+                x.HasOutstandingLateFees);
         }
 
         if (collectionDate.HasValue)
@@ -863,12 +1073,13 @@ public class LoanService : ILoanService
                 x => x.NextPaymentDate.Date <= date);
         }
 
-        if (dueDate.HasValue)
+        if (collectionDate.HasValue)
         {
-            var date = dueDate.Value.Date;
+            var date = collectionDate.Value.Date;
 
-            query = query.Where(
-                x => x.NextPaymentDate.Date == date);
+            query = query.Where(x =>
+                x.NextPaymentDate.Date <= date ||
+                x.HasOutstandingLateFees);
         }
 
         if (!string.IsNullOrWhiteSpace(search))
@@ -896,10 +1107,29 @@ public class LoanService : ILoanService
                 x => x.ClientId == clientId.Value);
         }
 
+        if (collectionRouteId.HasValue)
+        {
+            var routeClients =
+                await _clientRepository.GetAllAsync(
+                    tenantId,
+                    collectionRouteId,
+                    cancellationToken);
+
+            var routeClientIds =
+                routeClients
+                    .Select(x => x.Id)
+                    .ToHashSet();
+
+            query = query.Where(
+                x => routeClientIds.Contains(x.ClientId));
+        }
+
         return query
-            .OrderByDescending(x => x.IsOverdue)
+            .OrderByDescending(x =>
+                x.IsOverdue ||
+                x.HasOutstandingLateFees)
             .ThenBy(x => x.NextPaymentDate)
-            .ThenByDescending(x => x.OverdueAmount)
+            .ThenByDescending(x => x.TotalOverdueAmountDue)
             .Select(x => new CollectionLoanItemResponse
             {
                 LoanId = x.LoanId,
@@ -908,10 +1138,18 @@ public class LoanService : ILoanService
                 ClientPhone = x.ClientPhone,
                 ClientAddress = x.ClientAddress,
                 Balance = x.Balance,
+                LateFeeBalance =
+                    x.LateFeeBalance,
+                TotalOutstanding =
+                    x.TotalOutstanding,
                 InstallmentAmount = x.InstallmentAmount,
                 NextInstallmentAmountDue = x.NextInstallmentAmountDue,
                 NextPaymentDate = x.NextPaymentDate,
                 IsOverdue = x.IsOverdue,
+                TotalOverdueAmountDue =
+                    x.TotalOverdueAmountDue,
+                HasOutstandingLateFees =
+                    x.HasOutstandingLateFees,
                 DaysOverdue = x.DaysOverdue,
                 OverdueInstallments = x.OverdueInstallments,
                 OverdueAmount = x.OverdueAmount,
@@ -929,6 +1167,7 @@ public class LoanService : ILoanService
         string? search = null,
         Guid? investorId = null,
         Guid? clientId = null,
+        Guid? collectionRouteId = null,
         CancellationToken cancellationToken = default)
     {
         var portfolio = await GetCollectionPortfolioAsync(
@@ -939,22 +1178,38 @@ public class LoanService : ILoanService
             search,
             investorId,
             clientId,
+            collectionRouteId,
             cancellationToken);
 
         return new CollectionPortfolioSummaryResponse
         {
             LoansCount = portfolio.Count,
+
             ClientsCount = portfolio
                 .Select(x => x.ClientId)
                 .Distinct()
                 .Count(),
-            TotalBalance = portfolio.Sum(x => x.Balance),
+
+            TotalBalance =
+                portfolio.Sum(x => x.Balance),
+
+            TotalLateFeeBalance =
+                portfolio.Sum(x => x.LateFeeBalance),
+
+            TotalOutstanding =
+                portfolio.Sum(x => x.TotalOutstanding),
+
             TotalNextInstallmentAmountDue =
                 portfolio.Sum(x => x.NextInstallmentAmountDue),
+
             OverdueLoansCount =
                 portfolio.Count(x => x.IsOverdue),
+
             TotalOverdueAmount =
-                portfolio.Sum(x => x.OverdueAmount)
+                portfolio.Sum(x => x.OverdueAmount),
+
+            TotalOverdueAmountDue =
+                portfolio.Sum(x => x.TotalOverdueAmountDue)
         };
     }
 }

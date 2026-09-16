@@ -1,3 +1,5 @@
+using Sanes.Domain.Enums;
+
 namespace Sanes.Application.Tenants.DTOs;
 
 public class TenantDto
@@ -12,6 +14,14 @@ public class TenantDto
 
     public string CurrencyCode { get; set; } = string.Empty;
     public string CurrencySymbol { get; set; } = string.Empty;
+
+    public bool DefaultLateFeeEnabled { get; set; }
+
+    public LateFeeCalculationType DefaultLateFeeCalculationType { get; set; }
+
+    public decimal DefaultLateFeeAmount { get; set; }
+
+    public int DefaultLateFeeGraceDays { get; set; }
 
     public bool IsActive { get; set; }
 

@@ -5,11 +5,13 @@ namespace Sanes.Application.Clients.Services;
 public interface IClientService
 {
     Task<ClientResponse> CreateAsync(
+        Guid tenantId,
         CreateClientRequest request,
         CancellationToken cancellationToken = default);
 
     Task<List<ClientResponse>> GetAllAsync(
         Guid tenantId,
+        Guid? collectionRouteId = null,
         CancellationToken cancellationToken = default);
 
     Task<ClientResponse?> GetByIdAsync(
