@@ -29,6 +29,12 @@ public class SanesDbContext : DbContext
     public DbSet<CollectionRouteSchedule> CollectionRouteSchedules
     => Set<CollectionRouteSchedule>();
 
+    public DbSet<LoanBalanceAdjustment> LoanBalanceAdjustments =>
+        Set<LoanBalanceAdjustment>();
+
+    public DbSet<EarlySettlement> EarlySettlements =>
+        Set<EarlySettlement>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -572,6 +578,149 @@ public class SanesDbContext : DbContext
                 x.DayOfWeek
             })
             .IsUnique();
+        });
+
+        modelBuilder.Entity<LoanBalanceAdjustment>(entity =>
+        {
+            entity.ToTable("loan_balance_adjustments");
+
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.AdjustmentType)
+                .IsRequired();
+
+            entity.Property(x => x.Amount)
+                .HasPrecision(18, 2)
+                .IsRequired();
+
+            entity.Property(x => x.Reason)
+                .HasMaxLength(500)
+                .IsRequired();
+
+            entity.Property(x => x.CreatedAt)
+                .IsRequired();
+
+            entity.HasOne(x => x.Tenant)
+                .WithMany()
+                .HasForeignKey(x => x.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.Loan)
+                .WithMany(x => x.BalanceAdjustments)
+                .HasForeignKey(x => x.LoanId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.AppUser)
+                .WithMany()
+                .HasForeignKey(x => x.AppUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(x => x.TenantId);
+
+            entity.HasIndex(x =>
+                new
+                {
+                    x.TenantId,
+                    x.LoanId
+                });
+
+            entity.HasIndex(x =>
+                new
+                {
+                    x.TenantId,
+                    x.AppUserId
+                });
+        });
+
+        modelBuilder.Entity<EarlySettlement>(entity =>
+        {
+            entity.ToTable("early_settlements");
+
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.DiscountType)
+                .IsRequired();
+
+            entity.Property(x => x.DiscountValue)
+                .HasPrecision(18, 2)
+                .IsRequired();
+
+            entity.Property(x => x.ContractualBalanceBefore)
+                .HasPrecision(18, 2)
+                .IsRequired();
+
+            entity.Property(x => x.LateFeeBalanceBefore)
+                .HasPrecision(18, 2)
+                .IsRequired();
+
+            entity.Property(x => x.TotalOutstandingBefore)
+                .HasPrecision(18, 2)
+                .IsRequired();
+
+            entity.Property(x => x.DiscountAmount)
+                .HasPrecision(18, 2)
+                .IsRequired();
+
+            entity.Property(x => x.SettlementAmount)
+                .HasPrecision(18, 2)
+                .IsRequired();
+
+            entity.Property(x => x.CompletedInstallments)
+                .IsRequired();
+
+            entity.Property(x => x.CreatedAt)
+                .IsRequired();
+
+            entity.HasOne(x => x.Tenant)
+                .WithMany()
+                .HasForeignKey(x => x.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.Loan)
+                .WithOne(x => x.EarlySettlement)
+                .HasForeignKey<EarlySettlement>(
+                    x => x.LoanId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.AppUser)
+                .WithMany()
+                .HasForeignKey(x => x.AppUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.Payment)
+                .WithOne(x => x.EarlySettlement)
+                .HasForeignKey<EarlySettlement>(
+                    x => x.PaymentId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.LoanBalanceAdjustment)
+                .WithOne()
+                .HasForeignKey<EarlySettlement>(
+                    x => x.LoanBalanceAdjustmentId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(x => x.TenantId);
+
+            entity.HasIndex(x =>
+                new
+                {
+                    x.TenantId,
+                    x.LoanId
+                })
+                .IsUnique();
+
+            entity.HasIndex(x =>
+                new
+                {
+                    x.TenantId,
+                    x.AppUserId
+                });
+
+            entity.HasIndex(x => x.PaymentId)
+                .IsUnique();
+
+            entity.HasIndex(x => x.LoanBalanceAdjustmentId)
+                .IsUnique();
         });
     }
 }

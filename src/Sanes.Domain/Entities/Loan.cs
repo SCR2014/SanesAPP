@@ -32,6 +32,11 @@ public class Loan
 
     public int LateFeeGraceDays { get; set; } = 0;
 
+    public ICollection<LoanBalanceAdjustment> BalanceAdjustments { get; set; }
+    = new List<LoanBalanceAdjustment>();
+
+    public EarlySettlement? EarlySettlement { get; set; }
+
     public DateTime StartDate { get; set; }
 
     public DateTime NextPaymentDate { get; set; }

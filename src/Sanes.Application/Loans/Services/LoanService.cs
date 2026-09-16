@@ -19,6 +19,7 @@ public class LoanService : ILoanService
     private readonly IPaymentAllocationRepository _paymentAllocationRepository;
     private readonly ILateFeeAccrualService _lateFeeAccrualService;
     private readonly ILateFeeBalanceService _lateFeeBalanceService;
+    private readonly ILoanBalanceAdjustmentRepository _loanBalanceAdjustmentRepository;
 
     public LoanService(
     ILoanRepository loanRepository,
@@ -27,7 +28,8 @@ public class LoanService : ILoanService
     IClientRepository clientRepository,
     IPaymentAllocationRepository paymentAllocationRepository,
     ILateFeeAccrualService lateFeeAccrualService,
-    ILateFeeBalanceService lateFeeBalanceService)
+    ILateFeeBalanceService lateFeeBalanceService,
+    ILoanBalanceAdjustmentRepository loanBalanceAdjustmentRepository)
 {
     _loanRepository = loanRepository;
     _tenantRepository = tenantRepository;
@@ -36,6 +38,7 @@ public class LoanService : ILoanService
     _paymentAllocationRepository = paymentAllocationRepository;
     _lateFeeAccrualService = lateFeeAccrualService;
     _lateFeeBalanceService = lateFeeBalanceService;
+    _loanBalanceAdjustmentRepository = loanBalanceAdjustmentRepository;
 }
 
     public async Task<LoanResponse> CreateAsync(
@@ -260,8 +263,17 @@ public class LoanService : ILoanService
                 loanId,
                 cancellationToken);
 
+        var contractualAdjustments =
+            await _loanBalanceAdjustmentRepository
+                .GetTotalReductionsByLoanAsync(
+                    tenantId,
+                    loanId,
+                    cancellationToken);
+
         var balance =
-            totalAmount - amountPaid;
+            totalAmount
+            - amountPaid
+            - contractualAdjustments;
 
         if (balance < 0)
         {
@@ -733,6 +745,13 @@ public class LoanService : ILoanService
                 loanIds,
                 cancellationToken);
 
+        var contractualAdjustmentsByLoan =
+            await _loanBalanceAdjustmentRepository
+                .GetTotalReductionsByLoansAsync(
+                    tenantId,
+                    loanIds,
+                    cancellationToken);
+
         var lateFeeBalanceByLoan =
             await _lateFeeBalanceService
                 .GetOutstandingBalancesByLoansAsync(
@@ -756,8 +775,17 @@ public class LoanService : ILoanService
                     ? paid
                     : 0m;
 
+            var contractualAdjustments =
+                contractualAdjustmentsByLoan.TryGetValue(
+                    loan.Id,
+                    out var adjustmentAmount)
+                    ? adjustmentAmount
+                    : 0m;
+
             var balance =
-                totalAmount - amountPaid;
+                totalAmount
+                - amountPaid
+                - contractualAdjustments;
 
             if (balance < 0)
             {
