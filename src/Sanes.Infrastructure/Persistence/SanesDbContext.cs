@@ -37,6 +37,9 @@ public class SanesDbContext : DbContext
     public DbSet<EarlySettlement> EarlySettlements =>
         Set<EarlySettlement>();
 
+    public DbSet<LoanGuaranteeAttachment> LoanGuaranteeAttachments =>
+        Set<LoanGuaranteeAttachment>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -775,6 +778,83 @@ public class SanesDbContext : DbContext
 
             entity.HasIndex(x => x.LoanBalanceAdjustmentId)
                 .IsUnique();
+        });
+
+        modelBuilder.Entity<LoanGuaranteeAttachment>(entity =>
+        {
+            entity.ToTable(
+                "loan_guarantee_attachments");
+
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.OriginalFileName)
+                .HasMaxLength(255)
+                .IsRequired();
+
+            entity.Property(x => x.StorageKey)
+                .HasMaxLength(500)
+                .IsRequired();
+
+            entity.Property(x => x.ContentType)
+                .HasMaxLength(100)
+                .IsRequired();
+
+            entity.Property(x => x.FileSize)
+                .IsRequired();
+
+            entity.Property(x => x.Description)
+                .HasMaxLength(1000);
+
+            entity.Property(x => x.CreatedAt)
+                .IsRequired();
+
+            entity.Property(x => x.IsDeleted)
+                .HasDefaultValue(false);
+
+            entity.HasOne(x => x.Tenant)
+                .WithMany()
+                .HasForeignKey(x => x.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.LoanGuarantee)
+                .WithMany(x => x.Attachments)
+                .HasForeignKey(x => x.LoanGuaranteeId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.UploadedByAppUser)
+                .WithMany()
+                .HasForeignKey(x => x.UploadedByAppUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.DeletedByAppUser)
+                .WithMany()
+                .HasForeignKey(x => x.DeletedByAppUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            /*
+            * StorageKey identifica un único archivo físico.
+            */
+            entity.HasIndex(x => x.StorageKey)
+                .IsUnique();
+
+            entity.HasIndex(x => x.TenantId);
+
+            entity.HasIndex(x => new
+            {
+                x.TenantId,
+                x.LoanGuaranteeId
+            });
+
+            /*
+            * Optimiza las consultas normales:
+            * adjuntos activos de una garantía.
+            */
+            entity.HasIndex(x => new
+            {
+                x.TenantId,
+                x.LoanGuaranteeId,
+                x.IsDeleted
+            });
         });
     }
 }
