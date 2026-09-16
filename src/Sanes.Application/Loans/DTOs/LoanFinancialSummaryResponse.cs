@@ -16,6 +16,10 @@ public class LoanFinancialSummaryResponse
 
     public decimal Balance { get; set; }
 
+    public decimal LateFeeBalance { get; set; }
+
+    public decimal TotalOutstanding { get; set; }
+
     public decimal InstallmentAmount { get; set; }
 
     public int TotalInstallments { get; set; }
@@ -40,6 +44,9 @@ public class LoanFinancialSummaryResponse
 
     public decimal OverdueAmount { get; set; }
 
+    public decimal TotalOverdueAmountDue { get; set; }
+
+    public bool HasOutstandingLateFees { get; set; }
     public PaymentFrequency PaymentFrequency { get; set; }
 
     public DateTime StartDate { get; set; }
