@@ -36,6 +36,16 @@ public class CustomWebApplicationFactory
         Environment.SetEnvironmentVariable(
             "Provisioning__Key",
             TestProvisioningKey);
+
+        var testFileStorageRoot =
+            Path.Combine(
+                Path.GetTempPath(),
+                "SanesApp.IntegrationTests",
+                Guid.NewGuid().ToString("N"));
+
+        Environment.SetEnvironmentVariable(
+            "FileStorage__RootPath",
+            testFileStorageRoot);
     }
 
     protected override void ConfigureWebHost(

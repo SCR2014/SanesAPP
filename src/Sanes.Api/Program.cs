@@ -43,6 +43,8 @@ using Sanes.Application.LateFees.Repositories;
 using Sanes.Infrastructure.LateFees.Repositories;
 using Sanes.Application.LateFees.Services;
 using Sanes.Application.Common.Persistence;
+using Sanes.Application.Common.Files;
+using Sanes.Infrastructure.Files;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -315,6 +317,34 @@ builder.Services.AddScoped<
 builder.Services.AddScoped<
     ILoanGuaranteeService,
     LoanGuaranteeService>();
+
+builder.Services.AddScoped<
+    ILoanGuaranteeAttachmentRepository,
+    LoanGuaranteeAttachmentRepository>();
+builder.Services.AddScoped<
+    ILoanGuaranteeAttachmentService,
+    LoanGuaranteeAttachmentService>();
+
+builder.Services.AddSingleton<IFileStorage>(
+    _ =>
+    {
+        var configuredRoot =
+            builder.Configuration[
+                "FileStorage:RootPath"];
+
+        var rootPath =
+            string.IsNullOrWhiteSpace(
+                configuredRoot)
+                ? Path.Combine(
+                    builder.Environment
+                        .ContentRootPath,
+                    "data")
+                : Path.GetFullPath(
+                    configuredRoot);
+
+        return new LocalFileStorage(
+            rootPath);
+    });
 
 builder.Services.AddHttpContextAccessor();
 

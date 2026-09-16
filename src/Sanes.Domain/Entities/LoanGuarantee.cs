@@ -27,9 +27,14 @@ public class LoanGuarantee
 
     public string? Description { get; set; }
 
+    public ICollection<LoanGuaranteeAttachment> Attachments
+        { get; set; } =
+        new List<LoanGuaranteeAttachment>();
+
     public DateTime CreatedAt { get; set; } =
         DateTime.UtcNow;
 
     public DateTime UpdatedAt { get; set; } =
         DateTime.UtcNow;
+
 }
