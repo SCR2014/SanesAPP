@@ -13,23 +13,25 @@ public class LateFeeAdministrationService
     private readonly ILateFeeRepository _lateFeeRepository;
     private readonly ILateFeeAccrualService _lateFeeAccrualService;
     private readonly ILateFeeBalanceService _lateFeeBalanceService;
-    private readonly IPaymentAllocationRepository
-        _paymentAllocationRepository;
+    private readonly IPaymentAllocationRepository _paymentAllocationRepository;
     private readonly ILoanRepository _loanRepository;
+
+    private readonly ILoanBalanceAdjustmentRepository _loanBalanceAdjustmentRepository;
 
     public LateFeeAdministrationService(
         ILateFeeRepository lateFeeRepository,
         ILateFeeAccrualService lateFeeAccrualService,
         ILateFeeBalanceService lateFeeBalanceService,
         IPaymentAllocationRepository paymentAllocationRepository,
-        ILoanRepository loanRepository)
+        ILoanRepository loanRepository,
+        ILoanBalanceAdjustmentRepository loanBalanceAdjustmentRepository)
     {
         _lateFeeRepository = lateFeeRepository;
         _lateFeeAccrualService = lateFeeAccrualService;
         _lateFeeBalanceService = lateFeeBalanceService;
-        _paymentAllocationRepository =
-            paymentAllocationRepository;
+        _paymentAllocationRepository = paymentAllocationRepository;
         _loanRepository = loanRepository;
+        _loanBalanceAdjustmentRepository = loanBalanceAdjustmentRepository;
     }
 
     public async Task<LateFeeLoanResponse?> GetByLoanAsync(
@@ -277,9 +279,16 @@ public class LateFeeAdministrationService
                     loan.Id,
                     cancellationToken);
 
+        var contractualAdjustments =
+            await _loanBalanceAdjustmentRepository
+                .GetTotalReductionsByLoanAsync(
+                    tenantId,
+                    loan.Id,
+                    cancellationToken);
+
         var contractualBalance =
             totalAmount -
-            totalAppliedToLoan;
+            totalAppliedToLoan - contractualAdjustments;
 
         if (contractualBalance < 0)
         {

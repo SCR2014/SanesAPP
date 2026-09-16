@@ -42,6 +42,7 @@ using Sanes.Infrastructure.Provisioning.Services;
 using Sanes.Application.LateFees.Repositories;
 using Sanes.Infrastructure.LateFees.Repositories;
 using Sanes.Application.LateFees.Services;
+using Sanes.Application.Common.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -65,6 +66,10 @@ if (string.IsNullOrWhiteSpace(jwtSettings.Key))
 builder.Services.AddDbContext<SanesDbContext>(options =>
     options.UseNpgsql(
         builder.Configuration.GetConnectionString("DefaultConnection")));
+
+builder.Services.AddScoped<
+    ITransactionRunner,
+    EfTransactionRunner>();
 
 builder.Services
     .AddAuthentication(options =>
@@ -292,11 +297,22 @@ builder.Services.AddScoped<
     IProvisioningService,
     ProvisioningService>();
 
-builder.Services.AddHttpContextAccessor();
-
 builder.Services.AddScoped<
     ICurrentUserService,
     CurrentUserService>();
+
+builder.Services.AddScoped<
+    ILoanBalanceAdjustmentRepository,
+    LoanBalanceAdjustmentRepository>();
+
+builder.Services.AddScoped<
+    IEarlySettlementRepository,
+    EarlySettlementRepository>();
+builder.Services.AddScoped<
+    IEarlySettlementService,
+    EarlySettlementService>();
+
+builder.Services.AddHttpContextAccessor();
 
 builder.Services.AddControllers();
 

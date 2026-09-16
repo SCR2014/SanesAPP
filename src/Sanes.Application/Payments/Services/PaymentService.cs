@@ -23,6 +23,7 @@ public class PaymentService : IPaymentService
     private readonly IPaymentAllocationRepository _paymentAllocationRepository;
     private readonly ILateFeeAccrualService _lateFeeAccrualService;
     private readonly ILateFeeBalanceService _lateFeeBalanceService;
+    private readonly ILoanBalanceAdjustmentRepository _loanBalanceAdjustmentRepository;
 
     public PaymentService(
         IPaymentRepository paymentRepository,
@@ -34,7 +35,8 @@ public class PaymentService : IPaymentService
         IClientRepository clientRepository,
         IPaymentAllocationRepository paymentAllocationRepository,
         ILateFeeAccrualService lateFeeAccrualService,
-        ILateFeeBalanceService lateFeeBalanceService)
+        ILateFeeBalanceService lateFeeBalanceService,
+        ILoanBalanceAdjustmentRepository loanBalanceAdjustmentRepository)
     {
         _paymentRepository = paymentRepository;
         _loanRepository = loanRepository;
@@ -46,6 +48,7 @@ public class PaymentService : IPaymentService
         _paymentAllocationRepository = paymentAllocationRepository;
         _lateFeeAccrualService = lateFeeAccrualService;
         _lateFeeBalanceService = lateFeeBalanceService;
+        _loanBalanceAdjustmentRepository = loanBalanceAdjustmentRepository;
     }
 
     public async Task<PaymentResponse> CreateAsync(
@@ -109,8 +112,15 @@ public class PaymentService : IPaymentService
                     request.LoanId,
                     cancellationToken);
 
+        var contractualAdjustmentsBefore =
+            await _loanBalanceAdjustmentRepository
+                .GetTotalReductionsByLoanAsync(
+                    tenantId,
+                    request.LoanId,
+                    cancellationToken);
+
         var loanBalanceBefore =
-            totalAmount - totalAppliedToLoanBefore;
+            totalAmount - totalAppliedToLoanBefore - contractualAdjustmentsBefore;
 
         if (loanBalanceBefore < 0)
         {
