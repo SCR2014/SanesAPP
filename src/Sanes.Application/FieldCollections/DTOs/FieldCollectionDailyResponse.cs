@@ -16,9 +16,17 @@ public class FieldCollectionDailyResponse
 
     public decimal TotalBalance { get; set; }
 
+    public decimal TotalLateFeeBalance { get; set; }
+
+    public decimal TotalOutstanding { get; set; }
+
     public decimal TotalOverdueAmount { get; set; }
 
+    public decimal TotalOverdueAmountDue { get; set; }
+
     public decimal TotalAmountDue { get; set; }
+
+    public decimal TotalCollectionAmountDue { get; set; }
 
     public List<FieldCollectionRouteResponse> Routes { get; set; }
         = new();

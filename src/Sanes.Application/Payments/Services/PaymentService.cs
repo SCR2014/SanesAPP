@@ -5,6 +5,7 @@ using Sanes.Application.Tenants.Repositories;
 using Sanes.Application.AppUsers.Repositories;
 using Sanes.Application.CollectionRoutes.Repositories;
 using Sanes.Application.Clients.Repositories;
+using Sanes.Application.LateFees.Services;
 using Sanes.Domain.Entities;
 using Sanes.Domain.Enums;
 
@@ -19,6 +20,9 @@ public class PaymentService : IPaymentService
     private readonly ICollectionRouteRepository _collectionRouteRepository;
     private readonly IAppUserCollectionRouteRepository _appUserCollectionRouteRepository;
     private readonly IClientRepository _clientRepository;
+    private readonly IPaymentAllocationRepository _paymentAllocationRepository;
+    private readonly ILateFeeAccrualService _lateFeeAccrualService;
+    private readonly ILateFeeBalanceService _lateFeeBalanceService;
 
     public PaymentService(
         IPaymentRepository paymentRepository,
@@ -27,7 +31,10 @@ public class PaymentService : IPaymentService
         IAppUserRepository appUserRepository,
         ICollectionRouteRepository collectionRouteRepository,
         IAppUserCollectionRouteRepository appUserCollectionRouteRepository,
-        IClientRepository clientRepository)
+        IClientRepository clientRepository,
+        IPaymentAllocationRepository paymentAllocationRepository,
+        ILateFeeAccrualService lateFeeAccrualService,
+        ILateFeeBalanceService lateFeeBalanceService)
     {
         _paymentRepository = paymentRepository;
         _loanRepository = loanRepository;
@@ -36,6 +43,9 @@ public class PaymentService : IPaymentService
         _collectionRouteRepository = collectionRouteRepository;
         _appUserCollectionRouteRepository = appUserCollectionRouteRepository;
         _clientRepository = clientRepository;
+        _paymentAllocationRepository = paymentAllocationRepository;
+        _lateFeeAccrualService = lateFeeAccrualService;
+        _lateFeeBalanceService = lateFeeBalanceService;
     }
 
     public async Task<PaymentResponse> CreateAsync(
@@ -80,38 +90,79 @@ public class PaymentService : IPaymentService
                 cancellationToken);
         }
 
+        var paymentDate =
+            NormalizeUtc(request.PaymentDate);
+
+        await _lateFeeAccrualService.AccrueForLoanAsync(
+            tenantId,
+            request.LoanId,
+            paymentDate,
+            cancellationToken);
+
         var totalAmount =
             loan.InstallmentAmount * loan.TotalInstallments;
 
-        var totalPaidBefore =
-            await _paymentRepository.GetTotalPaidAsync(
-                tenantId,
-                request.LoanId,
-                cancellationToken);
+        var totalAppliedToLoanBefore =
+            await _paymentAllocationRepository
+                .GetTotalAppliedToLoanAsync(
+                    tenantId,
+                    request.LoanId,
+                    cancellationToken);
 
-        var balanceBefore =
-            totalAmount - totalPaidBefore;
+        var loanBalanceBefore =
+            totalAmount - totalAppliedToLoanBefore;
 
-        if (balanceBefore <= 0)
+        if (loanBalanceBefore < 0)
+        {
+            loanBalanceBefore = 0;
+        }
+
+        var outstandingLateFees =
+            await _lateFeeBalanceService
+                .GetOutstandingByLoanAsync(
+                    tenantId,
+                    request.LoanId,
+                    paymentDate,
+                    cancellationToken);
+
+        var lateFeeBalanceBefore =
+            outstandingLateFees.Sum(
+                x => x.OutstandingAmount);
+
+        var totalOutstandingBefore =
+            loanBalanceBefore +
+            lateFeeBalanceBefore;
+
+        if (totalOutstandingBefore <= 0)
         {
             throw new InvalidOperationException(
                 "This loan has no outstanding balance.");
         }
 
-        if (request.Amount > balanceBefore)
+        if (request.Amount > totalOutstandingBefore)
         {
             throw new InvalidOperationException(
-                $"Payment amount cannot exceed the outstanding balance of {balanceBefore:0.00}.");
+                $"Payment amount cannot exceed the total outstanding balance of {totalOutstandingBefore:0.00}.");
         }
+
+        var amountAppliedToLateFees =
+            Math.Min(
+                request.Amount,
+                lateFeeBalanceBefore);
+
+        var amountAppliedToLoan =
+            request.Amount -
+            amountAppliedToLateFees;
 
         ValidatePaymentType(
             request.PaymentType,
             request.Amount,
+            amountAppliedToLoan,
             loan.InstallmentAmount,
-            balanceBefore);
+            loanBalanceBefore,
+            totalOutstandingBefore);
 
-        var paymentDate =
-            NormalizeUtc(request.PaymentDate);
+        var now = DateTime.UtcNow;
 
         var payment = new Payment
         {
@@ -123,41 +174,115 @@ public class PaymentService : IPaymentService
             CollectedByAppUserId = request.CollectedByAppUserId,
             CollectionRouteId = request.CollectionRouteId,
             Notes = NormalizeOptional(request.Notes),
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
+            CreatedAt = now,
+            UpdatedAt = now
         };
 
         await _paymentRepository.AddAsync(
             payment,
             cancellationToken);
 
-        var totalPaidAfter =
-            totalPaidBefore + request.Amount;
+        var remainingForLateFees =
+            amountAppliedToLateFees;
 
-        var balanceAfter =
-            totalAmount - totalPaidAfter;
+        foreach (var lateFee in outstandingLateFees)
+        {
+            if (remainingForLateFees <= 0)
+            {
+                break;
+            }
 
-        if (balanceAfter == 0)
+            var allocationAmount =
+                Math.Min(
+                    remainingForLateFees,
+                    lateFee.OutstandingAmount);
+
+            var allocation =
+                new PaymentAllocation
+                {
+                    TenantId = tenantId,
+                    PaymentId = payment.Id,
+                    AllocationType =
+                        PaymentAllocationType.LateFee,
+                    LateFeeChargeId =
+                        lateFee.LateFeeChargeId,
+                    Amount = allocationAmount,
+                    CreatedAt = now
+                };
+
+            await _paymentAllocationRepository.AddAsync(
+                allocation,
+                cancellationToken);
+
+            remainingForLateFees -=
+                allocationAmount;
+        }
+
+        if (amountAppliedToLoan > 0)
+        {
+            var loanAllocation =
+                new PaymentAllocation
+                {
+                    TenantId = tenantId,
+                    PaymentId = payment.Id,
+                    AllocationType =
+                        PaymentAllocationType.LoanBalance,
+                    LateFeeChargeId = null,
+                    Amount = amountAppliedToLoan,
+                    CreatedAt = now
+                };
+
+            await _paymentAllocationRepository.AddAsync(
+                loanAllocation,
+                cancellationToken);
+        }
+
+        var totalAppliedToLoanAfter =
+            totalAppliedToLoanBefore +
+            amountAppliedToLoan;
+
+        var loanBalanceAfter =
+            totalAmount -
+            totalAppliedToLoanAfter;
+
+        if (loanBalanceAfter < 0)
+        {
+            loanBalanceAfter = 0;
+        }
+
+        var lateFeeBalanceAfter =
+            lateFeeBalanceBefore -
+            amountAppliedToLateFees;
+
+        if (lateFeeBalanceAfter < 0)
+        {
+            lateFeeBalanceAfter = 0;
+        }
+
+        if (
+            loanBalanceAfter == 0 &&
+            lateFeeBalanceAfter == 0)
         {
             loan.Status = LoanStatus.Paid;
         }
-        else
+        else if (amountAppliedToLoan > 0)
         {
             UpdateNextPaymentDate(
                 loan,
-                totalPaidBefore,
-                totalPaidAfter);
+                totalAppliedToLoanBefore,
+                totalAppliedToLoanAfter);
         }
 
-        loan.UpdatedAt = DateTime.UtcNow;
+        loan.UpdatedAt = now;
 
         /*
-         * PaymentRepository y LoanRepository utilizan el mismo
-         * SanesDbContext dentro del mismo scope de la petición.
-         *
-         * Por eso un único SaveChangesAsync persiste tanto el Payment
-         * nuevo como los cambios realizados al Loan.
-         */
+        * PaymentRepository, PaymentAllocationRepository
+        * y LoanRepository utilizan el mismo SanesDbContext
+        * dentro del mismo scope.
+        *
+        * Un único SaveChangesAsync persiste Payment,
+        * allocations y cambios del Loan.
+        */
         await _paymentRepository.SaveChangesAsync(
             cancellationToken);
 
@@ -207,38 +332,52 @@ public class PaymentService : IPaymentService
             : Map(payment);
     }
 
+
     private static void ValidatePaymentType(
         PaymentType paymentType,
-        decimal amount,
+        decimal amountReceived,
+        decimal amountAppliedToLoan,
         decimal installmentAmount,
-        decimal balance)
+        decimal loanBalance,
+        decimal totalOutstanding)
     {
         switch (paymentType)
         {
             case PaymentType.Regular:
-                if (amount < installmentAmount &&
-                    amount != balance)
+                if (
+                    loanBalance > 0 &&
+                    amountAppliedToLoan < installmentAmount &&
+                    amountAppliedToLoan != loanBalance)
                 {
                     throw new InvalidOperationException(
-                        "A regular payment cannot be less than the installment amount.");
+                        "A regular payment must apply at least one installment amount to the loan balance.");
                 }
 
                 break;
 
             case PaymentType.Partial:
-                if (amount >= installmentAmount)
+                if (
+                    amountReceived == totalOutstanding)
                 {
                     throw new InvalidOperationException(
-                        "A partial payment must be less than the installment amount.");
+                        "A partial payment cannot settle the entire outstanding balance.");
+                }
+
+                if (
+                    loanBalance > 0 &&
+                    amountAppliedToLoan >= installmentAmount)
+                {
+                    throw new InvalidOperationException(
+                        "A partial payment must apply less than one installment amount to the loan balance.");
                 }
 
                 break;
 
             case PaymentType.FullSettlement:
-                if (amount != balance)
+                if (amountReceived != totalOutstanding)
                 {
                     throw new InvalidOperationException(
-                        "A full settlement payment must equal the outstanding balance.");
+                        "A full settlement payment must equal the total outstanding balance.");
                 }
 
                 break;
@@ -427,4 +566,5 @@ public class PaymentService : IPaymentService
                 "The loan client does not belong to the specified collection route.");
         }
     }
+
 }

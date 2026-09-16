@@ -6,6 +6,7 @@ using Sanes.Application.Payments.DTOs;
 using Sanes.Application.Payments.Services;
 using Sanes.Application.Clients.Repositories;
 using Sanes.Application.CollectionRoutes.Repositories;
+using Sanes.Application.Payments.Repositories;
 using Sanes.Domain.Enums;
 
 namespace Sanes.Application.FieldCollections.Services;
@@ -18,6 +19,8 @@ public class FieldCollectionService : IFieldCollectionService
     private readonly IPaymentService _paymentService;
     private readonly IClientRepository _clientRepository;
     private readonly ICollectionRouteRepository _collectionRouteRepository; 
+    private readonly IPaymentAllocationRepository
+    _paymentAllocationRepository;
 
     public FieldCollectionService(
         IAppUserRepository appUserRepository,
@@ -25,7 +28,8 @@ public class FieldCollectionService : IFieldCollectionService
         ILoanService loanService,
         IPaymentService paymentService,
         IClientRepository clientRepository,
-        ICollectionRouteRepository collectionRouteRepository)
+        ICollectionRouteRepository collectionRouteRepository,
+        IPaymentAllocationRepository paymentAllocationRepository)
     {
         _appUserRepository = appUserRepository;
         _collectionAgendaService = collectionAgendaService;
@@ -33,6 +37,7 @@ public class FieldCollectionService : IFieldCollectionService
         _paymentService = paymentService;
         _clientRepository = clientRepository;
         _collectionRouteRepository = collectionRouteRepository;
+        _paymentAllocationRepository = paymentAllocationRepository;
     }
 
     public async Task<FieldCollectionDailyResponse> GetDailyAsync(
@@ -139,17 +144,30 @@ public class FieldCollectionService : IFieldCollectionService
                                 Balance =
                                     x.Balance,
 
+                                LateFeeBalance =
+                                    x.LateFeeBalance,
+
+                                TotalOutstanding =
+                                    x.TotalOutstanding,
+
                                 InstallmentAmount =
                                     x.InstallmentAmount,
 
                                 NextInstallmentAmountDue =
                                     x.NextInstallmentAmountDue,
 
+                                CollectionAmountDue =
+                                    x.NextInstallmentAmountDue +
+                                    x.LateFeeBalance,
+
                                 NextPaymentDate =
                                     x.NextPaymentDate,
 
                                 OverdueAmount =
                                     x.OverdueAmount,
+
+                                TotalOverdueAmountDue =
+                                    x.TotalOverdueAmountDue,
 
                                 DaysOverdue =
                                     x.DaysOverdue,
@@ -158,7 +176,10 @@ public class FieldCollectionService : IFieldCollectionService
                                     x.OverdueInstallments,
 
                                 IsOverdue =
-                                    x.IsOverdue
+                                    x.IsOverdue,
+
+                                HasOutstandingLateFees =
+                                    x.HasOutstandingLateFees
                             })
                         .ToList();
 
@@ -225,15 +246,35 @@ public class FieldCollectionService : IFieldCollectionService
                             .SelectMany(x => x.Loans)
                             .Sum(x => x.Balance),
 
+                    TotalLateFeeBalance =
+                        clients
+                            .SelectMany(x => x.Loans)
+                            .Sum(x => x.LateFeeBalance),
+
+                    TotalOutstanding =
+                        clients
+                            .SelectMany(x => x.Loans)
+                            .Sum(x => x.TotalOutstanding),
+
                     TotalOverdueAmount =
                         clients
                             .SelectMany(x => x.Loans)
                             .Sum(x => x.OverdueAmount),
 
+                    TotalOverdueAmountDue =
+                        clients
+                            .SelectMany(x => x.Loans)
+                            .Sum(x => x.TotalOverdueAmountDue),
+
                     TotalAmountDue =
                         clients
                             .SelectMany(x => x.Loans)
                             .Sum(x => x.NextInstallmentAmountDue),
+
+                    TotalCollectionAmountDue =
+                        clients
+                            .SelectMany(x => x.Loans)
+                            .Sum(x => x.CollectionAmountDue),
 
                     Clients =
                         clients
@@ -263,10 +304,23 @@ public class FieldCollectionService : IFieldCollectionService
             TotalBalance =
                 routes.Sum(x => x.TotalBalance),
 
+            TotalLateFeeBalance =
+                routes.Sum(x => x.TotalLateFeeBalance),
+
+            TotalOutstanding =
+                routes.Sum(x => x.TotalOutstanding),
+
             TotalOverdueAmount =
                 routes.Sum(x => x.TotalOverdueAmount),
+
+            TotalOverdueAmountDue =
+                routes.Sum(x => x.TotalOverdueAmountDue),
+
             TotalAmountDue =
                 routes.Sum(x => x.TotalAmountDue),
+
+            TotalCollectionAmountDue =
+                routes.Sum(x => x.TotalCollectionAmountDue),
 
             Routes =
                 routes
@@ -310,6 +364,26 @@ public class FieldCollectionService : IFieldCollectionService
                         request.Notes
                 },
                 cancellationToken);
+
+        var allocations =
+            await _paymentAllocationRepository.GetByPaymentAsync(
+                tenantId,
+                payment.Id,
+                cancellationToken);
+
+        var appliedToLateFees =
+            allocations
+                .Where(x =>
+                    x.AllocationType ==
+                    PaymentAllocationType.LateFee)
+                .Sum(x => x.Amount);
+
+        var appliedToLoan =
+            allocations
+                .Where(x =>
+                    x.AllocationType ==
+                    PaymentAllocationType.LoanBalance)
+                .Sum(x => x.Amount);
 
         var financialSummary =
             await _loanService.GetFinancialSummaryAsync(
@@ -410,11 +484,33 @@ public class FieldCollectionService : IFieldCollectionService
             PaymentType =
                 payment.PaymentType,
 
+            AppliedToLateFees =
+                appliedToLateFees,
+
+            AppliedToLoan =
+                appliedToLoan,
+
             BalanceBefore =
-                financialSummary.Balance + payment.Amount,
+                financialSummary.Balance +
+                appliedToLoan,
 
             BalanceAfter =
                 financialSummary.Balance,
+
+            LateFeeBalanceBefore =
+                financialSummary.LateFeeBalance +
+                appliedToLateFees,
+
+            LateFeeBalanceAfter =
+                financialSummary.LateFeeBalance,
+
+            TotalOutstandingBefore =
+                financialSummary.TotalOutstanding +
+                appliedToLoan +
+                appliedToLateFees,
+
+            TotalOutstandingAfter =
+                financialSummary.TotalOutstanding,
 
             NextInstallmentAmountDue =
                 financialSummary.NextInstallmentAmountDue,

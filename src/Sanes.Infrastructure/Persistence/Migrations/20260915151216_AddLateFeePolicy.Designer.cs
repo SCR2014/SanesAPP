@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Sanes.Infrastructure.Persistence;
@@ -11,9 +12,11 @@ using Sanes.Infrastructure.Persistence;
 namespace Sanes.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(SanesDbContext))]
-    partial class SanesDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260915151216_AddLateFeePolicy")]
+    partial class AddLateFeePolicy
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -304,98 +307,6 @@ namespace Sanes.Infrastructure.Persistence.Migrations
                     b.ToTable("investors", (string)null);
                 });
 
-            modelBuilder.Entity("Sanes.Domain.Entities.LateFeeAdjustment", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("AdjustmentType")
-                        .HasColumnType("integer");
-
-                    b.Property<decimal>("Amount")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("numeric(18,2)");
-
-                    b.Property<Guid>("AppUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("LateFeeChargeId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Reason")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AppUserId");
-
-                    b.HasIndex("LateFeeChargeId");
-
-                    b.HasIndex("TenantId");
-
-                    b.HasIndex("TenantId", "AppUserId");
-
-                    b.HasIndex("TenantId", "LateFeeChargeId");
-
-                    b.ToTable("late_fee_adjustments", (string)null);
-                });
-
-            modelBuilder.Entity("Sanes.Domain.Entities.LateFeeCharge", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<decimal>("Amount")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("numeric(18,2)");
-
-                    b.Property<int>("CalculationType")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime>("EffectiveDate")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime>("InstallmentDueDate")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("InstallmentNumber")
-                        .HasColumnType("integer");
-
-                    b.Property<Guid>("LoanId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("LoanId");
-
-                    b.HasIndex("TenantId");
-
-                    b.HasIndex("TenantId", "LoanId");
-
-                    b.HasIndex("TenantId", "LoanId", "InstallmentNumber");
-
-                    b.HasIndex("TenantId", "LoanId", "InstallmentNumber", "EffectiveDate")
-                        .IsUnique();
-
-                    b.ToTable("late_fee_charges", (string)null);
-                });
-
             modelBuilder.Entity("Sanes.Domain.Entities.Loan", b =>
                 {
                     b.Property<Guid>("Id")
@@ -535,46 +446,6 @@ namespace Sanes.Infrastructure.Persistence.Migrations
                     b.HasIndex("TenantId", "PaymentDate");
 
                     b.ToTable("payments", (string)null);
-                });
-
-            modelBuilder.Entity("Sanes.Domain.Entities.PaymentAllocation", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("AllocationType")
-                        .HasColumnType("integer");
-
-                    b.Property<decimal>("Amount")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("numeric(18,2)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("LateFeeChargeId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("PaymentId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("LateFeeChargeId");
-
-                    b.HasIndex("PaymentId");
-
-                    b.HasIndex("TenantId");
-
-                    b.HasIndex("TenantId", "LateFeeChargeId");
-
-                    b.HasIndex("TenantId", "PaymentId");
-
-                    b.ToTable("payment_allocations", (string)null);
                 });
 
             modelBuilder.Entity("Sanes.Domain.Entities.Tenant", b =>
@@ -726,52 +597,6 @@ namespace Sanes.Infrastructure.Persistence.Migrations
                     b.Navigation("Tenant");
                 });
 
-            modelBuilder.Entity("Sanes.Domain.Entities.LateFeeAdjustment", b =>
-                {
-                    b.HasOne("Sanes.Domain.Entities.AppUser", "AppUser")
-                        .WithMany()
-                        .HasForeignKey("AppUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Sanes.Domain.Entities.LateFeeCharge", "LateFeeCharge")
-                        .WithMany("Adjustments")
-                        .HasForeignKey("LateFeeChargeId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Sanes.Domain.Entities.Tenant", "Tenant")
-                        .WithMany()
-                        .HasForeignKey("TenantId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("AppUser");
-
-                    b.Navigation("LateFeeCharge");
-
-                    b.Navigation("Tenant");
-                });
-
-            modelBuilder.Entity("Sanes.Domain.Entities.LateFeeCharge", b =>
-                {
-                    b.HasOne("Sanes.Domain.Entities.Loan", "Loan")
-                        .WithMany()
-                        .HasForeignKey("LoanId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Sanes.Domain.Entities.Tenant", "Tenant")
-                        .WithMany()
-                        .HasForeignKey("TenantId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Loan");
-
-                    b.Navigation("Tenant");
-                });
-
             modelBuilder.Entity("Sanes.Domain.Entities.Loan", b =>
                 {
                     b.HasOne("Sanes.Domain.Entities.Client", "Client")
@@ -832,32 +657,6 @@ namespace Sanes.Infrastructure.Persistence.Migrations
                     b.Navigation("Tenant");
                 });
 
-            modelBuilder.Entity("Sanes.Domain.Entities.PaymentAllocation", b =>
-                {
-                    b.HasOne("Sanes.Domain.Entities.LateFeeCharge", "LateFeeCharge")
-                        .WithMany("PaymentAllocations")
-                        .HasForeignKey("LateFeeChargeId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("Sanes.Domain.Entities.Payment", "Payment")
-                        .WithMany("Allocations")
-                        .HasForeignKey("PaymentId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Sanes.Domain.Entities.Tenant", "Tenant")
-                        .WithMany()
-                        .HasForeignKey("TenantId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("LateFeeCharge");
-
-                    b.Navigation("Payment");
-
-                    b.Navigation("Tenant");
-                });
-
             modelBuilder.Entity("Sanes.Domain.Entities.AppUser", b =>
                 {
                     b.Navigation("CollectionRoutes");
@@ -868,18 +667,6 @@ namespace Sanes.Infrastructure.Persistence.Migrations
                     b.Navigation("AssignedUsers");
 
                     b.Navigation("Schedules");
-                });
-
-            modelBuilder.Entity("Sanes.Domain.Entities.LateFeeCharge", b =>
-                {
-                    b.Navigation("Adjustments");
-
-                    b.Navigation("PaymentAllocations");
-                });
-
-            modelBuilder.Entity("Sanes.Domain.Entities.Payment", b =>
-                {
-                    b.Navigation("Allocations");
                 });
 #pragma warning restore 612, 618
         }

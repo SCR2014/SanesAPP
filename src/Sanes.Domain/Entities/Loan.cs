@@ -23,6 +23,15 @@ public class Loan
 
     public PaymentFrequency PaymentFrequency { get; set; }
 
+    public bool LateFeeEnabled { get; set; } = false;
+
+    public LateFeeCalculationType LateFeeCalculationType { get; set; }
+        = LateFeeCalculationType.FixedAmountPerInstallment;
+
+    public decimal LateFeeAmount { get; set; } = 0m;
+
+    public int LateFeeGraceDays { get; set; } = 0;
+
     public DateTime StartDate { get; set; }
 
     public DateTime NextPaymentDate { get; set; }

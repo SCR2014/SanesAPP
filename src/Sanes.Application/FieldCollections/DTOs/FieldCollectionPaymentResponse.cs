@@ -26,11 +26,23 @@ public class FieldCollectionPaymentResponse
 
     public decimal Amount { get; set; }
 
+    public decimal AppliedToLateFees { get; set; }
+
+    public decimal AppliedToLoan { get; set; }
+
     public PaymentType PaymentType { get; set; }
 
     public decimal BalanceBefore { get; set; }
 
     public decimal BalanceAfter { get; set; }
+
+    public decimal LateFeeBalanceBefore { get; set; }
+
+    public decimal LateFeeBalanceAfter { get; set; }
+
+    public decimal TotalOutstandingBefore { get; set; }
+
+    public decimal TotalOutstandingAfter { get; set; }
 
     public decimal NextInstallmentAmountDue { get; set; }
 
