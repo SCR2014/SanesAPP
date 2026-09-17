@@ -45,6 +45,9 @@ using Sanes.Application.LateFees.Services;
 using Sanes.Application.Common.Persistence;
 using Sanes.Application.Common.Files;
 using Sanes.Infrastructure.Files;
+using Sanes.Application.Dashboard.Repositories;
+using Sanes.Infrastructure.Dashboard.Repositories;
+using Sanes.Application.Dashboard.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -331,6 +334,13 @@ builder.Services.AddScoped<
 builder.Services.AddScoped<
     IPaymentReceiptService,
     PaymentReceiptService>();
+
+builder.Services.AddScoped<
+    IFinancialDashboardRepository,
+    FinancialDashboardRepository>();
+builder.Services.AddScoped<
+    IFinancialDashboardService,
+    FinancialDashboardService>();
 
 builder.Services.AddSingleton<IFileStorage>(
     _ =>
