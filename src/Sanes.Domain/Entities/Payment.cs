@@ -24,12 +24,16 @@ public class Payment
 
     public PaymentType PaymentType { get; set; }
 
+    public ICollection<PaymentAllocation> Allocations { get; set; }
+        = new List<PaymentAllocation>();
+
+    public EarlySettlement? EarlySettlement { get; set; }
+
+    public PaymentReceipt? Receipt { get; set; }
+
     public string? Notes { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
-
-    public ICollection<PaymentAllocation> Allocations { get; set; }
-        = new List<PaymentAllocation>();
 }

@@ -42,6 +42,12 @@ using Sanes.Infrastructure.Provisioning.Services;
 using Sanes.Application.LateFees.Repositories;
 using Sanes.Infrastructure.LateFees.Repositories;
 using Sanes.Application.LateFees.Services;
+using Sanes.Application.Common.Persistence;
+using Sanes.Application.Common.Files;
+using Sanes.Infrastructure.Files;
+using Sanes.Application.Dashboard.Repositories;
+using Sanes.Infrastructure.Dashboard.Repositories;
+using Sanes.Application.Dashboard.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -65,6 +71,10 @@ if (string.IsNullOrWhiteSpace(jwtSettings.Key))
 builder.Services.AddDbContext<SanesDbContext>(options =>
     options.UseNpgsql(
         builder.Configuration.GetConnectionString("DefaultConnection")));
+
+builder.Services.AddScoped<
+    ITransactionRunner,
+    EfTransactionRunner>();
 
 builder.Services
     .AddAuthentication(options =>
@@ -292,11 +302,68 @@ builder.Services.AddScoped<
     IProvisioningService,
     ProvisioningService>();
 
-builder.Services.AddHttpContextAccessor();
-
 builder.Services.AddScoped<
     ICurrentUserService,
     CurrentUserService>();
+
+builder.Services.AddScoped<
+    ILoanBalanceAdjustmentRepository,
+    LoanBalanceAdjustmentRepository>();
+
+builder.Services.AddScoped<
+    IEarlySettlementRepository,
+    EarlySettlementRepository>();
+builder.Services.AddScoped<
+    IEarlySettlementService,
+    EarlySettlementService>();
+
+builder.Services.AddScoped<
+    ILoanGuaranteeService,
+    LoanGuaranteeService>();
+
+builder.Services.AddScoped<
+    ILoanGuaranteeAttachmentRepository,
+    LoanGuaranteeAttachmentRepository>();
+builder.Services.AddScoped<
+    ILoanGuaranteeAttachmentService,
+    LoanGuaranteeAttachmentService>();
+
+builder.Services.AddScoped<
+    IPaymentReceiptRepository,
+    PaymentReceiptRepository>();
+builder.Services.AddScoped<
+    IPaymentReceiptService,
+    PaymentReceiptService>();
+
+builder.Services.AddScoped<
+    IFinancialDashboardRepository,
+    FinancialDashboardRepository>();
+builder.Services.AddScoped<
+    IFinancialDashboardService,
+    FinancialDashboardService>();
+
+builder.Services.AddSingleton<IFileStorage>(
+    _ =>
+    {
+        var configuredRoot =
+            builder.Configuration[
+                "FileStorage:RootPath"];
+
+        var rootPath =
+            string.IsNullOrWhiteSpace(
+                configuredRoot)
+                ? Path.Combine(
+                    builder.Environment
+                        .ContentRootPath,
+                    "data")
+                : Path.GetFullPath(
+                    configuredRoot);
+
+        return new LocalFileStorage(
+            rootPath);
+    });
+
+builder.Services.AddHttpContextAccessor();
 
 builder.Services.AddControllers();
 

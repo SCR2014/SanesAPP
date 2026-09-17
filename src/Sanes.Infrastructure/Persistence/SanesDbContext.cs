@@ -15,6 +15,8 @@ public class SanesDbContext : DbContext
     public DbSet<Investor> Investors => Set<Investor>();
     public DbSet<Client> Clients => Set<Client>();
     public DbSet<Loan> Loans => Set<Loan>();
+    public DbSet<LoanGuarantee> LoanGuarantees =>
+        Set<LoanGuarantee>();
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<PaymentAllocation> PaymentAllocations =>
     Set<PaymentAllocation>();
@@ -28,6 +30,21 @@ public class SanesDbContext : DbContext
     => Set<AppUserCollectionRoute>();
     public DbSet<CollectionRouteSchedule> CollectionRouteSchedules
     => Set<CollectionRouteSchedule>();
+
+    public DbSet<LoanBalanceAdjustment> LoanBalanceAdjustments =>
+        Set<LoanBalanceAdjustment>();
+
+    public DbSet<EarlySettlement> EarlySettlements =>
+        Set<EarlySettlement>();
+
+    public DbSet<LoanGuaranteeAttachment> LoanGuaranteeAttachments =>
+        Set<LoanGuaranteeAttachment>();
+
+    public DbSet<PaymentReceipt> PaymentReceipts =>
+        Set<PaymentReceipt>();
+
+    public DbSet<PaymentReceiptSequence> PaymentReceiptSequences =>
+        Set<PaymentReceiptSequence>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -73,6 +90,9 @@ public class SanesDbContext : DbContext
 
             entity.Property(x => x.DefaultLateFeeGraceDays)
                 .HasDefaultValue(0);
+
+            entity.Property(x => x.GuaranteeRequiredFromAmount)
+                .HasPrecision(18, 2);
         });
 
         modelBuilder.Entity<Investor>(entity =>
@@ -210,6 +230,12 @@ public class SanesDbContext : DbContext
             entity.Property(x => x.LateFeeGraceDays)
                 .HasDefaultValue(0);
 
+            entity.Property(x => x.GuaranteeRequired)
+                .HasDefaultValue(false);
+
+            entity.Property(x => x.GuaranteeThresholdAtCreation)
+                .HasPrecision(18, 2);
+
             entity.Property(x => x.StartDate)
                 .IsRequired();
 
@@ -256,6 +282,49 @@ public class SanesDbContext : DbContext
                 x.TenantId,
                 x.Status
             });
+        });
+
+        modelBuilder.Entity<LoanGuarantee>(entity =>
+        {
+            entity.ToTable("loan_guarantees");
+
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.Type)
+                .IsRequired();
+
+            entity.Property(x => x.Reference)
+                .HasMaxLength(150)
+                .IsRequired();
+
+            entity.Property(x => x.Description)
+                .HasMaxLength(1000);
+
+            entity.Property(x => x.CreatedAt)
+                .IsRequired();
+
+            entity.Property(x => x.UpdatedAt)
+                .IsRequired();
+
+            entity.HasOne(x => x.Tenant)
+                .WithMany()
+                .HasForeignKey(x => x.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.Loan)
+                .WithOne(x => x.Guarantee)
+                .HasForeignKey<LoanGuarantee>(
+                    x => x.LoanId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(x => x.TenantId);
+
+            entity.HasIndex(x => new
+            {
+                x.TenantId,
+                x.LoanId
+            })
+            .IsUnique();
         });
 
         modelBuilder.Entity<Payment>(entity =>
@@ -572,6 +641,371 @@ public class SanesDbContext : DbContext
                 x.DayOfWeek
             })
             .IsUnique();
+        });
+
+        modelBuilder.Entity<LoanBalanceAdjustment>(entity =>
+        {
+            entity.ToTable("loan_balance_adjustments");
+
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.AdjustmentType)
+                .IsRequired();
+
+            entity.Property(x => x.Amount)
+                .HasPrecision(18, 2)
+                .IsRequired();
+
+            entity.Property(x => x.Reason)
+                .HasMaxLength(500)
+                .IsRequired();
+
+            entity.Property(x => x.CreatedAt)
+                .IsRequired();
+
+            entity.HasOne(x => x.Tenant)
+                .WithMany()
+                .HasForeignKey(x => x.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.Loan)
+                .WithMany(x => x.BalanceAdjustments)
+                .HasForeignKey(x => x.LoanId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.AppUser)
+                .WithMany()
+                .HasForeignKey(x => x.AppUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(x => x.TenantId);
+
+            entity.HasIndex(x =>
+                new
+                {
+                    x.TenantId,
+                    x.LoanId
+                });
+
+            entity.HasIndex(x =>
+                new
+                {
+                    x.TenantId,
+                    x.AppUserId
+                });
+        });
+
+        modelBuilder.Entity<EarlySettlement>(entity =>
+        {
+            entity.ToTable("early_settlements");
+
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.DiscountType)
+                .IsRequired();
+
+            entity.Property(x => x.DiscountValue)
+                .HasPrecision(18, 2)
+                .IsRequired();
+
+            entity.Property(x => x.ContractualBalanceBefore)
+                .HasPrecision(18, 2)
+                .IsRequired();
+
+            entity.Property(x => x.LateFeeBalanceBefore)
+                .HasPrecision(18, 2)
+                .IsRequired();
+
+            entity.Property(x => x.TotalOutstandingBefore)
+                .HasPrecision(18, 2)
+                .IsRequired();
+
+            entity.Property(x => x.DiscountAmount)
+                .HasPrecision(18, 2)
+                .IsRequired();
+
+            entity.Property(x => x.SettlementAmount)
+                .HasPrecision(18, 2)
+                .IsRequired();
+
+            entity.Property(x => x.CompletedInstallments)
+                .IsRequired();
+
+            entity.Property(x => x.CreatedAt)
+                .IsRequired();
+
+            entity.HasOne(x => x.Tenant)
+                .WithMany()
+                .HasForeignKey(x => x.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.Loan)
+                .WithOne(x => x.EarlySettlement)
+                .HasForeignKey<EarlySettlement>(
+                    x => x.LoanId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.AppUser)
+                .WithMany()
+                .HasForeignKey(x => x.AppUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.Payment)
+                .WithOne(x => x.EarlySettlement)
+                .HasForeignKey<EarlySettlement>(
+                    x => x.PaymentId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.LoanBalanceAdjustment)
+                .WithOne()
+                .HasForeignKey<EarlySettlement>(
+                    x => x.LoanBalanceAdjustmentId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(x => x.TenantId);
+
+            entity.HasIndex(x =>
+                new
+                {
+                    x.TenantId,
+                    x.LoanId
+                })
+                .IsUnique();
+
+            entity.HasIndex(x =>
+                new
+                {
+                    x.TenantId,
+                    x.AppUserId
+                });
+
+            entity.HasIndex(x => x.PaymentId)
+                .IsUnique();
+
+            entity.HasIndex(x => x.LoanBalanceAdjustmentId)
+                .IsUnique();
+        });
+
+        modelBuilder.Entity<LoanGuaranteeAttachment>(entity =>
+        {
+            entity.ToTable(
+                "loan_guarantee_attachments");
+
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.OriginalFileName)
+                .HasMaxLength(255)
+                .IsRequired();
+
+            entity.Property(x => x.StorageKey)
+                .HasMaxLength(500)
+                .IsRequired();
+
+            entity.Property(x => x.ContentType)
+                .HasMaxLength(100)
+                .IsRequired();
+
+            entity.Property(x => x.FileSize)
+                .IsRequired();
+
+            entity.Property(x => x.Description)
+                .HasMaxLength(1000);
+
+            entity.Property(x => x.CreatedAt)
+                .IsRequired();
+
+            entity.Property(x => x.IsDeleted)
+                .HasDefaultValue(false);
+
+            entity.HasOne(x => x.Tenant)
+                .WithMany()
+                .HasForeignKey(x => x.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.LoanGuarantee)
+                .WithMany(x => x.Attachments)
+                .HasForeignKey(x => x.LoanGuaranteeId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.UploadedByAppUser)
+                .WithMany()
+                .HasForeignKey(x => x.UploadedByAppUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.DeletedByAppUser)
+                .WithMany()
+                .HasForeignKey(x => x.DeletedByAppUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            /*
+            * StorageKey identifica un único archivo físico.
+            */
+            entity.HasIndex(x => x.StorageKey)
+                .IsUnique();
+
+            entity.HasIndex(x => x.TenantId);
+
+            entity.HasIndex(x => new
+            {
+                x.TenantId,
+                x.LoanGuaranteeId
+            });
+
+            /*
+            * Optimiza las consultas normales:
+            * adjuntos activos de una garantía.
+            */
+            entity.HasIndex(x => new
+            {
+                x.TenantId,
+                x.LoanGuaranteeId,
+                x.IsDeleted
+            });
+        });
+
+        modelBuilder.Entity<PaymentReceipt>(entity =>
+        {
+            entity.ToTable("payment_receipts");
+
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.ReceiptNumber)
+                .HasMaxLength(30)
+                .IsRequired();
+
+            entity.Property(x => x.ReceiptYear)
+                .IsRequired();
+
+            entity.Property(x => x.SequenceNumber)
+                .IsRequired();
+
+            entity.Property(x => x.TenantName)
+                .HasMaxLength(150)
+                .IsRequired();
+
+            entity.Property(x => x.TenantLegalName)
+                .HasMaxLength(200);
+
+            entity.Property(x => x.CurrencyCode)
+                .HasMaxLength(3)
+                .IsRequired();
+
+            entity.Property(x => x.CurrencySymbol)
+                .HasMaxLength(5)
+                .IsRequired();
+
+            entity.Property(x => x.ClientName)
+                .HasMaxLength(300)
+                .IsRequired();
+
+            entity.Property(x => x.AmountReceived)
+                .HasPrecision(18, 2);
+
+            entity.Property(x => x.LateFeeAmountApplied)
+                .HasPrecision(18, 2);
+
+            entity.Property(x => x.LoanBalanceAmountApplied)
+                .HasPrecision(18, 2);
+
+            entity.Property(x => x.ContractualBalanceAfter)
+                .HasPrecision(18, 2);
+
+            entity.Property(x => x.LateFeeBalanceAfter)
+                .HasPrecision(18, 2);
+
+            entity.Property(x => x.TotalOutstandingAfter)
+                .HasPrecision(18, 2);
+
+            entity.Property(x => x.CollectedByName)
+                .HasMaxLength(150);
+
+            entity.Property(x => x.Notes)
+                .HasMaxLength(1000);
+
+            entity.Property(x => x.CreatedAt)
+                .IsRequired();
+
+            entity.HasOne(x => x.Tenant)
+                .WithMany()
+                .HasForeignKey(x => x.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.Payment)
+                .WithOne(x => x.Receipt)
+                .HasForeignKey<PaymentReceipt>(
+                    x => x.PaymentId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.CollectedByAppUser)
+                .WithMany()
+                .HasForeignKey(x => x.CollectedByAppUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            /*
+            * Número visible único dentro de cada tenant.
+            */
+            entity.HasIndex(x => new
+            {
+                x.TenantId,
+                x.ReceiptNumber
+            })
+            .IsUnique();
+
+            /*
+            * Protege también la secuencia numérica,
+            * independientemente del string formateado.
+            */
+            entity.HasIndex(x => new
+            {
+                x.TenantId,
+                x.ReceiptYear,
+                x.SequenceNumber
+            })
+            .IsUnique();
+
+            /*
+            * Un Payment solo puede tener un Receipt.
+            *
+            * EF también generará unicidad por la relación 1:1,
+            * pero dejamos explícita la consulta multi-tenant.
+            */
+            entity.HasIndex(x => new
+            {
+                x.TenantId,
+                x.PaymentId
+            })
+            .IsUnique();
+
+            entity.HasIndex(x => new
+            {
+                x.TenantId,
+                x.CreatedAt
+            });
+        });
+
+        modelBuilder.Entity<PaymentReceiptSequence>(entity =>
+        {
+            entity.ToTable("payment_receipt_sequences");
+
+            entity.HasKey(x => new
+            {
+                x.TenantId,
+                x.Year
+            });
+
+            entity.Property(x => x.Year)
+                .IsRequired();
+
+            entity.Property(x => x.LastNumber)
+                .IsRequired();
+
+            entity.Property(x => x.UpdatedAt)
+                .IsRequired();
+
+            entity.HasOne(x => x.Tenant)
+                .WithMany()
+                .HasForeignKey(x => x.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
     }
 }

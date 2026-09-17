@@ -32,6 +32,16 @@ public class LoanResponse
 
     public int LateFeeGraceDays { get; set; }
 
+    /*
+    * Política de garantía congelada
+    * al crear el préstamo.
+    */
+    public bool GuaranteeRequired { get; set; }
+
+    public decimal? GuaranteeThresholdAtCreation { get; set; }
+
+    public LoanGuaranteeResponse? Guarantee { get; set; }
+
     public DateTime StartDate { get; set; }
 
     public DateTime NextPaymentDate { get; set; }

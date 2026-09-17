@@ -255,6 +255,83 @@ namespace Sanes.Infrastructure.Persistence.Migrations
                     b.ToTable("CollectionRouteSchedules");
                 });
 
+            modelBuilder.Entity("Sanes.Domain.Entities.EarlySettlement", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AppUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("CompletedInstallments")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("ContractualBalanceBefore")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("DiscountAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<int>("DiscountType")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("DiscountValue")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal>("LateFeeBalanceBefore")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<Guid>("LoanBalanceAdjustmentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("LoanId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("PaymentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("SettlementAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("TotalOutstandingBefore")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AppUserId");
+
+                    b.HasIndex("LoanBalanceAdjustmentId")
+                        .IsUnique();
+
+                    b.HasIndex("LoanId")
+                        .IsUnique();
+
+                    b.HasIndex("PaymentId")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId");
+
+                    b.HasIndex("TenantId", "AppUserId");
+
+                    b.HasIndex("TenantId", "LoanId")
+                        .IsUnique();
+
+                    b.ToTable("early_settlements", (string)null);
+                });
+
             modelBuilder.Entity("Sanes.Domain.Entities.Investor", b =>
                 {
                     b.Property<Guid>("Id")
@@ -408,6 +485,15 @@ namespace Sanes.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<bool>("GuaranteeRequired")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<decimal?>("GuaranteeThresholdAtCreation")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
                     b.Property<decimal>("InstallmentAmount")
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
@@ -480,6 +566,165 @@ namespace Sanes.Infrastructure.Persistence.Migrations
                     b.HasIndex("TenantId", "Status");
 
                     b.ToTable("loans", (string)null);
+                });
+
+            modelBuilder.Entity("Sanes.Domain.Entities.LoanBalanceAdjustment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("AdjustmentType")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<Guid>("AppUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("LoanId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AppUserId");
+
+                    b.HasIndex("LoanId");
+
+                    b.HasIndex("TenantId");
+
+                    b.HasIndex("TenantId", "AppUserId");
+
+                    b.HasIndex("TenantId", "LoanId");
+
+                    b.ToTable("loan_balance_adjustments", (string)null);
+                });
+
+            modelBuilder.Entity("Sanes.Domain.Entities.LoanGuarantee", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<Guid>("LoanId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Reference")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LoanId")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId");
+
+                    b.HasIndex("TenantId", "LoanId")
+                        .IsUnique();
+
+                    b.ToTable("loan_guarantees", (string)null);
+                });
+
+            modelBuilder.Entity("Sanes.Domain.Entities.LoanGuaranteeAttachment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("DeletedByAppUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<long>("FileSize")
+                        .HasColumnType("bigint");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<Guid>("LoanGuaranteeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("OriginalFileName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("StorageKey")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("UploadedByAppUserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DeletedByAppUserId");
+
+                    b.HasIndex("LoanGuaranteeId");
+
+                    b.HasIndex("StorageKey")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId");
+
+                    b.HasIndex("UploadedByAppUserId");
+
+                    b.HasIndex("TenantId", "LoanGuaranteeId");
+
+                    b.HasIndex("TenantId", "LoanGuaranteeId", "IsDeleted");
+
+                    b.ToTable("loan_guarantee_attachments", (string)null);
                 });
 
             modelBuilder.Entity("Sanes.Domain.Entities.Payment", b =>
@@ -577,6 +822,143 @@ namespace Sanes.Infrastructure.Persistence.Migrations
                     b.ToTable("payment_allocations", (string)null);
                 });
 
+            modelBuilder.Entity("Sanes.Domain.Entities.PaymentReceipt", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("AmountReceived")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<Guid>("ClientId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ClientName")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<Guid?>("CollectedByAppUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CollectedByName")
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<decimal>("ContractualBalanceAfter")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CurrencyCode")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)");
+
+                    b.Property<string>("CurrencySymbol")
+                        .IsRequired()
+                        .HasMaxLength(5)
+                        .HasColumnType("character varying(5)");
+
+                    b.Property<decimal>("LateFeeAmountApplied")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal>("LateFeeBalanceAfter")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal>("LoanBalanceAmountApplied")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<Guid>("LoanId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTime>("PaymentDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("PaymentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("PaymentType")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ReceiptNumber")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<int>("ReceiptYear")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SequenceNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TenantLegalName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("TenantName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<decimal>("TotalOutstandingAfter")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CollectedByAppUserId");
+
+                    b.HasIndex("PaymentId")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId", "CreatedAt");
+
+                    b.HasIndex("TenantId", "PaymentId")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId", "ReceiptNumber")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId", "ReceiptYear", "SequenceNumber")
+                        .IsUnique();
+
+                    b.ToTable("payment_receipts", (string)null);
+                });
+
+            modelBuilder.Entity("Sanes.Domain.Entities.PaymentReceiptSequence", b =>
+                {
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Year")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("LastNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("TenantId", "Year");
+
+                    b.ToTable("payment_receipt_sequences", (string)null);
+                });
+
             modelBuilder.Entity("Sanes.Domain.Entities.Tenant", b =>
                 {
                     b.Property<Guid>("Id")
@@ -620,6 +1002,10 @@ namespace Sanes.Infrastructure.Persistence.Migrations
                     b.Property<string>("Email")
                         .HasMaxLength(150)
                         .HasColumnType("character varying(150)");
+
+                    b.Property<decimal?>("GuaranteeRequiredFromAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
@@ -715,6 +1101,48 @@ namespace Sanes.Infrastructure.Persistence.Migrations
                     b.Navigation("CollectionRoute");
                 });
 
+            modelBuilder.Entity("Sanes.Domain.Entities.EarlySettlement", b =>
+                {
+                    b.HasOne("Sanes.Domain.Entities.AppUser", "AppUser")
+                        .WithMany()
+                        .HasForeignKey("AppUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Sanes.Domain.Entities.LoanBalanceAdjustment", "LoanBalanceAdjustment")
+                        .WithOne()
+                        .HasForeignKey("Sanes.Domain.Entities.EarlySettlement", "LoanBalanceAdjustmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Sanes.Domain.Entities.Loan", "Loan")
+                        .WithOne("EarlySettlement")
+                        .HasForeignKey("Sanes.Domain.Entities.EarlySettlement", "LoanId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Sanes.Domain.Entities.Payment", "Payment")
+                        .WithOne("EarlySettlement")
+                        .HasForeignKey("Sanes.Domain.Entities.EarlySettlement", "PaymentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Sanes.Domain.Entities.Tenant", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("AppUser");
+
+                    b.Navigation("Loan");
+
+                    b.Navigation("LoanBalanceAdjustment");
+
+                    b.Navigation("Payment");
+
+                    b.Navigation("Tenant");
+                });
+
             modelBuilder.Entity("Sanes.Domain.Entities.Investor", b =>
                 {
                     b.HasOne("Sanes.Domain.Entities.Tenant", "Tenant")
@@ -799,6 +1227,86 @@ namespace Sanes.Infrastructure.Persistence.Migrations
                     b.Navigation("Tenant");
                 });
 
+            modelBuilder.Entity("Sanes.Domain.Entities.LoanBalanceAdjustment", b =>
+                {
+                    b.HasOne("Sanes.Domain.Entities.AppUser", "AppUser")
+                        .WithMany()
+                        .HasForeignKey("AppUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Sanes.Domain.Entities.Loan", "Loan")
+                        .WithMany("BalanceAdjustments")
+                        .HasForeignKey("LoanId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Sanes.Domain.Entities.Tenant", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("AppUser");
+
+                    b.Navigation("Loan");
+
+                    b.Navigation("Tenant");
+                });
+
+            modelBuilder.Entity("Sanes.Domain.Entities.LoanGuarantee", b =>
+                {
+                    b.HasOne("Sanes.Domain.Entities.Loan", "Loan")
+                        .WithOne("Guarantee")
+                        .HasForeignKey("Sanes.Domain.Entities.LoanGuarantee", "LoanId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Sanes.Domain.Entities.Tenant", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Loan");
+
+                    b.Navigation("Tenant");
+                });
+
+            modelBuilder.Entity("Sanes.Domain.Entities.LoanGuaranteeAttachment", b =>
+                {
+                    b.HasOne("Sanes.Domain.Entities.AppUser", "DeletedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("DeletedByAppUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Sanes.Domain.Entities.LoanGuarantee", "LoanGuarantee")
+                        .WithMany("Attachments")
+                        .HasForeignKey("LoanGuaranteeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Sanes.Domain.Entities.Tenant", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Sanes.Domain.Entities.AppUser", "UploadedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("UploadedByAppUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("DeletedByAppUser");
+
+                    b.Navigation("LoanGuarantee");
+
+                    b.Navigation("Tenant");
+
+                    b.Navigation("UploadedByAppUser");
+                });
+
             modelBuilder.Entity("Sanes.Domain.Entities.Payment", b =>
                 {
                     b.HasOne("Sanes.Domain.Entities.AppUser", "CollectedByAppUser")
@@ -858,6 +1366,43 @@ namespace Sanes.Infrastructure.Persistence.Migrations
                     b.Navigation("Tenant");
                 });
 
+            modelBuilder.Entity("Sanes.Domain.Entities.PaymentReceipt", b =>
+                {
+                    b.HasOne("Sanes.Domain.Entities.AppUser", "CollectedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("CollectedByAppUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Sanes.Domain.Entities.Payment", "Payment")
+                        .WithOne("Receipt")
+                        .HasForeignKey("Sanes.Domain.Entities.PaymentReceipt", "PaymentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Sanes.Domain.Entities.Tenant", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("CollectedByAppUser");
+
+                    b.Navigation("Payment");
+
+                    b.Navigation("Tenant");
+                });
+
+            modelBuilder.Entity("Sanes.Domain.Entities.PaymentReceiptSequence", b =>
+                {
+                    b.HasOne("Sanes.Domain.Entities.Tenant", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Tenant");
+                });
+
             modelBuilder.Entity("Sanes.Domain.Entities.AppUser", b =>
                 {
                     b.Navigation("CollectionRoutes");
@@ -877,9 +1422,27 @@ namespace Sanes.Infrastructure.Persistence.Migrations
                     b.Navigation("PaymentAllocations");
                 });
 
+            modelBuilder.Entity("Sanes.Domain.Entities.Loan", b =>
+                {
+                    b.Navigation("BalanceAdjustments");
+
+                    b.Navigation("EarlySettlement");
+
+                    b.Navigation("Guarantee");
+                });
+
+            modelBuilder.Entity("Sanes.Domain.Entities.LoanGuarantee", b =>
+                {
+                    b.Navigation("Attachments");
+                });
+
             modelBuilder.Entity("Sanes.Domain.Entities.Payment", b =>
                 {
                     b.Navigation("Allocations");
+
+                    b.Navigation("EarlySettlement");
+
+                    b.Navigation("Receipt");
                 });
 #pragma warning restore 612, 618
         }

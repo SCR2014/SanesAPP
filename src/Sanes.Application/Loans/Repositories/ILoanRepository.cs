@@ -8,6 +8,10 @@ public interface ILoanRepository
         Loan loan,
         CancellationToken cancellationToken = default);
 
+    Task AddGuaranteeAsync(
+        LoanGuarantee guarantee,
+        CancellationToken cancellationToken = default);
+
     Task<List<Loan>> GetAllAsync(
         Guid tenantId,
         CancellationToken cancellationToken = default);

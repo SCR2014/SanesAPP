@@ -19,3 +19,6 @@ obj/
 
 # Accidental duplicate infrastructure folder
 /infrastructure/Persistence/SanesDbContext.cs
+
+# Local application file storage
+src/Sanes.Api/data/

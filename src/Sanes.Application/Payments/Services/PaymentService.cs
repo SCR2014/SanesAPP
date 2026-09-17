@@ -6,6 +6,7 @@ using Sanes.Application.AppUsers.Repositories;
 using Sanes.Application.CollectionRoutes.Repositories;
 using Sanes.Application.Clients.Repositories;
 using Sanes.Application.LateFees.Services;
+using Sanes.Application.Common.Persistence;
 using Sanes.Domain.Entities;
 using Sanes.Domain.Enums;
 
@@ -23,6 +24,10 @@ public class PaymentService : IPaymentService
     private readonly IPaymentAllocationRepository _paymentAllocationRepository;
     private readonly ILateFeeAccrualService _lateFeeAccrualService;
     private readonly ILateFeeBalanceService _lateFeeBalanceService;
+    private readonly ILoanBalanceAdjustmentRepository _loanBalanceAdjustmentRepository;
+    private readonly IPaymentReceiptRepository
+    _paymentReceiptRepository;
+    private readonly ITransactionRunner _transactionRunner;
 
     public PaymentService(
         IPaymentRepository paymentRepository,
@@ -34,7 +39,10 @@ public class PaymentService : IPaymentService
         IClientRepository clientRepository,
         IPaymentAllocationRepository paymentAllocationRepository,
         ILateFeeAccrualService lateFeeAccrualService,
-        ILateFeeBalanceService lateFeeBalanceService)
+        ILateFeeBalanceService lateFeeBalanceService,
+        ILoanBalanceAdjustmentRepository loanBalanceAdjustmentRepository,
+        IPaymentReceiptRepository paymentReceiptRepository,
+        ITransactionRunner transactionRunner)
     {
         _paymentRepository = paymentRepository;
         _loanRepository = loanRepository;
@@ -46,9 +54,26 @@ public class PaymentService : IPaymentService
         _paymentAllocationRepository = paymentAllocationRepository;
         _lateFeeAccrualService = lateFeeAccrualService;
         _lateFeeBalanceService = lateFeeBalanceService;
+        _loanBalanceAdjustmentRepository = loanBalanceAdjustmentRepository;
+        _paymentReceiptRepository = paymentReceiptRepository;
+        _transactionRunner = transactionRunner;
     }
 
-    public async Task<PaymentResponse> CreateAsync(
+    public Task<PaymentResponse> CreateAsync(
+        Guid tenantId,
+        CreatePaymentRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        return _transactionRunner.ExecuteAsync(
+            transactionCancellationToken =>
+                CreateCoreAsync(
+                    tenantId,
+                    request,
+                    transactionCancellationToken),
+            cancellationToken);
+    }
+
+    private async Task<PaymentResponse> CreateCoreAsync(
         Guid tenantId,
         CreatePaymentRequest request,
         CancellationToken cancellationToken = default)
@@ -80,6 +105,18 @@ public class PaymentService : IPaymentService
                 "Payments can only be registered for active loans.");
         }
 
+        var client =
+            await _clientRepository.GetByIdAsync(
+                tenantId,
+                loan.ClientId,
+                cancellationToken);
+
+        if (client is null)
+        {
+            throw new InvalidOperationException(
+                "The client associated with the loan could not be found.");
+        }
+
         if (request.CollectedByAppUserId.HasValue ||
             request.CollectionRouteId.HasValue)
         {
@@ -88,6 +125,24 @@ public class PaymentService : IPaymentService
                 request,
                 loan,
                 cancellationToken);
+        }
+
+        AppUser? collector =
+            null;
+
+        if (request.CollectedByAppUserId.HasValue)
+        {
+            collector =
+                await _appUserRepository.GetByIdAsync(
+                    request.CollectedByAppUserId.Value,
+                    tenantId,
+                    cancellationToken);
+
+            if (collector is null)
+            {
+                throw new InvalidOperationException(
+                    "The collector could not be found.");
+            }
         }
 
         var paymentDate =
@@ -109,8 +164,15 @@ public class PaymentService : IPaymentService
                     request.LoanId,
                     cancellationToken);
 
+        var contractualAdjustmentsBefore =
+            await _loanBalanceAdjustmentRepository
+                .GetTotalReductionsByLoanAsync(
+                    tenantId,
+                    request.LoanId,
+                    cancellationToken);
+
         var loanBalanceBefore =
-            totalAmount - totalAppliedToLoanBefore;
+            totalAmount - totalAppliedToLoanBefore - contractualAdjustmentsBefore;
 
         if (loanBalanceBefore < 0)
         {
@@ -243,7 +305,8 @@ public class PaymentService : IPaymentService
 
         var loanBalanceAfter =
             totalAmount -
-            totalAppliedToLoanAfter;
+            totalAppliedToLoanAfter -
+            contractualAdjustmentsBefore;
 
         if (loanBalanceAfter < 0)
         {
@@ -258,6 +321,10 @@ public class PaymentService : IPaymentService
         {
             lateFeeBalanceAfter = 0;
         }
+
+        var totalOutstandingAfter =
+            loanBalanceAfter +
+            lateFeeBalanceAfter;
 
         if (
             loanBalanceAfter == 0 &&
@@ -275,13 +342,119 @@ public class PaymentService : IPaymentService
 
         loan.UpdatedAt = now;
 
+        var receiptYear =
+            now.Year;
+
+        var sequenceNumber =
+            await _paymentReceiptRepository
+                .GetNextSequenceNumberAsync(
+                    tenantId,
+                    receiptYear,
+                    cancellationToken);
+
+        var receiptNumber =
+            $"REC-{receiptYear}-{sequenceNumber:D6}";
+
+        var receipt =
+            new PaymentReceipt
+            {
+                TenantId =
+                    tenantId,
+
+                PaymentId =
+                    payment.Id,
+
+                Payment =
+                    payment,
+
+                ReceiptNumber =
+                    receiptNumber,
+
+                ReceiptYear =
+                    receiptYear,
+
+                SequenceNumber =
+                    sequenceNumber,
+
+                TenantName =
+                    tenant.Name,
+
+                TenantLegalName =
+                    tenant.LegalName,
+
+                CurrencyCode =
+                    tenant.CurrencyCode,
+
+                CurrencySymbol =
+                    tenant.CurrencySymbol,
+
+                ClientId =
+                    client.Id,
+
+                ClientName =
+                    BuildClientName(
+                        client),
+
+                LoanId =
+                    loan.Id,
+
+                PaymentDate =
+                    payment.PaymentDate,
+
+                PaymentType =
+                    payment.PaymentType,
+
+                AmountReceived =
+                    payment.Amount,
+
+                LateFeeAmountApplied =
+                    amountAppliedToLateFees,
+
+                LoanBalanceAmountApplied =
+                    amountAppliedToLoan,
+
+                ContractualBalanceAfter =
+                    loanBalanceAfter,
+
+                LateFeeBalanceAfter =
+                    lateFeeBalanceAfter,
+
+                TotalOutstandingAfter =
+                    totalOutstandingAfter,
+
+                CollectedByAppUserId =
+                    collector?.Id,
+
+                CollectedByAppUser =
+                    collector,
+
+                CollectedByName =
+                    collector?.Name,
+
+                Notes =
+                    payment.Notes,
+
+                CreatedAt =
+                    now
+            };
+
+        payment.Receipt =
+            receipt;
+
+        await _paymentReceiptRepository.AddAsync(
+            receipt,
+            cancellationToken);
+
         /*
-        * PaymentRepository, PaymentAllocationRepository
-        * y LoanRepository utilizan el mismo SanesDbContext
-        * dentro del mismo scope.
+        * Todos los repositorios involucrados utilizan
+        * el mismo SanesDbContext dentro del scope.
         *
-        * Un único SaveChangesAsync persiste Payment,
-        * allocations y cambios del Loan.
+        * El SaveChanges persiste Payment,
+        * PaymentAllocations, Loan y PaymentReceipt.
+        *
+        * PaymentReceiptSequence ya fue incrementado
+        * mediante SQL, pero participa en la misma
+        * transacción y se revierte si la operación falla.
         */
         await _paymentRepository.SaveChangesAsync(
             cancellationToken);
@@ -565,6 +738,23 @@ public class PaymentService : IPaymentService
             throw new InvalidOperationException(
                 "The loan client does not belong to the specified collection route.");
         }
+    }
+
+    private static string BuildClientName(
+        Client client)
+    {
+        var firstName =
+            client.FirstName.Trim();
+
+        var lastName =
+            string.IsNullOrWhiteSpace(
+                client.LastName)
+                ? null
+                : client.LastName.Trim();
+
+        return lastName is null
+            ? firstName
+            : $"{firstName} {lastName}";
     }
 
 }
