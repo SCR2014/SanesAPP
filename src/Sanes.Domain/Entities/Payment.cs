@@ -29,6 +29,8 @@ public class Payment
 
     public EarlySettlement? EarlySettlement { get; set; }
 
+    public PaymentReceipt? Receipt { get; set; }
+
     public string? Notes { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

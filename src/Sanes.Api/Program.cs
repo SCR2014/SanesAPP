@@ -325,6 +325,13 @@ builder.Services.AddScoped<
     ILoanGuaranteeAttachmentService,
     LoanGuaranteeAttachmentService>();
 
+builder.Services.AddScoped<
+    IPaymentReceiptRepository,
+    PaymentReceiptRepository>();
+builder.Services.AddScoped<
+    IPaymentReceiptService,
+    PaymentReceiptService>();
+
 builder.Services.AddSingleton<IFileStorage>(
     _ =>
     {

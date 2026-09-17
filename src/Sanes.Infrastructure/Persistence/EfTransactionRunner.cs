@@ -18,6 +18,22 @@ public class EfTransactionRunner
         Func<CancellationToken, Task<T>> operation,
         CancellationToken cancellationToken = default)
     {
+        /*
+         * Si ya existe una transacción en este DbContext,
+         * reutilizamos esa transacción.
+         *
+         * Esto es necesario para escenarios como
+         * EarlySettlement -> PaymentService.
+         *
+         * El servicio exterior conserva la responsabilidad
+         * de COMMIT / ROLLBACK.
+         */
+        if (_dbContext.Database.CurrentTransaction is not null)
+        {
+            return await operation(
+                cancellationToken);
+        }
+
         await using var transaction =
             await _dbContext.Database
                 .BeginTransactionAsync(
@@ -37,7 +53,7 @@ public class EfTransactionRunner
         catch
         {
             await transaction.RollbackAsync(
-                cancellationToken);
+                CancellationToken.None);
 
             throw;
         }
