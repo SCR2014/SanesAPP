@@ -107,4 +107,66 @@ public class FinancialDashboardController
                 });
         }
     }
+
+    [HttpGet("investors")]
+    [ProducesResponseType(
+        typeof(List<FinancialDashboardInvestorBreakdownResponse>),
+        StatusCodes.Status200OK)]
+    [ProducesResponseType(
+        StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(
+        StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<
+        List<FinancialDashboardInvestorBreakdownResponse>>>
+        GetInvestorsAsync(
+            CancellationToken cancellationToken)
+    {
+        var tenantId =
+            _currentUserService.TenantId;
+
+        if (tenantId == Guid.Empty)
+        {
+            return Unauthorized();
+        }
+
+        var response =
+            await _financialDashboardService
+                .GetInvestorsAsync(
+                    tenantId,
+                    cancellationToken);
+
+        return Ok(
+            response);
+    }
+
+    [HttpGet("routes")]
+    [ProducesResponseType(
+        typeof(List<FinancialDashboardRouteBreakdownResponse>),
+        StatusCodes.Status200OK)]
+    [ProducesResponseType(
+        StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(
+        StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<
+        List<FinancialDashboardRouteBreakdownResponse>>>
+        GetRoutesAsync(
+            CancellationToken cancellationToken)
+    {
+        var tenantId =
+            _currentUserService.TenantId;
+
+        if (tenantId == Guid.Empty)
+        {
+            return Unauthorized();
+        }
+
+        var response =
+            await _financialDashboardService
+                .GetRoutesAsync(
+                    tenantId,
+                    cancellationToken);
+
+        return Ok(
+            response);
+    }
 }
