@@ -67,12 +67,17 @@ public class CustomWebApplicationFactory
                 services.Remove(descriptor);
             }
 
+            var postgresHostPort =
+                Environment.GetEnvironmentVariable(
+                    "POSTGRES_HOST_PORT")
+                ?? "55432";
+
             services.AddDbContext<SanesDbContext>(
                 options =>
                 {
                     options.UseNpgsql(
                         "Host=localhost;" +
-                        "Port=55432;" +
+                        $"Port={postgresHostPort};" +
                         "Database=sanesdb_test;" +
                         "Username=sanesadmin;" +
                         "Password=SanesDev2026_Local_ChangeMe!");

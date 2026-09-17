@@ -365,4 +365,310 @@ public class FinancialDashboardRepository
 
         return result;
     }
+
+    public async Task<List<FinancialDashboardInvestorHistoricalData>>
+        GetInvestorHistoricalDataAsync(
+            Guid tenantId,
+            CancellationToken cancellationToken = default)
+    {
+        /*
+        * Partimos de Investors y no de Loans.
+        *
+        * De esta forma también devolvemos inversionistas
+        * que actualmente no tengan préstamos, lo que permite
+        * mostrar una fila histórica consistente.
+        */
+        var investors =
+            await _dbContext.Investors
+                .AsNoTracking()
+                .Where(x =>
+                    x.TenantId == tenantId)
+                .Select(x =>
+                    new FinancialDashboardInvestorHistoricalData
+                    {
+                        InvestorId =
+                            x.Id,
+
+                        InvestorName =
+                            x.Name,
+
+                        IsActive =
+                            x.IsActive
+                    })
+                .ToListAsync(
+                    cancellationToken);
+
+        var byInvestor =
+            investors.ToDictionary(
+                x => x.InvestorId);
+
+        // ========================================================
+        // ORIGINATIONS
+        // ========================================================
+
+        var originations =
+            await _dbContext.Loans
+                .AsNoTracking()
+                .Where(x =>
+                    x.TenantId == tenantId)
+                .GroupBy(x =>
+                    x.InvestorId)
+                .Select(group =>
+                    new
+                    {
+                        InvestorId =
+                            group.Key,
+
+                        PrincipalOriginated =
+                            group.Sum(x =>
+                                x.PrincipalAmount),
+
+                        ContractualAmountOriginated =
+                            group.Sum(x =>
+                                x.InstallmentAmount *
+                                x.TotalInstallments)
+                    })
+                .ToListAsync(
+                    cancellationToken);
+
+        foreach (var item in originations)
+        {
+            if (!byInvestor.TryGetValue(
+                    item.InvestorId,
+                    out var investor))
+            {
+                continue;
+            }
+
+            investor.PrincipalOriginated =
+                item.PrincipalOriginated;
+
+            investor.ContractualAmountOriginated =
+                item.ContractualAmountOriginated;
+        }
+
+        // ========================================================
+        // CASH RECEIVED
+        // ========================================================
+
+        var payments =
+            await _dbContext.Payments
+                .AsNoTracking()
+                .Where(x =>
+                    x.TenantId == tenantId)
+                .GroupBy(x =>
+                    x.Loan.InvestorId)
+                .Select(group =>
+                    new
+                    {
+                        InvestorId =
+                            group.Key,
+
+                        Amount =
+                            group.Sum(x =>
+                                x.Amount)
+                    })
+                .ToListAsync(
+                    cancellationToken);
+
+        foreach (var item in payments)
+        {
+            if (!byInvestor.TryGetValue(
+                    item.InvestorId,
+                    out var investor))
+            {
+                continue;
+            }
+
+            investor.CashCollected =
+                item.Amount;
+        }
+
+        // ========================================================
+        // CONTRACTUAL COLLECTIONS
+        // ========================================================
+
+        var contractualCollections =
+            await _dbContext.PaymentAllocations
+                .AsNoTracking()
+                .Where(x =>
+                    x.TenantId == tenantId &&
+                    x.AllocationType ==
+                        PaymentAllocationType.LoanBalance)
+                .GroupBy(x =>
+                    x.Payment.Loan.InvestorId)
+                .Select(group =>
+                    new
+                    {
+                        InvestorId =
+                            group.Key,
+
+                        Amount =
+                            group.Sum(x =>
+                                x.Amount)
+                    })
+                .ToListAsync(
+                    cancellationToken);
+
+        foreach (var item in contractualCollections)
+        {
+            if (!byInvestor.TryGetValue(
+                    item.InvestorId,
+                    out var investor))
+            {
+                continue;
+            }
+
+            investor.ContractualCashCollected =
+                item.Amount;
+        }
+
+        // ========================================================
+        // LATE FEES COLLECTED
+        // ========================================================
+
+        var lateFeeCollections =
+            await _dbContext.PaymentAllocations
+                .AsNoTracking()
+                .Where(x =>
+                    x.TenantId == tenantId &&
+                    x.AllocationType ==
+                        PaymentAllocationType.LateFee)
+                .GroupBy(x =>
+                    x.Payment.Loan.InvestorId)
+                .Select(group =>
+                    new
+                    {
+                        InvestorId =
+                            group.Key,
+
+                        Amount =
+                            group.Sum(x =>
+                                x.Amount)
+                    })
+                .ToListAsync(
+                    cancellationToken);
+
+        foreach (var item in lateFeeCollections)
+        {
+            if (!byInvestor.TryGetValue(
+                    item.InvestorId,
+                    out var investor))
+            {
+                continue;
+            }
+
+            investor.LateFeesCollected =
+                item.Amount;
+        }
+
+        // ========================================================
+        // EARLY SETTLEMENT DISCOUNTS
+        // ========================================================
+
+        var discounts =
+            await _dbContext.LoanBalanceAdjustments
+                .AsNoTracking()
+                .Where(x =>
+                    x.TenantId == tenantId &&
+                    x.AdjustmentType ==
+                        LoanBalanceAdjustmentType
+                            .EarlySettlementDiscount)
+                .GroupBy(x =>
+                    x.Loan.InvestorId)
+                .Select(group =>
+                    new
+                    {
+                        InvestorId =
+                            group.Key,
+
+                        Amount =
+                            group.Sum(x =>
+                                x.Amount)
+                    })
+                .ToListAsync(
+                    cancellationToken);
+
+        foreach (var item in discounts)
+        {
+            if (!byInvestor.TryGetValue(
+                    item.InvestorId,
+                    out var investor))
+            {
+                continue;
+            }
+
+            investor.EarlySettlementDiscounts =
+                item.Amount;
+        }
+
+        return investors
+            .OrderBy(x =>
+                x.InvestorName)
+            .ToList();
+    }
+
+    public async Task<List<FinancialDashboardRouteData>>
+        GetRoutesAsync(
+            Guid tenantId,
+            CancellationToken cancellationToken = default)
+    {
+        /*
+        * Incluimos activas e inactivas.
+        *
+        * El servicio decidirá:
+        * - activas: siempre visibles,
+        * - inactivas: solamente si conservan
+        *   cartera activa asociada.
+        */
+        return await _dbContext.CollectionRoutes
+            .AsNoTracking()
+            .Where(x =>
+                x.TenantId == tenantId)
+            .OrderBy(x =>
+                x.Name)
+            .Select(x =>
+                new FinancialDashboardRouteData
+                {
+                    CollectionRouteId =
+                        x.Id,
+
+                    CollectionRouteName =
+                        x.Name,
+
+                    IsActive =
+                        x.IsActive
+                })
+            .ToListAsync(
+                cancellationToken);
+    }
+
+    public async Task<List<FinancialDashboardClientRouteData>>
+        GetClientRoutesAsync(
+            Guid tenantId,
+            CancellationToken cancellationToken = default)
+    {
+        /*
+        * No filtramos por Client.IsActive.
+        *
+        * Si existe un préstamo activo asociado a un cliente
+        * que posteriormente fue desactivado, todavía debemos
+        * poder ubicar esa cartera en su ruta actual.
+        */
+        return await _dbContext.Clients
+            .AsNoTracking()
+            .Where(x =>
+                x.TenantId == tenantId)
+            .Select(x =>
+                new FinancialDashboardClientRouteData
+                {
+                    ClientId =
+                        x.Id,
+
+                    CollectionRouteId =
+                        x.CollectionRouteId
+                })
+            .ToListAsync(
+                cancellationToken);
+    }
 }

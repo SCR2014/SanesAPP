@@ -13,4 +13,14 @@ public interface IFinancialDashboardService
         DateOnly from,
         DateOnly to,
         CancellationToken cancellationToken = default);
+
+    Task<List<FinancialDashboardInvestorBreakdownResponse>>
+        GetInvestorsAsync(
+            Guid tenantId,
+            CancellationToken cancellationToken = default);
+
+    Task<List<FinancialDashboardRouteBreakdownResponse>>
+        GetRoutesAsync(
+            Guid tenantId,
+            CancellationToken cancellationToken = default);
 }

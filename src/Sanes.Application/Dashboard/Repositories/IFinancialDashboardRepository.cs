@@ -15,4 +15,19 @@ public interface IFinancialDashboardRepository
             DateOnly from,
             DateOnly to,
             CancellationToken cancellationToken = default);
+
+    Task<List<FinancialDashboardInvestorHistoricalData>>
+        GetInvestorHistoricalDataAsync(
+            Guid tenantId,
+            CancellationToken cancellationToken = default);
+
+    Task<List<FinancialDashboardRouteData>>
+        GetRoutesAsync(
+            Guid tenantId,
+            CancellationToken cancellationToken = default);
+
+    Task<List<FinancialDashboardClientRouteData>>
+        GetClientRoutesAsync(
+            Guid tenantId,
+            CancellationToken cancellationToken = default);
 }
