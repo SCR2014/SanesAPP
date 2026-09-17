@@ -918,6 +918,130 @@ public class EarlySettlementsTests
             historical.TotalOutstandingAfter);
     }
 
+    [Fact]
+    public async Task Execute_WithLateFeeAndDiscount_CreatesCorrectPaymentReceipt()
+    {
+        var scenario =
+            await CreateEligibleLateFeeScenarioAsync();
+
+        var quote =
+            await QuoteAsync(
+                scenario.Context.Client,
+                scenario.Loan.Id,
+                EarlySettlementDiscountType
+                    .InstallmentWaiver,
+                2);
+
+        /*
+        * Contractual balance = 700
+        * Mora                =  20
+        * Descuento           = 200
+        *
+        * Cash settlement:
+        *
+        * 20  -> mora
+        * 500 -> préstamo
+        *
+        * Efectivo real = 520
+        */
+        Assert.Equal(
+            700m,
+            quote.ContractualBalance);
+
+        Assert.Equal(
+            20m,
+            quote.LateFeeBalance);
+
+        Assert.Equal(
+            200m,
+            quote.DiscountAmount);
+
+        Assert.Equal(
+            520m,
+            quote.SettlementAmount);
+
+        var settlement =
+            await ExecuteAsync(
+                scenario.Context.Client,
+                scenario.Loan.Id,
+                EarlySettlementDiscountType
+                    .InstallmentWaiver,
+                2,
+                quote.SettlementAmount);
+
+        Assert.NotNull(
+            settlement.PaymentId);
+
+        var receiptResponse =
+            await scenario.Context.Client.GetAsync(
+                $"/api/payments/{settlement.PaymentId.Value}/receipt");
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            receiptResponse.StatusCode);
+
+        var receipt =
+            await receiptResponse.Content
+                .ReadFromJsonAsync<
+                    PaymentReceiptResponse>();
+
+        Assert.NotNull(receipt);
+
+        /*
+        * El descuento de RD$200 NO es efectivo.
+        */
+        Assert.Equal(
+            520m,
+            receipt.AmountReceived);
+
+        Assert.Equal(
+            20m,
+            receipt.LateFeeAmountApplied);
+
+        Assert.Equal(
+            500m,
+            receipt.LoanBalanceAmountApplied);
+
+        /*
+        * El descuento contractual + efectivo
+        * dejan el préstamo completamente liquidado.
+        */
+        Assert.Equal(
+            0m,
+            receipt.ContractualBalanceAfter);
+
+        Assert.Equal(
+            0m,
+            receipt.LateFeeBalanceAfter);
+
+        Assert.Equal(
+            0m,
+            receipt.TotalOutstandingAfter);
+
+        Assert.Equal(
+            PaymentType.FullSettlement,
+            receipt.PaymentType);
+
+        Assert.Equal(
+            "Early settlement",
+            receipt.Notes);
+
+        /*
+        * Confirmación explícita:
+        *
+        * DiscountAmount no fue incorporado
+        * al dinero recibido.
+        */
+        Assert.Equal(
+            200m,
+            settlement.DiscountAmount);
+
+        Assert.NotEqual(
+            settlement.SettlementAmount +
+                settlement.DiscountAmount,
+            receipt.AmountReceived);
+    }
+
     // ============================================================
     // SCENARIOS
     // ============================================================

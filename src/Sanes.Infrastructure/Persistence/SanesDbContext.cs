@@ -40,6 +40,12 @@ public class SanesDbContext : DbContext
     public DbSet<LoanGuaranteeAttachment> LoanGuaranteeAttachments =>
         Set<LoanGuaranteeAttachment>();
 
+    public DbSet<PaymentReceipt> PaymentReceipts =>
+        Set<PaymentReceipt>();
+
+    public DbSet<PaymentReceiptSequence> PaymentReceiptSequences =>
+        Set<PaymentReceiptSequence>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -855,6 +861,151 @@ public class SanesDbContext : DbContext
                 x.LoanGuaranteeId,
                 x.IsDeleted
             });
+        });
+
+        modelBuilder.Entity<PaymentReceipt>(entity =>
+        {
+            entity.ToTable("payment_receipts");
+
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.ReceiptNumber)
+                .HasMaxLength(30)
+                .IsRequired();
+
+            entity.Property(x => x.ReceiptYear)
+                .IsRequired();
+
+            entity.Property(x => x.SequenceNumber)
+                .IsRequired();
+
+            entity.Property(x => x.TenantName)
+                .HasMaxLength(150)
+                .IsRequired();
+
+            entity.Property(x => x.TenantLegalName)
+                .HasMaxLength(200);
+
+            entity.Property(x => x.CurrencyCode)
+                .HasMaxLength(3)
+                .IsRequired();
+
+            entity.Property(x => x.CurrencySymbol)
+                .HasMaxLength(5)
+                .IsRequired();
+
+            entity.Property(x => x.ClientName)
+                .HasMaxLength(300)
+                .IsRequired();
+
+            entity.Property(x => x.AmountReceived)
+                .HasPrecision(18, 2);
+
+            entity.Property(x => x.LateFeeAmountApplied)
+                .HasPrecision(18, 2);
+
+            entity.Property(x => x.LoanBalanceAmountApplied)
+                .HasPrecision(18, 2);
+
+            entity.Property(x => x.ContractualBalanceAfter)
+                .HasPrecision(18, 2);
+
+            entity.Property(x => x.LateFeeBalanceAfter)
+                .HasPrecision(18, 2);
+
+            entity.Property(x => x.TotalOutstandingAfter)
+                .HasPrecision(18, 2);
+
+            entity.Property(x => x.CollectedByName)
+                .HasMaxLength(150);
+
+            entity.Property(x => x.Notes)
+                .HasMaxLength(1000);
+
+            entity.Property(x => x.CreatedAt)
+                .IsRequired();
+
+            entity.HasOne(x => x.Tenant)
+                .WithMany()
+                .HasForeignKey(x => x.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.Payment)
+                .WithOne(x => x.Receipt)
+                .HasForeignKey<PaymentReceipt>(
+                    x => x.PaymentId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.CollectedByAppUser)
+                .WithMany()
+                .HasForeignKey(x => x.CollectedByAppUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            /*
+            * Número visible único dentro de cada tenant.
+            */
+            entity.HasIndex(x => new
+            {
+                x.TenantId,
+                x.ReceiptNumber
+            })
+            .IsUnique();
+
+            /*
+            * Protege también la secuencia numérica,
+            * independientemente del string formateado.
+            */
+            entity.HasIndex(x => new
+            {
+                x.TenantId,
+                x.ReceiptYear,
+                x.SequenceNumber
+            })
+            .IsUnique();
+
+            /*
+            * Un Payment solo puede tener un Receipt.
+            *
+            * EF también generará unicidad por la relación 1:1,
+            * pero dejamos explícita la consulta multi-tenant.
+            */
+            entity.HasIndex(x => new
+            {
+                x.TenantId,
+                x.PaymentId
+            })
+            .IsUnique();
+
+            entity.HasIndex(x => new
+            {
+                x.TenantId,
+                x.CreatedAt
+            });
+        });
+
+        modelBuilder.Entity<PaymentReceiptSequence>(entity =>
+        {
+            entity.ToTable("payment_receipt_sequences");
+
+            entity.HasKey(x => new
+            {
+                x.TenantId,
+                x.Year
+            });
+
+            entity.Property(x => x.Year)
+                .IsRequired();
+
+            entity.Property(x => x.LastNumber)
+                .IsRequired();
+
+            entity.Property(x => x.UpdatedAt)
+                .IsRequired();
+
+            entity.HasOne(x => x.Tenant)
+                .WithMany()
+                .HasForeignKey(x => x.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
     }
 }

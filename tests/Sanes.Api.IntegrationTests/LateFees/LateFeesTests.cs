@@ -965,6 +965,103 @@ public class LateFeesTests
                 auth.AccessToken);
     }
 
+    [Fact]
+    public async Task PaymentReceipt_WhenLateFeeExists_StoresCorrectAllocationAndBalances()
+    {
+        var setup =
+            await CreateLoanScenarioAsync(
+                startDate:
+                    DateTime.UtcNow.Date
+                        .AddDays(-8));
+
+        /*
+        * Materializamos la mora:
+        *
+        * Contractual = 1300
+        * Mora        =   20
+        */
+        var lateFees =
+            await GetLateFeesAsync(
+                setup.Context.Client,
+                setup.Loan.Id);
+
+        Assert.Equal(
+            20m,
+            lateFees.LateFeeBalance);
+
+        /*
+        * RD$120:
+        *
+        * 20  -> mora
+        * 100 -> saldo contractual
+        */
+        var paymentResponse =
+            await CreatePaymentAsync(
+                setup.Context.Client,
+                setup.Loan.Id,
+                amount: 120m,
+                paymentDate:
+                    DateTime.UtcNow,
+                paymentType:
+                    PaymentType.Regular);
+
+        Assert.Equal(
+            HttpStatusCode.Created,
+            paymentResponse.StatusCode);
+
+        var payment =
+            await paymentResponse.Content
+                .ReadFromJsonAsync<PaymentResponse>();
+
+        Assert.NotNull(payment);
+
+        var receiptResponse =
+            await setup.Context.Client.GetAsync(
+                $"/api/payments/{payment.Id}/receipt");
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            receiptResponse.StatusCode);
+
+        var receipt =
+            await receiptResponse.Content
+                .ReadFromJsonAsync<PaymentReceiptResponse>();
+
+        Assert.NotNull(receipt);
+
+        Assert.Equal(
+            payment.Id,
+            receipt.PaymentId);
+
+        Assert.Equal(
+            120m,
+            receipt.AmountReceived);
+
+        Assert.Equal(
+            20m,
+            receipt.LateFeeAmountApplied);
+
+        Assert.Equal(
+            100m,
+            receipt.LoanBalanceAmountApplied);
+
+        Assert.Equal(
+            1200m,
+            receipt.ContractualBalanceAfter);
+
+        Assert.Equal(
+            0m,
+            receipt.LateFeeBalanceAfter);
+
+        Assert.Equal(
+            1200m,
+            receipt.TotalOutstandingAfter);
+
+        Assert.Equal(
+            PaymentType.Regular,
+            receipt.PaymentType);
+    }
+
     // ============================================================
     // TENANT
     // ============================================================

@@ -10,6 +10,7 @@ using Sanes.Application.CollectionRoutes.DTOs;
 using Sanes.Application.FieldCollections.DTOs;
 using Sanes.Application.Investors.DTOs;
 using Sanes.Application.Loans.DTOs;
+using Sanes.Application.Payments.DTOs;
 using Sanes.Domain.Enums;
 
 namespace Sanes.Api.IntegrationTests.FieldCollections;
@@ -1277,6 +1278,103 @@ public class FieldCollectionsTests
         Assert.Equal(
             originalNextPaymentDate,
             receipt.NextPaymentDate);
+    }
+
+    [Fact]
+    public async Task CreatePayment_CreatesPersistentReceiptWithCollectorSnapshot()
+    {
+        var setup =
+            await CreatePaymentScenarioAsync();
+
+        var request =
+            CreatePaymentRequest(
+                setup,
+                100m,
+                PaymentType.Regular,
+                "Pago con recibo persistente");
+
+        var response =
+            await setup.CollectorClient
+                .PostAsJsonAsync(
+                    "/api/field-collections/payments",
+                    request);
+
+        Assert.Equal(
+            HttpStatusCode.Created,
+            response.StatusCode);
+
+        var fieldPayment =
+            await response.Content
+                .ReadFromJsonAsync<
+                    FieldCollectionPaymentResponse>();
+
+        Assert.NotNull(fieldPayment);
+
+        /*
+        * Consultamos el PaymentReceipt usando
+        * directamente el token del Collector.
+        *
+        * Esto valida también autorización para
+        * reimpresión desde la aplicación móvil.
+        */
+        var receiptResponse =
+            await setup.CollectorClient.GetAsync(
+                $"/api/payments/{fieldPayment.PaymentId}/receipt");
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            receiptResponse.StatusCode);
+
+        var receipt =
+            await receiptResponse.Content
+                .ReadFromJsonAsync<
+                    PaymentReceiptResponse>();
+
+        Assert.NotNull(receipt);
+
+        Assert.Equal(
+            fieldPayment.PaymentId,
+            receipt.PaymentId);
+
+        Assert.Equal(
+            setup.Loan.Id,
+            receipt.LoanId);
+
+        Assert.Equal(
+            setup.ClientId,
+            receipt.ClientId);
+
+        Assert.Equal(
+            100m,
+            receipt.AmountReceived);
+
+        Assert.Equal(
+            0m,
+            receipt.LateFeeAmountApplied);
+
+        Assert.Equal(
+            100m,
+            receipt.LoanBalanceAmountApplied);
+
+        Assert.Equal(
+            1200m,
+            receipt.ContractualBalanceAfter);
+
+        Assert.Equal(
+            1200m,
+            receipt.TotalOutstandingAfter);
+
+        Assert.Equal(
+            setup.Collector.Id,
+            receipt.CollectedByAppUserId);
+
+        Assert.False(
+            string.IsNullOrWhiteSpace(
+                receipt.CollectedByName));
+
+        Assert.Equal(
+            "Pago con recibo persistente",
+            receipt.Notes);
     }
 
     // ============================================================
