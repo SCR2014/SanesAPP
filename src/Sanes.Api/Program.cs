@@ -48,6 +48,9 @@ using Sanes.Infrastructure.Files;
 using Sanes.Application.Dashboard.Repositories;
 using Sanes.Infrastructure.Dashboard.Repositories;
 using Sanes.Application.Dashboard.Services;
+using Sanes.Application.FinancialReports.Repositories;
+using Sanes.Infrastructure.FinancialReports.Repositories;
+using Sanes.Application.FinancialReports.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -341,6 +344,13 @@ builder.Services.AddScoped<
 builder.Services.AddScoped<
     IFinancialDashboardService,
     FinancialDashboardService>();
+
+builder.Services.AddScoped<
+    IFinancialReportRepository,
+    FinancialReportRepository>();
+builder.Services.AddScoped<
+    IFinancialReportService,
+    FinancialReportService>();
 
 builder.Services.AddSingleton<IFileStorage>(
     _ =>
