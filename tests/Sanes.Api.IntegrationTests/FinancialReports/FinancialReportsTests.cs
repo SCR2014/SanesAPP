@@ -12,6 +12,7 @@ using Sanes.Application.Investors.DTOs;
 using Sanes.Application.Loans.DTOs;
 using Sanes.Application.Payments.DTOs;
 using Sanes.Domain.Enums;
+using ClosedXML.Excel;
 
 namespace Sanes.Api.IntegrationTests.FinancialReports;
 
@@ -1009,6 +1010,419 @@ public class FinancialReportsTests
     }
 
     // ============================================================
+    // REPORT EXPORTS
+    // ============================================================
+
+    [Fact]
+    public async Task PortfolioExport_ReturnsValidExcelWithReportValues()
+    {
+        var context =
+            await CreateContextAsync();
+
+        var scenario =
+            await CreateLoanScenarioAsync(
+                context,
+                "Excel",
+                "Portfolio");
+
+        var response =
+            await context.Client.GetAsync(
+                "/api/reports/portfolio/export/xlsx");
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            response.StatusCode);
+
+        Assert.Equal(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            response.Content.Headers.ContentType?.MediaType);
+
+        var bytes =
+            await response.Content
+                .ReadAsByteArrayAsync();
+
+        Assert.NotEmpty(bytes);
+
+        using var stream =
+            new MemoryStream(bytes);
+
+        using var workbook =
+            new XLWorkbook(stream);
+
+        Assert.True(
+            workbook.Worksheets.Contains("Resumen"));
+
+        Assert.True(
+            workbook.Worksheets.Contains("Cartera"));
+
+        var summary =
+            workbook.Worksheet("Resumen");
+
+        var detail =
+            workbook.Worksheet("Cartera");
+
+        Assert.Equal(
+            1000m,
+            GetDecimalValueByLabel(
+                summary,
+                "Capital original"));
+
+        Assert.Equal(
+            1300m,
+            GetDecimalValueByLabel(
+                summary,
+                "Monto contractual original"));
+
+        Assert.Equal(
+            1300m,
+            GetDecimalValueByLabel(
+                summary,
+                "Saldo contractual pendiente"));
+
+        AssertWorksheetContainsText(
+            detail,
+            scenario.Client.FirstName);
+
+        AssertWorksheetContainsText(
+            detail,
+            scenario.Investor.Name);
+    }
+
+    [Fact]
+    public async Task DelinquencyExport_ReturnsValidExcelWithAging()
+    {
+        var context =
+            await CreateContextAsync();
+
+        var route =
+            await CreateRouteAsync(
+                context.Client);
+
+        var investor =
+            await CreateInvestorAsync(
+                context.Client);
+
+        var client =
+            await CreateClientAsync(
+                context.Client,
+                route.Id,
+                "Excel",
+                "Delinquency");
+
+        await CreateLoanAsync(
+            context.Client,
+            investor.Id,
+            client.Id,
+            DateTime.UtcNow.Date.AddDays(-8));
+
+        var response =
+            await context.Client.GetAsync(
+                "/api/reports/delinquency/export/xlsx");
+
+        response.EnsureSuccessStatusCode();
+
+        var bytes =
+            await response.Content
+                .ReadAsByteArrayAsync();
+
+        using var stream =
+            new MemoryStream(bytes);
+
+        using var workbook =
+            new XLWorkbook(stream);
+
+        Assert.True(
+            workbook.Worksheets.Contains(
+                "Resumen y Aging"));
+
+        Assert.True(
+            workbook.Worksheets.Contains(
+                "Morosidad"));
+
+        var summary =
+            workbook.Worksheet(
+                "Resumen y Aging");
+
+        var detail =
+            workbook.Worksheet(
+                "Morosidad");
+
+        Assert.Equal(
+            100m,
+            GetDecimalValueByLabel(
+                summary,
+                "Monto contractual vencido"));
+
+        AssertWorksheetContainsText(
+            summary,
+            "1-7");
+
+        AssertWorksheetContainsText(
+            detail,
+            client.FirstName);
+
+        AssertWorksheetContainsText(
+            detail,
+            "1-7");
+    }
+
+    [Fact]
+    public async Task CollectionsExport_ReturnsValidExcelWithPaymentValues()
+    {
+        var context =
+            await CreateContextAsync();
+
+        var scenario =
+            await CreateLoanScenarioAsync(
+                context,
+                "Excel",
+                "Collections");
+
+        await CreateAdministrativePaymentAsync(
+            context.Client,
+            scenario.Loan.Id,
+            100m,
+            DateTime.UtcNow);
+
+        var today =
+            DateOnly.FromDateTime(
+                DateTime.UtcNow);
+
+        var response =
+            await context.Client.GetAsync(
+                "/api/reports/collections/export/xlsx" +
+                $"?from={today:yyyy-MM-dd}" +
+                $"&to={today:yyyy-MM-dd}");
+
+        response.EnsureSuccessStatusCode();
+
+        Assert.Equal(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            response.Content.Headers.ContentType?.MediaType);
+
+        var bytes =
+            await response.Content
+                .ReadAsByteArrayAsync();
+
+        using var stream =
+            new MemoryStream(bytes);
+
+        using var workbook =
+            new XLWorkbook(stream);
+
+        Assert.True(
+            workbook.Worksheets.Contains("Resumen"));
+
+        Assert.True(
+            workbook.Worksheets.Contains("Cobros"));
+
+        var summary =
+            workbook.Worksheet("Resumen");
+
+        var detail =
+            workbook.Worksheet("Cobros");
+
+        Assert.Equal(
+            100m,
+            GetDecimalValueByLabel(
+                summary,
+                "Efectivo cobrado"));
+
+        Assert.Equal(
+            100m,
+            GetDecimalValueByLabel(
+                summary,
+                "Cobrado a saldo contractual"));
+
+        AssertWorksheetContainsText(
+            detail,
+            scenario.Client.FirstName);
+
+        AssertWorksheetContainsNumber(
+            detail,
+            100m);
+    }
+
+    [Fact]
+    public async Task InvestorStatementExport_ReturnsValidExcelWithHistoricalAndCurrentMetrics()
+    {
+        var context =
+            await CreateContextAsync();
+
+        var scenario =
+            await CreateLoanScenarioAsync(
+                context,
+                "Excel",
+                "Investor");
+
+        await CreateAdministrativePaymentAsync(
+            context.Client,
+            scenario.Loan.Id,
+            100m,
+            DateTime.UtcNow);
+
+        var response =
+            await context.Client.GetAsync(
+                "/api/reports/investors/" +
+                $"{scenario.Investor.Id}/export/xlsx");
+
+        response.EnsureSuccessStatusCode();
+
+        var bytes =
+            await response.Content
+                .ReadAsByteArrayAsync();
+
+        using var stream =
+            new MemoryStream(bytes);
+
+        using var workbook =
+            new XLWorkbook(stream);
+
+        Assert.True(
+            workbook.Worksheets.Contains("Estado"));
+
+        Assert.True(
+            workbook.Worksheets.Contains(
+                "Prestamos activos"));
+
+        var statement =
+            workbook.Worksheet("Estado");
+
+        var loans =
+            workbook.Worksheet(
+                "Prestamos activos");
+
+        Assert.Equal(
+            1000m,
+            GetDecimalValueByLabel(
+                statement,
+                "Capital originado"));
+
+        Assert.Equal(
+            1300m,
+            GetDecimalValueByLabel(
+                statement,
+                "Monto contractual originado"));
+
+        Assert.Equal(
+            300m,
+            GetDecimalValueByLabel(
+                statement,
+                "Interés contractual bruto"));
+
+        Assert.Equal(
+            100m,
+            GetDecimalValueByLabel(
+                statement,
+                "Efectivo cobrado"));
+
+        Assert.Equal(
+            1200m,
+            GetDecimalValueByLabel(
+                statement,
+                "Saldo contractual pendiente"));
+
+        AssertWorksheetContainsText(
+            statement,
+            scenario.Investor.Name);
+
+        AssertWorksheetContainsText(
+            loans,
+            scenario.Client.FirstName);
+    }
+
+    [Fact]
+    public async Task CollectionsExport_FromGreaterThanTo_ReturnsBadRequest()
+    {
+        var context =
+            await CreateContextAsync();
+
+        var response =
+            await context.Client.GetAsync(
+                "/api/reports/collections/export/xlsx" +
+                "?from=2026-09-18" +
+                "&to=2026-09-17");
+
+        Assert.Equal(
+            HttpStatusCode.BadRequest,
+            response.StatusCode);
+    }
+
+    [Fact]
+    public async Task InvestorStatementExport_InvestorFromAnotherTenant_ReturnsNotFound()
+    {
+        var tenant1 =
+            await CreateContextAsync();
+
+        var tenant2 =
+            await CreateContextAsync();
+
+        var investorTenant2 =
+            await CreateInvestorAsync(
+                tenant2.Client);
+
+        var response =
+            await tenant1.Client.GetAsync(
+                "/api/reports/investors/" +
+                $"{investorTenant2.Id}/export/xlsx");
+
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("/api/reports/portfolio/export/xlsx")]
+    [InlineData("/api/reports/delinquency/export/xlsx")]
+    [InlineData(
+        "/api/reports/collections/export/xlsx?from=2026-09-01&to=2026-09-30")]
+    [InlineData(
+        "/api/reports/investors/11111111-1111-1111-1111-111111111111/export/xlsx")]
+    public async Task ReportExports_WithoutToken_ReturnUnauthorized(
+        string url)
+    {
+        var client =
+            _factory.CreateClient();
+
+        var response =
+            await client.GetAsync(url);
+
+        Assert.Equal(
+            HttpStatusCode.Unauthorized,
+            response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("/api/reports/portfolio/export/xlsx")]
+    [InlineData("/api/reports/delinquency/export/xlsx")]
+    [InlineData(
+        "/api/reports/collections/export/xlsx?from=2026-09-01&to=2026-09-30")]
+    [InlineData(
+        "/api/reports/investors/11111111-1111-1111-1111-111111111111/export/xlsx")]
+    public async Task ReportExports_Collector_ReturnsForbidden(
+        string url)
+    {
+        var context =
+            await CreateContextAsync();
+
+        var collector =
+            await CreateCollectorAsync(
+                context);
+
+        var collectorClient =
+            await LoginCollectorAsync(
+                context.TenantId,
+                collector);
+
+        var response =
+            await collectorClient.GetAsync(url);
+
+        Assert.Equal(
+            HttpStatusCode.Forbidden,
+            response.StatusCode);
+    }
+
+    // ============================================================
     // HELPERS
     // ============================================================
 
@@ -1341,6 +1755,71 @@ public class FinancialReportsTests
             investor,
             client,
             loan);
+    }
+
+    private static decimal GetDecimalValueByLabel(
+        IXLWorksheet worksheet,
+        string label)
+    {
+        var labelCell =
+            worksheet.CellsUsed()
+                .FirstOrDefault(x =>
+                    string.Equals(
+                        x.GetString(),
+                        label,
+                        StringComparison.Ordinal));
+
+        Assert.NotNull(labelCell);
+
+        var valueCell =
+            worksheet.Cell(
+                labelCell.Address.RowNumber,
+                labelCell.Address.ColumnNumber + 1);
+
+        return valueCell.GetValue<decimal>();
+    }
+
+    private static void AssertWorksheetContainsText(
+        IXLWorksheet worksheet,
+        string expected)
+    {
+        var found =
+            worksheet.CellsUsed()
+                .Any(x =>
+                    x.GetString()
+                        .Contains(
+                            expected,
+                            StringComparison.OrdinalIgnoreCase));
+
+        Assert.True(
+            found,
+            $"Expected worksheet '{worksheet.Name}' " +
+            $"to contain '{expected}'.");
+    }
+
+    private static void AssertWorksheetContainsNumber(
+        IXLWorksheet worksheet,
+        decimal expected)
+    {
+        var found =
+            worksheet.CellsUsed()
+                .Any(x =>
+                {
+                    if (!x.DataType.Equals(
+                            XLDataType.Number))
+                    {
+                        return false;
+                    }
+
+                    return x.TryGetValue<decimal>(
+                            out var value) &&
+                        value == expected;
+                });
+
+        Assert.True(
+            found,
+            $"Expected worksheet '{worksheet.Name}' " +
+            $"to contain numeric value {expected}.");
     }
 
     private sealed record CollectorCredentials(
