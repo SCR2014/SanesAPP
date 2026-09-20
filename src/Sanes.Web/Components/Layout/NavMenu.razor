@@ -1,30 +1,89 @@
 ﻿<div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
-        <a class="navbar-brand" href="">Sanes.Web</a>
+        <a class="navbar-brand"
+           href="/">
+            Sanes
+        </a>
     </div>
 </div>
 
-<input type="checkbox" title="Navigation menu" class="navbar-toggler" />
+<input type="checkbox"
+       title="Navigation menu"
+       class="navbar-toggler" />
 
-<div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
+<div class="nav-scrollable"
+     onclick="document.querySelector('.navbar-toggler').click()">
+
     <nav class="nav flex-column">
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Home
-            </NavLink>
-        </div>
 
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="counter">
-                <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Counter
-            </NavLink>
-        </div>
+        <AuthorizeView>
+            <Authorized>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link"
+                             href=""
+                             Match="NavLinkMatch.All">
+                        <span class="bi bi-house-door-fill-nav-menu"
+                              aria-hidden="true">
+                        </span>
+                        Inicio
+                    </NavLink>
+                </div>
+            </Authorized>
 
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="weather">
-                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Weather
-            </NavLink>
-        </div>
+            <NotAuthorized>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link"
+                             href="login">
+                        Iniciar sesión
+                    </NavLink>
+                </div>
+            </NotAuthorized>
+        </AuthorizeView>
+
+        <AuthorizeView Roles="@WebRoles.Administrator">
+            <Authorized>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link"
+                             href="admin">
+                        <span class="bi bi-grid-fill-nav-menu"
+                              aria-hidden="true">
+                        </span>
+                        Administración
+                    </NavLink>
+                </div>
+            </Authorized>
+        </AuthorizeView>
+
+        <AuthorizeView Roles="@WebRoles.Collector">
+            <Authorized>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link"
+                             href="collector">
+                        <span class="bi bi-list-nested-nav-menu"
+                              aria-hidden="true">
+                        </span>
+                        Cobranza
+                    </NavLink>
+                </div>
+            </Authorized>
+        </AuthorizeView>
+
+        <AuthorizeView>
+            <Authorized>
+                <div class="nav-item px-3 mt-3">
+                    <form method="post"
+                          action="/auth/logout">
+
+                        <AntiforgeryToken />
+
+                        <button type="submit"
+                                class="nav-link border-0 bg-transparent w-100 text-start">
+                            Cerrar sesión
+                        </button>
+                    </form>
+                </div>
+            </Authorized>
+        </AuthorizeView>
+
     </nav>
 </div>
-

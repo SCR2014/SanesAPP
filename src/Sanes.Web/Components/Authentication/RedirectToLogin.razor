@@ -1,0 +1,27 @@
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NavigationManager Navigation
+
+<p class="text-muted">
+    Verificando acceso...
+</p>
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        var authenticationState =
+            await AuthenticationStateProvider
+                .GetAuthenticationStateAsync();
+
+        var user =
+            authenticationState.User;
+
+        var destination =
+            user.Identity?.IsAuthenticated == true
+                ? "/forbidden"
+                : "/login";
+
+        Navigation.NavigateTo(
+            destination,
+            forceLoad: true);
+    }
+}

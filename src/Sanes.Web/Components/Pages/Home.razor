@@ -1,7 +1,19 @@
 ﻿@page "/"
 
-<PageTitle>Home</PageTitle>
+@attribute [Authorize]
 
-<h1>Hello, world!</h1>
+<PageTitle>Inicio - Sanes</PageTitle>
 
-Welcome to your new app.
+<h1>Sanes</h1>
+
+<AuthorizeView>
+    <Authorized Context="authContext">
+        <p class="lead">
+            Bienvenido, @authContext.User.Identity?.Name.
+        </p>
+
+        <p class="text-muted">
+            Selecciona una opción del menú para continuar.
+        </p>
+    </Authorized>
+</AuthorizeView>

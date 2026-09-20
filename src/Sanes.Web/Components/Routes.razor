@@ -1,6 +1,25 @@
-﻿<Router AppAssembly="typeof(Program).Assembly" NotFoundPage="typeof(Pages.NotFound)">
+﻿<Router AppAssembly="typeof(Program).Assembly"
+        NotFoundPage="typeof(Pages.NotFound)">
     <Found Context="routeData">
-        <RouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)" />
-        <FocusOnNavigate RouteData="routeData" Selector="h1" />
+        <AuthorizeRouteView
+            RouteData="routeData"
+            DefaultLayout="typeof(Layout.MainLayout)">
+
+            <NotAuthorized>
+                <RedirectToLogin />
+            </NotAuthorized>
+
+            <Authorizing>
+                <div class="container py-5">
+                    <p class="text-muted">
+                        Verificando autorización...
+                    </p>
+                </div>
+            </Authorizing>
+        </AuthorizeRouteView>
+
+        <FocusOnNavigate
+            RouteData="routeData"
+            Selector="h1" />
     </Found>
 </Router>
