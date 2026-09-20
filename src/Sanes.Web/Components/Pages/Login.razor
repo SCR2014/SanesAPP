@@ -1,0 +1,188 @@
+@page "/login"
+
+@using System.ComponentModel.DataAnnotations
+@using Sanes.Application.Authentication.DTOs
+@using Sanes.Web.Authentication
+@using Sanes.Domain.Enums
+
+@attribute [AllowAnonymous]
+@layout LoginLayout
+
+@inject IWebAuthenticationService AuthenticationService
+@inject NavigationManager Navigation
+
+<PageTitle>Iniciar sesión - Sanes</PageTitle>
+
+<div class="card shadow-sm">
+    <div class="card-body p-4">
+        <h1 class="h3 mb-3">
+            Sanes
+        </h1>
+
+        <p class="text-muted mb-4">
+            Inicia sesión para continuar.
+        </p>
+
+        @if (!string.IsNullOrWhiteSpace(_errorMessage))
+        {
+            <div class="alert alert-danger"
+                 role="alert">
+                @_errorMessage
+            </div>
+        }
+
+        <EditForm Model="Model"
+                  method="post"
+                  FormName="SanesLogin"
+                  OnValidSubmit="HandleLoginAsync">
+
+            <DataAnnotationsValidator />
+
+            <div class="mb-3">
+                <label for="tenantId"
+                       class="form-label">
+                    Tenant ID
+                </label>
+
+                <InputText id="tenantId"
+                           class="form-control"
+                           @bind-Value="Model!.TenantId"
+                           autocomplete="off" />
+
+                <ValidationMessage For="() => Model!.TenantId" />
+            </div>
+
+            <div class="mb-3">
+                <label for="username"
+                       class="form-label">
+                    Usuario
+                </label>
+
+                <InputText id="username"
+                           class="form-control"
+                           @bind-Value="Model!.Username"
+                           autocomplete="username" />
+
+                <ValidationMessage For="() => Model!.Username" />
+            </div>
+
+            <div class="mb-3">
+                <label for="password"
+                       class="form-label">
+                    Contraseña
+                </label>
+
+                <InputText id="password"
+                           type="password"
+                           class="form-control"
+                           @bind-Value="Model!.Password"
+                           autocomplete="current-password" />
+
+                <ValidationMessage For="() => Model!.Password" />
+            </div>
+
+            <button type="submit"
+                    class="btn btn-primary w-100">
+                Iniciar sesión
+            </button>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    private string? _errorMessage;
+
+    [SupplyParameterFromForm(FormName = "SanesLogin")]
+    private LoginFormModel? Model { get; set; }
+
+    [CascadingParameter]
+    private HttpContext? HttpContext { get; set; }
+
+    protected override void OnInitialized()
+    {
+        Model ??= new LoginFormModel();
+    }
+
+    private async Task HandleLoginAsync()
+    {
+        _errorMessage = null;
+
+        if (HttpContext is null)
+        {
+            _errorMessage =
+                "No fue posible establecer el contexto de autenticación.";
+
+            return;
+        }
+
+        if (!Guid.TryParse(
+                Model!.TenantId,
+                out var tenantId))
+        {
+            _errorMessage =
+                "El Tenant ID no tiene un formato válido.";
+
+            return;
+        }
+
+        var request =
+            new LoginRequest
+            {
+                TenantId = tenantId,
+                Username = Model.Username.Trim(),
+                Password = Model.Password
+            };
+
+        var result =
+            await AuthenticationService.SignInAsync(
+                request,
+                HttpContext,
+                HttpContext.RequestAborted);
+
+        if (!result.Succeeded)
+        {
+            _errorMessage =
+                result.ErrorMessage ??
+                "No fue posible iniciar sesión.";
+
+            return;
+        }
+
+        var destination =
+            result.Role switch
+            {
+                AppUserRole.Administrator =>
+                    "/admin",
+
+                AppUserRole.Collector =>
+                    "/collector",
+
+                _ =>
+                    "/"
+            };
+
+        Navigation.NavigateTo(
+            destination,
+            forceLoad: true);
+    }
+
+    private sealed class LoginFormModel
+    {
+        [Required(
+            ErrorMessage = "El Tenant ID es requerido.")]
+        public string TenantId { get; set; } =
+            string.Empty;
+
+        [Required(
+            ErrorMessage = "El usuario es requerido.")]
+        [MaxLength(100)]
+        public string Username { get; set; } =
+            string.Empty;
+
+        [Required(
+            ErrorMessage = "La contraseña es requerida.")]
+        [MaxLength(100)]
+        public string Password { get; set; } =
+            string.Empty;
+    }
+}

@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <ItemGroup>
+    <ProjectReference Include="..\Sanes.Application\Sanes.Application.csproj" />
     <ProjectReference Include="..\Sanes.Shared\Sanes.Shared.csproj" />
   </ItemGroup>
 
