@@ -9,5 +9,6 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Sanes.Api.IntegrationTests/Sanes.Api.IntegrationTests.csproj" />
+    <Project Path="tests/Sanes.Web.Tests/Sanes.Web.Tests.csproj" />
   </Folder>
 </Solution>
