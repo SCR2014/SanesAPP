@@ -16,8 +16,8 @@ permissions:
   contents: read
 
 jobs:
-  integration-tests:
-    name: Build and Integration Tests
+  tests:
+    name: Build and Tests
     runs-on: ubuntu-latest
 
     services:
@@ -56,10 +56,20 @@ jobs:
       - name: Build solution
         run: dotnet build --no-restore --configuration Release
 
+      - name: Run web tests
+        run: >
+          dotnet test
+          tests/Sanes.Web.Tests/Sanes.Web.Tests.csproj
+          --no-build
+          --no-restore
+          --configuration Release
+          --logger "console;verbosity=normal"
+
       - name: Run integration tests
         run: >
           dotnet test
           tests/Sanes.Api.IntegrationTests/Sanes.Api.IntegrationTests.csproj
+          --no-build
           --no-restore
           --configuration Release
           --logger "console;verbosity=normal"
