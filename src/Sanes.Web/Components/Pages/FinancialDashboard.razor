@@ -1,0 +1,1169 @@
+@page "/admin/dashboard"
+
+@attribute [Authorize(Roles = WebRoles.Administrator)]
+@rendermode InteractiveServer
+
+@inject IFinancialDashboardWebService DashboardService
+
+<PageTitle>Dashboard - Sanes</PageTitle>
+
+@if (_isLoading)
+{
+    <div class="py-5 text-center">
+        <div class="spinner-border"
+             role="status">
+            <span class="visually-hidden">
+                Cargando...
+            </span>
+        </div>
+
+        <p class="text-muted mt-3">
+            Cargando información financiera...
+        </p>
+    </div>
+}
+else if (!string.IsNullOrWhiteSpace(_errorMessage))
+{
+    <div class="alert alert-danger"
+         role="alert">
+        <h1 class="h5">
+            No fue posible cargar el Dashboard
+        </h1>
+
+        <p class="mb-0">
+            @_errorMessage
+        </p>
+    </div>
+}
+else if (_overview is not null)
+{
+    var tenant = _overview.Tenant;
+    var summary = _overview.Summary;
+
+    <div class="d-flex flex-wrap
+                justify-content-between
+                align-items-start
+                gap-3
+                mb-4">
+
+        <div>
+            <h1 class="mb-1">
+                Dashboard
+            </h1>
+
+            <p class="text-muted mb-0">
+                @tenant.Name
+                ·
+                @tenant.CurrencyCode
+            </p>
+        </div>
+
+        <span class="badge text-bg-light border">
+            @tenant.CurrencySymbol
+            @tenant.CurrencyCode
+        </span>
+    </div>
+
+    @if (IsEmpty(summary))
+    {
+        <div class="alert alert-info">
+            Este tenant todavía no tiene actividad
+            financiera registrada.
+        </div>
+    }
+
+    <div class="row g-3 mb-4">
+
+        <div class="col-12 col-md-6 col-xl-3">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <p class="text-muted mb-1">
+                        Préstamos activos
+                    </p>
+
+                    <p class="fs-3 fw-semibold mb-0">
+                        @summary.ActiveLoansCount
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-md-6 col-xl-3">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <p class="text-muted mb-1">
+                        Clientes activos
+                    </p>
+
+                    <p class="fs-3 fw-semibold mb-0">
+                        @summary.ActiveClientsCount
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-md-6 col-xl-3">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <p class="text-muted mb-1">
+                        Dinero en calle
+                    </p>
+
+                    <p class="fs-3 fw-semibold mb-0">
+                        @Money(
+                            summary.ContractualBalanceOutstanding)
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-md-6 col-xl-3">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <p class="text-muted mb-1">
+                        Total pendiente
+                    </p>
+
+                    <p class="fs-3 fw-semibold mb-0">
+                        @Money(
+                            summary.TotalOutstanding)
+                    </p>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <h2 class="h5 mb-3">
+        Originación y cobros
+    </h2>
+
+    <div class="row g-3 mb-4">
+
+        <div class="col-12 col-md-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <p class="text-muted mb-1">
+                        Capital originado
+                    </p>
+
+                    <p class="fs-4 fw-semibold mb-0">
+                        @Money(
+                            summary.PrincipalOriginated)
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-md-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <p class="text-muted mb-1">
+                        Monto contractual originado
+                    </p>
+
+                    <p class="fs-4 fw-semibold mb-0">
+                        @Money(
+                            summary.ContractualAmountOriginated)
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-md-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <p class="text-muted mb-1">
+                        Efectivo cobrado
+                    </p>
+
+                    <p class="fs-4 fw-semibold mb-0">
+                        @Money(
+                            summary.CashCollected)
+                    </p>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <h2 class="h5 mb-3">
+        Morosidad
+    </h2>
+
+    <div class="row g-3">
+
+        <div class="col-12 col-md-3">
+            <div class="card h-100">
+                <div class="card-body">
+                    <p class="text-muted mb-1">
+                        Préstamos en mora
+                    </p>
+
+                    <p class="fs-4 fw-semibold mb-0">
+                        @summary.OverdueLoansCount
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-md-3">
+            <div class="card h-100">
+                <div class="card-body">
+                    <p class="text-muted mb-1">
+                        Monto contractual vencido
+                    </p>
+
+                    <p class="fs-4 fw-semibold mb-0">
+                        @Money(
+                            summary.OverdueContractualAmount)
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-md-3">
+            <div class="card h-100">
+                <div class="card-body">
+                    <p class="text-muted mb-1">
+                        Mora pendiente
+                    </p>
+
+                    <p class="fs-4 fw-semibold mb-0">
+                        @Money(
+                            summary.LateFeeBalanceOutstanding)
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-md-3">
+            <div class="card h-100">
+                <div class="card-body">
+                    <p class="text-muted mb-1">
+                        Tasa de morosidad
+                    </p>
+
+                    <p class="fs-4 fw-semibold mb-0">
+                        @Percentage(
+                            summary.DelinquencyRate)
+                    </p>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <hr class="my-5" />
+
+    <section>
+
+        <div class="d-flex flex-wrap
+                    justify-content-between
+                    align-items-center
+                    gap-3
+                    mb-3">
+
+            <div>
+                <h2 class="h4 mb-1">
+                    Flujo de caja
+                </h2>
+
+                <p class="text-muted mb-0">
+                    Movimientos financieros del período seleccionado.
+                </p>
+            </div>
+
+        </div>
+
+        <div class="card mb-4">
+
+            <div class="card-body">
+
+                <div class="row g-3 align-items-end">
+
+                    <div class="col-12 col-md-4">
+
+                        <label class="form-label">
+                            Desde
+                        </label>
+
+                        <input type="date"
+                            class="form-control"
+                            @bind="_cashFlowFrom" />
+
+                    </div>
+
+                    <div class="col-12 col-md-4">
+
+                        <label class="form-label">
+                            Hasta
+                        </label>
+
+                        <input type="date"
+                            class="form-control"
+                            @bind="_cashFlowTo" />
+
+                    </div>
+
+                    <div class="col-12 col-md-4">
+
+                        <button type="button"
+                                class="btn btn-primary w-100"
+                                disabled="@_isCashFlowLoading"
+                                @onclick="LoadCashFlowAsync">
+
+                            @if (_isCashFlowLoading)
+                            {
+                                <span class="spinner-border
+                                            spinner-border-sm
+                                            me-2"
+                                    aria-hidden="true">
+                                </span>
+
+                                <span>
+                                    Cargando...
+                                </span>
+                            }
+                            else
+                            {
+                                <span>
+                                    Actualizar período
+                                </span>
+                            }
+
+                        </button>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(
+            _cashFlowErrorMessage))
+        {
+            <div class="alert alert-warning"
+                role="alert">
+
+                @_cashFlowErrorMessage
+
+            </div>
+        }
+
+        @if (_cashFlow is not null)
+        {
+            <div class="row g-3 mb-4">
+
+                <div class="col-12 col-md-6 col-xl-3">
+                    <div class="card h-100">
+
+                        <div class="card-body">
+
+                            <p class="text-muted mb-1">
+                                Capital originado
+                            </p>
+
+                            <p class="fs-5 fw-semibold mb-0">
+                                @Money(
+                                    _cashFlow.PrincipalOriginated)
+                            </p>
+
+                        </div>
+
+                    </div>
+                </div>
+
+                <div class="col-12 col-md-6 col-xl-3">
+                    <div class="card h-100">
+
+                        <div class="card-body">
+
+                            <p class="text-muted mb-1">
+                                Efectivo cobrado
+                            </p>
+
+                            <p class="fs-5 fw-semibold mb-0">
+                                @Money(
+                                    _cashFlow.CashCollected)
+                            </p>
+
+                        </div>
+
+                    </div>
+                </div>
+
+                <div class="col-12 col-md-6 col-xl-3">
+                    <div class="card h-100">
+
+                        <div class="card-body">
+
+                            <p class="text-muted mb-1">
+                                Mora cobrada
+                            </p>
+
+                            <p class="fs-5 fw-semibold mb-0">
+                                @Money(
+                                    _cashFlow.LateFeesCollected)
+                            </p>
+
+                        </div>
+
+                    </div>
+                </div>
+
+                <div class="col-12 col-md-6 col-xl-3">
+                    <div class="card h-100">
+
+                        <div class="card-body">
+
+                            <p class="text-muted mb-1">
+                                Descuentos por pago anticipado
+                            </p>
+
+                            <p class="fs-5 fw-semibold mb-0">
+                                @Money(
+                                    _cashFlow.EarlySettlementDiscounts)
+                            </p>
+
+                        </div>
+
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="card">
+
+                <div class="card-header bg-body">
+                    <strong>
+                        Detalle diario
+                    </strong>
+
+                    <span class="text-muted ms-2">
+                        @_cashFlow.From.ToString("dd/MM/yyyy")
+                        -
+                        @_cashFlow.To.ToString("dd/MM/yyyy")
+                    </span>
+                </div>
+
+                @if (_cashFlow.Items.Count == 0)
+                {
+                    <div class="card-body">
+
+                        <p class="text-muted mb-0">
+                            No existen movimientos financieros
+                            para el período seleccionado.
+                        </p>
+
+                    </div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+
+                        <table class="table
+                                    table-hover
+                                    align-middle
+                                    mb-0">
+
+                            <thead>
+                                <tr>
+                                    <th>
+                                        Fecha
+                                    </th>
+
+                                    <th class="text-end">
+                                        Capital originado
+                                    </th>
+
+                                    <th class="text-end">
+                                        Efectivo cobrado
+                                    </th>
+
+                                    <th class="text-end">
+                                        Cobro contractual
+                                    </th>
+
+                                    <th class="text-end">
+                                        Mora cobrada
+                                    </th>
+
+                                    <th class="text-end">
+                                        Descuentos anticipados
+                                    </th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+
+                                @foreach (
+                                    var item in _cashFlow.Items)
+                                {
+                                    <tr>
+
+                                        <td>
+                                            @item.Date.ToString(
+                                                "dd/MM/yyyy")
+                                        </td>
+
+                                        <td class="text-end">
+                                            @Money(
+                                                item.PrincipalOriginated)
+                                        </td>
+
+                                        <td class="text-end">
+                                            @Money(
+                                                item.CashCollected)
+                                        </td>
+
+                                        <td class="text-end">
+                                            @Money(
+                                                item.ContractualCashCollected)
+                                        </td>
+
+                                        <td class="text-end">
+                                            @Money(
+                                                item.LateFeesCollected)
+                                        </td>
+
+                                        <td class="text-end">
+                                            @Money(
+                                                item.EarlySettlementDiscounts)
+                                        </td>
+
+                                    </tr>
+                                }
+
+                            </tbody>
+
+                        </table>
+
+                    </div>
+                }
+
+            </div>
+        }
+
+    </section>
+
+    <hr class="my-5" />
+
+    <section>
+
+        <div class="d-flex flex-wrap
+                    justify-content-between
+                    align-items-center
+                    gap-3
+                    mb-3">
+
+            <div>
+                <h2 class="h4 mb-1">
+                    Cartera por inversionista
+                </h2>
+
+                <p class="text-muted mb-0">
+                    Distribución financiera y nivel de morosidad
+                    de cada inversionista.
+                </p>
+            </div>
+
+        </div>
+
+        @if (_isInvestorsLoading)
+        {
+            <div class="py-4 text-center">
+
+                <div class="spinner-border spinner-border-sm"
+                    role="status">
+                    <span class="visually-hidden">
+                        Cargando...
+                    </span>
+                </div>
+
+                <span class="text-muted ms-2">
+                    Cargando inversionistas...
+                </span>
+
+            </div>
+        }
+        else if (!string.IsNullOrWhiteSpace(
+            _investorsErrorMessage))
+        {
+            <div class="alert alert-warning"
+                role="alert">
+
+                @_investorsErrorMessage
+
+            </div>
+        }
+        else if (_investors.Count == 0)
+        {
+            <div class="alert alert-info">
+
+                No existen inversionistas con información
+                financiera para mostrar.
+
+            </div>
+        }
+        else
+        {
+            <div class="card">
+
+                <div class="table-responsive">
+
+                    <table class="table
+                                table-hover
+                                align-middle
+                                mb-0">
+
+                        <thead>
+                            <tr>
+                                <th>
+                                    Inversionista
+                                </th>
+
+                                <th>
+                                    Estado
+                                </th>
+
+                                <th class="text-end">
+                                    Préstamos
+                                </th>
+
+                                <th class="text-end">
+                                    Clientes
+                                </th>
+
+                                <th class="text-end">
+                                    Capital originado
+                                </th>
+
+                                <th class="text-end">
+                                    Interés neto
+                                </th>
+
+                                <th class="text-end">
+                                    Total pendiente
+                                </th>
+
+                                <th class="text-end">
+                                    Efectivo cobrado
+                                </th>
+
+                                <th class="text-end">
+                                    En mora
+                                </th>
+
+                                <th class="text-end">
+                                    Morosidad
+                                </th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+
+                            @foreach (var investor in _investors)
+                            {
+                                <tr>
+
+                                    <td>
+                                        <strong>
+                                            @investor.InvestorName
+                                        </strong>
+                                    </td>
+
+                                    <td>
+                                        @if (investor.IsActive)
+                                        {
+                                            <span class="badge text-bg-success">
+                                                Activo
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge text-bg-secondary">
+                                                Inactivo
+                                            </span>
+                                        }
+                                    </td>
+
+                                    <td class="text-end">
+                                        @investor.ActiveLoansCount
+                                    </td>
+
+                                    <td class="text-end">
+                                        @investor.ActiveClientsCount
+                                    </td>
+
+                                    <td class="text-end">
+                                        @Money(
+                                            investor.PrincipalOriginated)
+                                    </td>
+
+                                    <td class="text-end">
+                                        @Money(
+                                            investor.NetContractualInterest)
+                                    </td>
+
+                                    <td class="text-end">
+                                        @Money(
+                                            investor.TotalOutstanding)
+                                    </td>
+
+                                    <td class="text-end">
+                                        @Money(
+                                            investor.CashCollected)
+                                    </td>
+
+                                    <td class="text-end">
+                                        @investor.OverdueLoansCount
+                                    </td>
+
+                                    <td class="text-end">
+                                        @Percentage(
+                                            investor.DelinquencyRate)
+                                    </td>
+
+                                </tr>
+                            }
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+            </div>
+        }
+
+    </section>
+
+    <hr class="my-5" />
+
+    <section>
+
+        <div class="mb-3">
+            <h2 class="h4 mb-1">
+                Cartera por ruta
+            </h2>
+
+            <p class="text-muted mb-0">
+                Estado de la cartera y cobranza
+                por ruta asignada.
+            </p>
+        </div>
+
+        @if (_isRoutesLoading)
+        {
+            <div class="py-4 text-center">
+
+                <div class="spinner-border spinner-border-sm"
+                    role="status">
+                    <span class="visually-hidden">
+                        Cargando...
+                    </span>
+                </div>
+
+                <span class="text-muted ms-2">
+                    Cargando rutas...
+                </span>
+
+            </div>
+        }
+        else if (!string.IsNullOrWhiteSpace(
+            _routesErrorMessage))
+        {
+            <div class="alert alert-warning"
+                role="alert">
+
+                @_routesErrorMessage
+
+            </div>
+        }
+        else if (_routes.Count == 0)
+        {
+            <div class="alert alert-info">
+
+                No existen rutas con información
+                financiera para mostrar.
+
+            </div>
+        }
+        else
+        {
+            <div class="card">
+
+                <div class="table-responsive">
+
+                    <table class="table
+                                table-hover
+                                align-middle
+                                mb-0">
+
+                        <thead>
+                            <tr>
+                                <th>
+                                    Ruta
+                                </th>
+
+                                <th>
+                                    Estado
+                                </th>
+
+                                <th class="text-end">
+                                    Préstamos
+                                </th>
+
+                                <th class="text-end">
+                                    Clientes
+                                </th>
+
+                                <th class="text-end">
+                                    Total pendiente
+                                </th>
+
+                                <th class="text-end">
+                                    Próximas cuotas
+                                </th>
+
+                                <th class="text-end">
+                                    Cobro pendiente
+                                </th>
+
+                                <th class="text-end">
+                                    Préstamos en mora
+                                </th>
+
+                                <th class="text-end">
+                                    Total vencido
+                                </th>
+
+                                <th class="text-end">
+                                    Morosidad
+                                </th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+
+                            @foreach (var route in _routes)
+                            {
+                                <tr>
+
+                                    <td>
+                                        <strong>
+                                            @route.CollectionRouteName
+                                        </strong>
+
+                                        @if (route.IsUnassigned)
+                                        {
+                                            <span class="badge
+                                                        text-bg-warning
+                                                        ms-2">
+                                                Sin asignar
+                                            </span>
+                                        }
+                                    </td>
+
+                                    <td>
+                                        @if (route.IsUnassigned)
+                                        {
+                                            <span class="text-muted">
+                                                —
+                                            </span>
+                                        }
+                                        else if (route.IsActive)
+                                        {
+                                            <span class="badge
+                                                        text-bg-success">
+                                                Activa
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge
+                                                        text-bg-secondary">
+                                                Inactiva
+                                            </span>
+                                        }
+                                    </td>
+
+                                    <td class="text-end">
+                                        @route.ActiveLoansCount
+                                    </td>
+
+                                    <td class="text-end">
+                                        @route.ActiveClientsCount
+                                    </td>
+
+                                    <td class="text-end">
+                                        @Money(
+                                            route.TotalOutstanding)
+                                    </td>
+
+                                    <td class="text-end">
+                                        @Money(
+                                            route.NextInstallmentAmountDue)
+                                    </td>
+
+                                    <td class="text-end">
+                                        @Money(
+                                            route.CollectionAmountDue)
+                                    </td>
+
+                                    <td class="text-end">
+                                        @route.OverdueLoansCount
+                                    </td>
+
+                                    <td class="text-end">
+                                        @Money(
+                                            route.TotalOverdueAmountDue)
+                                    </td>
+
+                                    <td class="text-end">
+                                        @Percentage(
+                                            route.DelinquencyRate)
+                                    </td>
+
+                                </tr>
+                            }
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+            </div>
+        }
+
+    </section>
+}
+
+@code {
+    private FinancialDashboardOverview? _overview;
+
+    private bool _isLoading = true;
+
+    private string? _errorMessage;
+
+    private FinancialDashboardCashFlowResponse?
+    _cashFlow;
+
+    private DateTime _cashFlowFrom =
+        DateTime.Today.AddDays(-29);
+
+    private DateTime _cashFlowTo =
+        DateTime.Today;
+
+    private bool _isCashFlowLoading;
+
+    private string? _cashFlowErrorMessage;
+
+    private List<FinancialDashboardInvestorBreakdownResponse>
+    _investors = new();
+
+    private bool _isInvestorsLoading;
+
+    private string? _investorsErrorMessage;
+
+    private List<FinancialDashboardRouteBreakdownResponse>
+    _routes = new();
+
+    private bool _isRoutesLoading;
+
+    private string? _routesErrorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _overview =
+                await DashboardService
+                    .GetOverviewAsync();
+
+            await LoadCashFlowAsync();
+
+            await LoadInvestorsAsync();
+
+            await LoadRoutesAsync();
+        }
+        catch (HttpRequestException)
+        {
+            _errorMessage =
+                "La API no pudo completar la solicitud.";
+        }
+        catch (InvalidOperationException)
+        {
+            _errorMessage =
+                "La respuesta recibida desde la API no es válida.";
+        }
+        catch (Exception)
+        {
+            _errorMessage =
+                "Ocurrió un error inesperado al cargar la información.";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private string Money(
+        decimal value)
+    {
+        if (_overview is null)
+        {
+            return value.ToString("N2");
+        }
+
+        var symbol =
+            string.IsNullOrWhiteSpace(
+                _overview.Tenant.CurrencySymbol)
+                ? _overview.Tenant.CurrencyCode
+                : _overview.Tenant.CurrencySymbol;
+
+        return $"{symbol} {value:N2}";
+    }
+
+    private static string Percentage(
+        decimal value)
+    {
+        return $"{value:N2} %";
+    }
+
+    private static bool IsEmpty(
+        Sanes.Application.Dashboard.DTOs
+            .FinancialDashboardSummaryResponse summary)
+    {
+        return
+            summary.ActiveLoansCount == 0 &&
+            summary.PrincipalOriginated == 0m &&
+            summary.CashCollected == 0m;
+    }
+
+    private async Task LoadCashFlowAsync()
+    {
+        _cashFlowErrorMessage = null;
+
+        if (_cashFlowFrom.Date >
+            _cashFlowTo.Date)
+        {
+            _cashFlowErrorMessage =
+                "La fecha Desde no puede ser posterior a la fecha Hasta.";
+
+            return;
+        }
+
+        _isCashFlowLoading = true;
+
+        try
+        {
+            var from =
+                DateOnly.FromDateTime(
+                    _cashFlowFrom);
+
+            var to =
+                DateOnly.FromDateTime(
+                    _cashFlowTo);
+
+            _cashFlow =
+                await DashboardService
+                    .GetCashFlowAsync(
+                        from,
+                        to);
+        }
+        catch (ArgumentException ex)
+        {
+            _cashFlowErrorMessage =
+                ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            _cashFlowErrorMessage =
+                "No fue posible obtener el flujo de caja.";
+        }
+        catch (InvalidOperationException)
+        {
+            _cashFlowErrorMessage =
+                "La respuesta del flujo de caja no es válida.";
+        }
+        catch (Exception)
+        {
+            _cashFlowErrorMessage =
+                "Ocurrió un error inesperado al cargar el flujo de caja.";
+        }
+        finally
+        {
+            _isCashFlowLoading = false;
+        }
+    }
+
+    private async Task LoadInvestorsAsync()
+    {
+        _investorsErrorMessage = null;
+        _isInvestorsLoading = true;
+
+        try
+        {
+            _investors =
+                await DashboardService
+                    .GetInvestorsAsync();
+        }
+        catch (HttpRequestException)
+        {
+            _investorsErrorMessage =
+                "No fue posible obtener la información de los inversionistas.";
+        }
+        catch (InvalidOperationException)
+        {
+            _investorsErrorMessage =
+                "La respuesta de inversionistas recibida desde la API no es válida.";
+        }
+        catch (Exception)
+        {
+            _investorsErrorMessage =
+                "Ocurrió un error inesperado al cargar los inversionistas.";
+        }
+        finally
+        {
+            _isInvestorsLoading = false;
+        }
+    }
+
+    private async Task LoadRoutesAsync()
+    {
+        _routesErrorMessage = null;
+        _isRoutesLoading = true;
+
+        try
+        {
+            _routes =
+                await DashboardService
+                    .GetRoutesAsync();
+        }
+        catch (HttpRequestException)
+        {
+            _routesErrorMessage =
+                "No fue posible obtener la información de las rutas.";
+        }
+        catch (InvalidOperationException)
+        {
+            _routesErrorMessage =
+                "La respuesta de rutas recibida desde la API no es válida.";
+        }
+        catch (Exception)
+        {
+            _routesErrorMessage =
+                "Ocurrió un error inesperado al cargar las rutas.";
+        }
+        finally
+        {
+            _isRoutesLoading = false;
+        }
+    }
+    
+}

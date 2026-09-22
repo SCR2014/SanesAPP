@@ -25,13 +25,23 @@ public class InvestorRepository : IInvestorRepository
 
     public async Task<List<Investor>> GetAllAsync(
         Guid tenantId,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool includeInactive = false)
     {
-        return await _dbContext.Investors
-            .AsNoTracking()
-            .Where(x =>
-                x.TenantId == tenantId &&
-                x.IsActive)
+        var query =
+            _dbContext.Investors
+                .AsNoTracking()
+                .Where(x =>
+                    x.TenantId == tenantId);
+
+        if (!includeInactive)
+        {
+            query =
+                query.Where(x =>
+                    x.IsActive);
+        }
+
+        return await query
             .OrderBy(x => x.Name)
             .ToListAsync(cancellationToken);
     }

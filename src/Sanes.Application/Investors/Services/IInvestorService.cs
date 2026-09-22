@@ -11,7 +11,8 @@ public interface IInvestorService
 
     Task<List<InvestorResponse>> GetAllAsync(
         Guid tenantId,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        bool includeInactive = false);
 
     Task<InvestorResponse?> GetByIdAsync(
         Guid tenantId,

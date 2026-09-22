@@ -87,29 +87,34 @@ public class InvestorService : IInvestorService
     }
 
     public async Task<List<InvestorResponse>> GetAllAsync(
-    Guid tenantId,
-    CancellationToken cancellationToken = default)
-{
-    var investors = await _investorRepository.GetAllAsync(
-        tenantId,
-        cancellationToken);
+        Guid tenantId,
+        CancellationToken cancellationToken = default,
+        bool includeInactive = false)
+    {
+        var investors =
+            await _investorRepository.GetAllAsync(
+                tenantId,
+                cancellationToken,
+                includeInactive);
 
-    return investors
-        .Select(investor => new InvestorResponse
-        {
-            Id = investor.Id,
-            TenantId = investor.TenantId,
-            Name = investor.Name,
-            Phone = investor.Phone,
-            Email = investor.Email,
-            Identification = investor.Identification,
-            Notes = investor.Notes,
-            IsActive = investor.IsActive,
-            CreatedAt = investor.CreatedAt,
-            UpdatedAt = investor.UpdatedAt
-        })
-        .ToList();
-}
+        return investors
+            .Select(investor =>
+                new InvestorResponse
+                {
+                    Id = investor.Id,
+                    TenantId = investor.TenantId,
+                    Name = investor.Name,
+                    Phone = investor.Phone,
+                    Email = investor.Email,
+                    Identification =
+                        investor.Identification,
+                    Notes = investor.Notes,
+                    IsActive = investor.IsActive,
+                    CreatedAt = investor.CreatedAt,
+                    UpdatedAt = investor.UpdatedAt
+                })
+            .ToList();
+    }
 
     public async Task<InvestorResponse?> GetByIdAsync(
     Guid tenantId,
