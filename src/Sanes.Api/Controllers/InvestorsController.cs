@@ -52,14 +52,17 @@ public class InvestorsController : ControllerBase
 
     [HttpGet]
     public async Task<ActionResult<List<InvestorResponse>>> GetAll(
+        [FromQuery] bool includeInactive,
         CancellationToken cancellationToken)
     {
-        var investors = await _investorService.GetAllAsync(
-            _currentUserService.TenantId,
-            cancellationToken);
+        var investors =
+            await _investorService.GetAllAsync(
+                _currentUserService.TenantId,
+                cancellationToken,
+                includeInactive);
 
         return Ok(investors);
-    }
+}
 
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<InvestorResponse>> GetById(

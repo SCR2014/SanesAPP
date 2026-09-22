@@ -1,37 +1,27 @@
 using Sanes.Application.Investors.DTOs;
 
-namespace Sanes.Application.Investors.Services;
+namespace Sanes.Web.Investors;
 
-public interface IInvestorService
+public interface IInvestorsWebService
 {
+    Task<List<InvestorResponse>> GetAllAsync(
+        bool includeInactive = false,
+        CancellationToken cancellationToken = default);
+
     Task<InvestorResponse> CreateAsync(
-        Guid tenantId,
         CreateInvestorRequest request,
         CancellationToken cancellationToken = default);
 
-    Task<List<InvestorResponse>> GetAllAsync(
-        Guid tenantId,
-        CancellationToken cancellationToken = default,
-        bool includeInactive = false);
-
-    Task<InvestorResponse?> GetByIdAsync(
-        Guid tenantId,
-        Guid investorId,
-        CancellationToken cancellationToken = default);
-
     Task<InvestorResponse?> UpdateAsync(
-        Guid tenantId,
         Guid investorId,
         UpdateInvestorRequest request,
         CancellationToken cancellationToken = default);
 
     Task<bool> DeleteAsync(
-        Guid tenantId,
         Guid investorId,
         CancellationToken cancellationToken = default);
 
     Task<bool> ReactivateAsync(
-        Guid tenantId,
         Guid investorId,
         CancellationToken cancellationToken = default);
 }

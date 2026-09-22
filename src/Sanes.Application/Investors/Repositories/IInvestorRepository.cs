@@ -10,7 +10,8 @@ public interface IInvestorRepository
 
     Task<List<Investor>> GetAllAsync(
         Guid tenantId,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        bool includeInactive = false);
 
     Task<Investor?> GetByIdAsync(
         Guid tenantId,
