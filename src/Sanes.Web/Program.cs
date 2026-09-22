@@ -9,6 +9,7 @@ using Sanes.Web.Api;
 using Microsoft.AspNetCore.Antiforgery;
 using System.Security.Claims;
 using Sanes.Web.Dashboard;
+using Sanes.Web.FinancialReports;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -70,6 +71,10 @@ builder.Services.AddScoped<
 builder.Services.AddScoped<
     IFinancialDashboardWebService,
     FinancialDashboardWebService>();
+
+builder.Services.AddScoped<
+    IFinancialReportsWebService,
+    FinancialReportsWebService>();
 
 // Web authentication
 builder.Services

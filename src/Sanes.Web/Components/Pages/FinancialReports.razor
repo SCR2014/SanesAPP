@@ -1,0 +1,2032 @@
+@page "/admin/reports"
+
+@attribute [Authorize(Roles = WebRoles.Administrator)]
+@rendermode InteractiveServer
+
+@inject IFinancialReportsWebService ReportsService
+@inject IJSRuntime JS
+
+<PageTitle>Reportes financieros - Sanes</PageTitle>
+
+@if (!string.IsNullOrWhiteSpace(
+    _downloadErrorMessage))
+{
+    <div class="alert alert-warning"
+         role="alert">
+        @_downloadErrorMessage
+    </div>
+}
+
+@if (_isInitialLoading)
+{
+    <div class="py-5 text-center">
+        <div class="spinner-border"
+             role="status">
+            <span class="visually-hidden">
+                Cargando...
+            </span>
+        </div>
+
+        <p class="text-muted mt-3">
+            Cargando reporte financiero...
+        </p>
+    </div>
+}
+else if (!string.IsNullOrWhiteSpace(
+    _initialErrorMessage))
+{
+    <div class="alert alert-danger">
+        <h1 class="h5">
+            No fue posible cargar los reportes
+        </h1>
+
+        <p class="mb-0">
+            @_initialErrorMessage
+        </p>
+    </div>
+}
+else if (_setup is not null)
+{
+    <div class="d-flex flex-wrap
+                justify-content-between
+                align-items-start
+                gap-3
+                mb-4">
+
+        <div>
+            <h1 class="mb-1">
+                Reportes financieros
+            </h1>
+
+            <p class="text-muted mb-0">
+                @_setup.Tenant.Name
+                ·
+                @_setup.Tenant.CurrencyCode
+            </p>
+        </div>
+
+        <span class="badge text-bg-light border">
+            @_setup.Tenant.CurrencySymbol
+            @_setup.Tenant.CurrencyCode
+        </span>
+
+    </div>
+
+    <section>
+
+        <div class="mb-3">
+            <h2 class="h4 mb-1">
+                Cartera
+            </h2>
+
+            <p class="text-muted mb-0">
+                Estado actual de los préstamos
+                activos del tenant.
+            </p>
+        </div>
+
+        <div class="card mb-4">
+
+            <div class="card-body">
+
+                <div class="row g-3 align-items-end">
+
+                    <div class="col-12 col-md-4">
+
+                        <label class="form-label">
+                            Inversionista
+                        </label>
+
+                        <select class="form-select"
+                                @bind="_investorId">
+
+                            <option value="">
+                                Todos
+                            </option>
+
+                            @foreach (
+                                var investor in
+                                _setup.Investors)
+                            {
+                                <option value="@investor.Id">
+                                    @investor.Name
+                                </option>
+                            }
+
+                        </select>
+
+                    </div>
+
+                    <div class="col-12 col-md-4">
+
+                        <label class="form-label">
+                            Ruta
+                        </label>
+
+                        <select class="form-select"
+                                @bind="_collectionRouteId">
+
+                            <option value="">
+                                Todas
+                            </option>
+
+                            @foreach (
+                                var route in
+                                _setup.CollectionRoutes)
+                            {
+                                <option value="@route.Id">
+                                    @route.Name
+                                </option>
+                            }
+
+                        </select>
+
+                    </div>
+
+                    <div class="col-12 col-md-2">
+
+                        <div class="form-check mb-2">
+
+                            <input class="form-check-input"
+                                   type="checkbox"
+                                   id="overdueOnly"
+                                   @bind="_overdueOnly" />
+
+                            <label class="form-check-label"
+                                   for="overdueOnly">
+                                Solo vencidos
+                            </label>
+
+                        </div>
+
+                    </div>
+
+                    <div class="col-12 col-md-2">
+
+                        <button type="button"
+                                class="btn btn-primary w-100"
+                                disabled="@_isReportLoading"
+                                @onclick="LoadPortfolioAsync">
+
+                            @if (_isReportLoading)
+                            {
+                                <span class="spinner-border
+                                             spinner-border-sm
+                                             me-2">
+                                </span>
+
+                                <span>
+                                    Cargando...
+                                </span>
+                            }
+                            else
+                            {
+                                <span>
+                                    Aplicar filtros
+                                </span>
+                            }
+
+                        </button>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+        <div class="d-flex justify-content-end mb-3">
+
+            <button type="button"
+                    class="btn btn-outline-success"
+                    disabled="@_isDownloadLoading"
+                    @onclick="DownloadPortfolioAsync">
+
+                Exportar Excel
+
+            </button>
+
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(
+            _reportErrorMessage))
+        {
+            <div class="alert alert-warning">
+                @_reportErrorMessage
+            </div>
+        }
+
+        @if (_portfolio is not null)
+        {
+            var summary =
+                _portfolio.Summary;
+
+            <div class="row g-3 mb-4">
+
+                <div class="col-12 col-md-6 col-xl-2">
+                    <div class="card h-100">
+                        <div class="card-body">
+
+                            <p class="text-muted mb-1">
+                                Préstamos
+                            </p>
+
+                            <p class="fs-4 fw-semibold mb-0">
+                                @summary.LoansCount
+                            </p>
+
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-md-6 col-xl-2">
+                    <div class="card h-100">
+                        <div class="card-body">
+
+                            <p class="text-muted mb-1">
+                                Clientes
+                            </p>
+
+                            <p class="fs-4 fw-semibold mb-0">
+                                @summary.ClientsCount
+                            </p>
+
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-md-6 col-xl-2">
+                    <div class="card h-100">
+                        <div class="card-body">
+
+                            <p class="text-muted mb-1">
+                                Capital
+                            </p>
+
+                            <p class="fs-5 fw-semibold mb-0">
+                                @Money(summary.PrincipalAmount)
+                            </p>
+
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-md-6 col-xl-2">
+                    <div class="card h-100">
+                        <div class="card-body">
+
+                            <p class="text-muted mb-1">
+                                Dinero en calle
+                            </p>
+
+                            <p class="fs-5 fw-semibold mb-0">
+                                @Money(
+                                    summary
+                                        .ContractualBalanceOutstanding)
+                            </p>
+
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-md-6 col-xl-2">
+                    <div class="card h-100">
+                        <div class="card-body">
+
+                            <p class="text-muted mb-1">
+                                Total pendiente
+                            </p>
+
+                            <p class="fs-5 fw-semibold mb-0">
+                                @Money(
+                                    summary.TotalOutstanding)
+                            </p>
+
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-md-6 col-xl-2">
+                    <div class="card h-100">
+                        <div class="card-body">
+
+                            <p class="text-muted mb-1">
+                                Morosidad
+                            </p>
+
+                            <p class="fs-5 fw-semibold mb-0">
+                                @Percentage(
+                                    summary.DelinquencyRate)
+                            </p>
+
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            @if (_portfolio.Items.Count == 0)
+            {
+                <div class="alert alert-info">
+                    No existen préstamos que coincidan
+                    con los filtros seleccionados.
+                </div>
+            }
+            else
+            {
+                <div class="card">
+
+                    <div class="table-responsive">
+
+                        <table class="table
+                                      table-hover
+                                      align-middle
+                                      mb-0">
+
+                            <thead>
+                                <tr>
+                                    <th>Cliente</th>
+                                    <th>Inversionista</th>
+                                    <th>Ruta</th>
+
+                                    <th class="text-end">
+                                        Saldo contractual
+                                    </th>
+
+                                    <th class="text-end">
+                                        Mora
+                                    </th>
+
+                                    <th class="text-end">
+                                        Total pendiente
+                                    </th>
+
+                                    <th class="text-end">
+                                        Próxima cuota
+                                    </th>
+
+                                    <th>
+                                        Próximo pago
+                                    </th>
+
+                                    <th>
+                                        Estado
+                                    </th>
+
+                                    <th class="text-end">
+                                        Pagado
+                                    </th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+
+                                @foreach (
+                                    var item in
+                                    _portfolio.Items)
+                                {
+                                    <tr>
+
+                                        <td>
+                                            <strong>
+                                                @item.ClientName
+                                            </strong>
+
+                                            @if (!string.IsNullOrWhiteSpace(
+                                                item.ClientPhone))
+                                            {
+                                                <div class="small text-muted">
+                                                    @item.ClientPhone
+                                                </div>
+                                            }
+                                        </td>
+
+                                        <td>
+                                            @item.InvestorName
+                                        </td>
+
+                                        <td>
+                                            @(string.IsNullOrWhiteSpace(
+                                                item.CollectionRouteName)
+                                                ? "Sin ruta"
+                                                : item.CollectionRouteName)
+                                        </td>
+
+                                        <td class="text-end">
+                                            @Money(
+                                                item
+                                                    .ContractualBalanceOutstanding)
+                                        </td>
+
+                                        <td class="text-end">
+                                            @Money(
+                                                item
+                                                    .LateFeeBalanceOutstanding)
+                                        </td>
+
+                                        <td class="text-end fw-semibold">
+                                            @Money(
+                                                item.TotalOutstanding)
+                                        </td>
+
+                                        <td class="text-end">
+                                            @Money(
+                                                item
+                                                    .NextInstallmentAmountDue)
+                                        </td>
+
+                                        <td>
+                                            @item.NextPaymentDate
+                                                .ToString("dd/MM/yyyy")
+                                        </td>
+
+                                        <td>
+                                            @if (item.IsOverdue)
+                                            {
+                                                <span class="badge
+                                                             text-bg-danger">
+                                                    Vencido
+                                                </span>
+
+                                                <div class="small
+                                                            text-muted
+                                                            mt-1">
+                                                    @item.DaysOverdue días
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge
+                                                             text-bg-success">
+                                                    Al día
+                                                </span>
+                                            }
+                                        </td>
+
+                                        <td class="text-end">
+                                            @Percentage(
+                                                item.PercentagePaid)
+                                        </td>
+
+                                    </tr>
+                                }
+
+                            </tbody>
+
+                        </table>
+
+                    </div>
+
+                </div>
+            }
+        }
+
+    </section>
+
+    <hr class="my-5" />
+
+    <section>
+
+        <div class="mb-3">
+            <h2 class="h4 mb-1">
+                Morosidad
+            </h2>
+
+            <p class="text-muted mb-0">
+                Estado de préstamos vencidos,
+                mora pendiente y antigüedad del atraso.
+            </p>
+        </div>
+
+        <div class="card mb-4">
+
+            <div class="card-body">
+
+                <div class="row g-3 align-items-end">
+
+                    <div class="col-12 col-md-5">
+
+                        <label class="form-label">
+                            Inversionista
+                        </label>
+
+                        <select class="form-select"
+                                @bind="_delinquencyInvestorId">
+
+                            <option value="">
+                                Todos
+                            </option>
+
+                            @foreach (
+                                var investor in
+                                _setup.Investors)
+                            {
+                                <option value="@investor.Id">
+                                    @investor.Name
+                                </option>
+                            }
+
+                        </select>
+
+                    </div>
+
+                    <div class="col-12 col-md-5">
+
+                        <label class="form-label">
+                            Ruta
+                        </label>
+
+                        <select class="form-select"
+                                @bind="_delinquencyCollectionRouteId">
+
+                            <option value="">
+                                Todas
+                            </option>
+
+                            @foreach (
+                                var route in
+                                _setup.CollectionRoutes)
+                            {
+                                <option value="@route.Id">
+                                    @route.Name
+                                </option>
+                            }
+
+                        </select>
+
+                    </div>
+
+                    <div class="col-12 col-md-2">
+
+                        <button type="button"
+                                class="btn btn-primary w-100"
+                                disabled="@_isDelinquencyLoading"
+                                @onclick="LoadDelinquencyAsync">
+
+                            @if (_isDelinquencyLoading)
+                            {
+                                <span class="spinner-border
+                                            spinner-border-sm
+                                            me-2">
+                                </span>
+
+                                <span>
+                                    Cargando...
+                                </span>
+                            }
+                            else
+                            {
+                                <span>
+                                    Aplicar filtros
+                                </span>
+                            }
+
+                        </button>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+        <div class="d-flex justify-content-end mb-3">
+
+            <button type="button"
+                    class="btn btn-outline-success"
+                    disabled="@_isDownloadLoading"
+                    @onclick="DownloadDelinquencyAsync">
+
+                Exportar Excel
+
+            </button>
+
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(
+            _delinquencyErrorMessage))
+        {
+            <div class="alert alert-warning">
+                @_delinquencyErrorMessage
+            </div>
+        }
+
+        @if (_delinquency is not null)
+        {
+            var summary =
+                _delinquency.Summary;
+
+            <div class="row g-3 mb-4">
+
+                <div class="col-12 col-md-6 col-xl-3">
+                    <div class="card h-100">
+                        <div class="card-body">
+
+                            <p class="text-muted mb-1">
+                                Préstamos en mora
+                            </p>
+
+                            <p class="fs-4 fw-semibold mb-0">
+                                @summary.LoansCount
+                            </p>
+
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-md-6 col-xl-3">
+                    <div class="card h-100">
+                        <div class="card-body">
+
+                            <p class="text-muted mb-1">
+                                Clientes afectados
+                            </p>
+
+                            <p class="fs-4 fw-semibold mb-0">
+                                @summary.ClientsCount
+                            </p>
+
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-md-6 col-xl-3">
+                    <div class="card h-100">
+                        <div class="card-body">
+
+                            <p class="text-muted mb-1">
+                                Total vencido
+                            </p>
+
+                            <p class="fs-5 fw-semibold mb-0">
+                                @Money(
+                                    summary.TotalOverdueAmountDue)
+                            </p>
+
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-md-6 col-xl-3">
+                    <div class="card h-100">
+                        <div class="card-body">
+
+                            <p class="text-muted mb-1">
+                                Tasa de morosidad
+                            </p>
+
+                            <p class="fs-5 fw-semibold mb-0">
+                                @Percentage(
+                                    summary.DelinquencyRate)
+                            </p>
+
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <h3 class="h5 mb-3">
+                Aging de morosidad
+            </h3>
+
+            @if (_delinquency.Aging.Count == 0)
+            {
+                <div class="alert alert-info">
+                    No existen saldos vencidos
+                    para los filtros seleccionados.
+                </div>
+            }
+            else
+            {
+                <div class="card mb-4">
+
+                    <div class="table-responsive">
+
+                        <table class="table
+                                    table-hover
+                                    align-middle
+                                    mb-0">
+
+                            <thead>
+                                <tr>
+                                    <th>
+                                        Antigüedad
+                                    </th>
+
+                                    <th class="text-end">
+                                        Préstamos
+                                    </th>
+
+                                    <th class="text-end">
+                                        Clientes
+                                    </th>
+
+                                    <th class="text-end">
+                                        Contractual vencido
+                                    </th>
+
+                                    <th class="text-end">
+                                        Mora pendiente
+                                    </th>
+
+                                    <th class="text-end">
+                                        Total vencido
+                                    </th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+
+                                @foreach (
+                                    var aging in
+                                    _delinquency.Aging)
+                                {
+                                    <tr>
+
+                                        <td>
+                                            @AgingLabel(
+                                                aging.AgingBucket)
+                                        </td>
+
+                                        <td class="text-end">
+                                            @aging.LoansCount
+                                        </td>
+
+                                        <td class="text-end">
+                                            @aging.ClientsCount
+                                        </td>
+
+                                        <td class="text-end">
+                                            @Money(
+                                                aging
+                                                    .OverdueContractualAmount)
+                                        </td>
+
+                                        <td class="text-end">
+                                            @Money(
+                                                aging
+                                                    .LateFeeBalanceOutstanding)
+                                        </td>
+
+                                        <td class="text-end fw-semibold">
+                                            @Money(
+                                                aging
+                                                    .TotalOverdueAmountDue)
+                                        </td>
+
+                                    </tr>
+                                }
+
+                            </tbody>
+
+                        </table>
+
+                    </div>
+
+                </div>
+            }
+
+            <h3 class="h5 mb-3">
+                Préstamos morosos
+            </h3>
+
+            @if (_delinquency.Items.Count == 0)
+            {
+                <div class="alert alert-info">
+                    No existen préstamos morosos
+                    para los filtros seleccionados.
+                </div>
+            }
+            else
+            {
+                <div class="card">
+
+                    <div class="table-responsive">
+
+                        <table class="table
+                                    table-hover
+                                    align-middle
+                                    mb-0">
+
+                            <thead>
+                                <tr>
+                                    <th>
+                                        Cliente
+                                    </th>
+
+                                    <th>
+                                        Inversionista
+                                    </th>
+
+                                    <th>
+                                        Ruta
+                                    </th>
+
+                                    <th class="text-end">
+                                        Días vencidos
+                                    </th>
+
+                                    <th class="text-end">
+                                        Cuotas vencidas
+                                    </th>
+
+                                    <th class="text-end">
+                                        Contractual vencido
+                                    </th>
+
+                                    <th class="text-end">
+                                        Mora pendiente
+                                    </th>
+
+                                    <th class="text-end">
+                                        Total vencido
+                                    </th>
+
+                                    <th>
+                                        Aging
+                                    </th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+
+                                @foreach (
+                                    var item in
+                                    _delinquency.Items)
+                                {
+                                    <tr>
+
+                                        <td>
+                                            <strong>
+                                                @item.ClientName
+                                            </strong>
+
+                                            @if (!string.IsNullOrWhiteSpace(
+                                                item.ClientPhone))
+                                            {
+                                                <div class="small text-muted">
+                                                    @item.ClientPhone
+                                                </div>
+                                            }
+                                        </td>
+
+                                        <td>
+                                            @item.InvestorName
+                                        </td>
+
+                                        <td>
+                                            @(string.IsNullOrWhiteSpace(
+                                                item.CollectionRouteName)
+                                                ? "Sin ruta"
+                                                : item.CollectionRouteName)
+                                        </td>
+
+                                        <td class="text-end">
+                                            @item.DaysOverdue
+                                        </td>
+
+                                        <td class="text-end">
+                                            @item.OverdueInstallments
+                                        </td>
+
+                                        <td class="text-end">
+                                            @Money(
+                                                item
+                                                    .OverdueContractualAmount)
+                                        </td>
+
+                                        <td class="text-end">
+                                            @Money(
+                                                item
+                                                    .LateFeeBalanceOutstanding)
+                                        </td>
+
+                                        <td class="text-end fw-semibold">
+                                            @Money(
+                                                item
+                                                    .TotalOverdueAmountDue)
+                                        </td>
+
+                                        <td>
+                                            <span class="badge
+                                                        text-bg-warning">
+                                                @AgingLabel(
+                                                    item.AgingBucket)
+                                            </span>
+                                        </td>
+
+                                    </tr>
+                                }
+
+                            </tbody>
+
+                        </table>
+
+                    </div>
+
+                </div>
+            }
+        }
+
+    </section>
+
+    <hr class="my-5" />
+
+    <section>
+
+        <div class="mb-3">
+            <h2 class="h4 mb-1">
+                Cobros
+            </h2>
+
+            <p class="text-muted mb-0">
+                Efectivo recibido durante el período seleccionado.
+            </p>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-body">
+
+                <div class="row g-3 align-items-end">
+
+                    <div class="col-12 col-md-2">
+                        <label class="form-label">
+                            Desde
+                        </label>
+
+                        <input type="date"
+                            class="form-control"
+                            @bind="_collectionsFrom" />
+                    </div>
+
+                    <div class="col-12 col-md-2">
+                        <label class="form-label">
+                            Hasta
+                        </label>
+
+                        <input type="date"
+                            class="form-control"
+                            @bind="_collectionsTo" />
+                    </div>
+
+                    <div class="col-12 col-md-2">
+                        <label class="form-label">
+                            Inversionista
+                        </label>
+
+                        <select class="form-select"
+                                @bind="_collectionsInvestorId">
+
+                            <option value="">
+                                Todos
+                            </option>
+
+                            @foreach (
+                                var investor in _setup.Investors)
+                            {
+                                <option value="@investor.Id">
+                                    @investor.Name
+                                </option>
+                            }
+
+                        </select>
+                    </div>
+
+                    <div class="col-12 col-md-2">
+                        <label class="form-label">
+                            Cobrador
+                        </label>
+
+                        <select class="form-select"
+                                @bind="_collectionsCollectorId">
+
+                            <option value="">
+                                Todos
+                            </option>
+
+                            @foreach (
+                                var collector in _setup.Collectors)
+                            {
+                                <option value="@collector.Id">
+                                    @collector.Name
+                                </option>
+                            }
+
+                        </select>
+                    </div>
+
+                    <div class="col-12 col-md-2">
+                        <label class="form-label">
+                            Ruta histórica
+                        </label>
+
+                        <select class="form-select"
+                                @bind="_collectionsRouteId">
+
+                            <option value="">
+                                Todas
+                            </option>
+
+                            @foreach (
+                                var route in _setup.CollectionRoutes)
+                            {
+                                <option value="@route.Id">
+                                    @route.Name
+                                </option>
+                            }
+
+                        </select>
+                    </div>
+
+                    <div class="col-12 col-md-2">
+
+                        <button type="button"
+                                class="btn btn-primary w-100"
+                                disabled="@_isCollectionsLoading"
+                                @onclick="LoadCollectionsAsync">
+
+                            Aplicar filtros
+
+                        </button>
+
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-end mb-3">
+
+            <button type="button"
+                    class="btn btn-outline-success"
+                    disabled="@_isDownloadLoading"
+                    @onclick="DownloadCollectionsAsync">
+
+                Exportar Excel
+
+            </button>
+
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(
+            _collectionsErrorMessage))
+        {
+            <div class="alert alert-warning">
+                @_collectionsErrorMessage
+            </div>
+        }
+
+        @if (_collections is not null)
+        {
+            var summary =
+                _collections.Summary;
+
+            <div class="row g-3 mb-4">
+
+                <div class="col-12 col-md-4 col-xl">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <p class="text-muted mb-1">
+                                Pagos
+                            </p>
+                            <p class="fs-4 fw-semibold mb-0">
+                                @summary.PaymentsCount
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-md-4 col-xl">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <p class="text-muted mb-1">
+                                Clientes
+                            </p>
+                            <p class="fs-4 fw-semibold mb-0">
+                                @summary.ClientsCount
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-md-4 col-xl">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <p class="text-muted mb-1">
+                                Efectivo cobrado
+                            </p>
+                            <p class="fs-5 fw-semibold mb-0">
+                                @Money(summary.CashCollected)
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-md-6 col-xl">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <p class="text-muted mb-1">
+                                Cobro contractual
+                            </p>
+                            <p class="fs-5 fw-semibold mb-0">
+                                @Money(
+                                    summary.ContractualCashCollected)
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-md-6 col-xl">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <p class="text-muted mb-1">
+                                Mora cobrada
+                            </p>
+                            <p class="fs-5 fw-semibold mb-0">
+                                @Money(
+                                    summary.LateFeesCollected)
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            @if (_collections.Items.Count == 0)
+            {
+                <div class="alert alert-info">
+                    No existen cobros para el período
+                    y filtros seleccionados.
+                </div>
+            }
+            else
+            {
+                <div class="card">
+                    <div class="table-responsive">
+
+                        <table class="table
+                                    table-hover
+                                    align-middle
+                                    mb-0">
+
+                            <thead>
+                                <tr>
+                                    <th>Fecha</th>
+                                    <th>Recibo</th>
+                                    <th>Cliente</th>
+                                    <th>Inversionista</th>
+                                    <th>Cobrador</th>
+                                    <th>Ruta histórica</th>
+                                    <th>Tipo</th>
+
+                                    <th class="text-end">
+                                        Efectivo
+                                    </th>
+
+                                    <th class="text-end">
+                                        Contractual
+                                    </th>
+
+                                    <th class="text-end">
+                                        Mora
+                                    </th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+
+                                @foreach (
+                                    var item in _collections.Items)
+                                {
+                                    <tr>
+
+                                        <td>
+                                            @item.PaymentDate
+                                                .ToString("dd/MM/yyyy")
+                                        </td>
+
+                                        <td>
+                                            @(string.IsNullOrWhiteSpace(
+                                                item.ReceiptNumber)
+                                                ? "—"
+                                                : item.ReceiptNumber)
+                                        </td>
+
+                                        <td>
+                                            @item.ClientName
+                                        </td>
+
+                                        <td>
+                                            @item.InvestorName
+                                        </td>
+
+                                        <td>
+                                            @(string.IsNullOrWhiteSpace(
+                                                item.CollectorName)
+                                                ? "No aplica"
+                                                : item.CollectorName)
+                                        </td>
+
+                                        <td>
+                                            @(string.IsNullOrWhiteSpace(
+                                                item.CollectionRouteName)
+                                                ? "Sin ruta"
+                                                : item.CollectionRouteName)
+                                        </td>
+
+                                        <td>
+                                            @item.PaymentType
+                                        </td>
+
+                                        <td class="text-end">
+                                            @Money(item.CashCollected)
+                                        </td>
+
+                                        <td class="text-end">
+                                            @Money(
+                                                item
+                                                    .ContractualCashCollected)
+                                        </td>
+
+                                        <td class="text-end">
+                                            @Money(
+                                                item.LateFeesCollected)
+                                        </td>
+
+                                    </tr>
+                                }
+
+                            </tbody>
+
+                        </table>
+
+                    </div>
+                </div>
+            }
+        }
+
+    </section>
+
+    <hr class="my-5" />
+
+    <section>
+
+        <div class="mb-3">
+            <h2 class="h4 mb-1">
+                Estado financiero por inversionista
+            </h2>
+
+            <p class="text-muted mb-0">
+                Historial financiero y cartera actual
+                del inversionista seleccionado.
+            </p>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-body">
+
+                <div class="row g-3 align-items-end">
+
+                    <div class="col-12 col-md-8">
+
+                        <label class="form-label">
+                            Inversionista
+                        </label>
+
+                        <select class="form-select"
+                                @bind="_statementInvestorId">
+
+                            <option value="">
+                                Seleccione...
+                            </option>
+
+                            @foreach (
+                                var investor in _setup.Investors)
+                            {
+                                <option value="@investor.Id">
+                                    @investor.Name
+                                </option>
+                            }
+
+                        </select>
+
+                    </div>
+
+                    <div class="col-12 col-md-4">
+
+                        <button type="button"
+                                class="btn btn-primary w-100"
+                                disabled="@_isStatementLoading"
+                                @onclick="LoadInvestorStatementAsync">
+
+                            Consultar
+
+                        </button>
+
+                    </div>
+
+                </div>
+
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(
+            _statementErrorMessage))
+        {
+            <div class="alert alert-warning">
+                @_statementErrorMessage
+            </div>
+        }
+
+        @if (_investorStatement is not null)
+        {
+            var statement =
+                _investorStatement;
+
+            <div class="d-flex
+                        justify-content-between
+                        align-items-center
+                        mb-3">
+
+                <div>
+                    <h3 class="h5 mb-0">
+                        @statement.InvestorName
+                    </h3>
+
+                    <span class="text-muted">
+                        @(statement.IsActive
+                            ? "Activo"
+                            : "Inactivo")
+                    </span>
+                </div>
+
+                <button type="button"
+                        class="btn btn-outline-success"
+                        disabled="@_isDownloadLoading"
+                        @onclick="DownloadInvestorStatementAsync">
+
+                    Exportar Excel
+
+                </button>
+
+            </div>
+
+            <div class="row g-3 mb-4">
+
+                <div class="col-12 col-md-3">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <p class="text-muted mb-1">
+                                Capital originado
+                            </p>
+                            <p class="fs-5 fw-semibold mb-0">
+                                @Money(
+                                    statement.PrincipalOriginated)
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-md-3">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <p class="text-muted mb-1">
+                                Interés neto
+                            </p>
+                            <p class="fs-5 fw-semibold mb-0">
+                                @Money(
+                                    statement.NetContractualInterest)
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-md-3">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <p class="text-muted mb-1">
+                                Efectivo cobrado
+                            </p>
+                            <p class="fs-5 fw-semibold mb-0">
+                                @Money(
+                                    statement.CashCollected)
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-md-3">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <p class="text-muted mb-1">
+                                Total pendiente
+                            </p>
+                            <p class="fs-5 fw-semibold mb-0">
+                                @Money(
+                                    statement.TotalOutstanding)
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-md-3">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <p class="text-muted mb-1">
+                                Préstamos activos
+                            </p>
+                            <p class="fs-4 fw-semibold mb-0">
+                                @statement.ActiveLoansCount
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-md-3">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <p class="text-muted mb-1">
+                                Clientes activos
+                            </p>
+                            <p class="fs-4 fw-semibold mb-0">
+                                @statement.ActiveClientsCount
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-md-3">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <p class="text-muted mb-1">
+                                Préstamos en mora
+                            </p>
+                            <p class="fs-4 fw-semibold mb-0">
+                                @statement.OverdueLoansCount
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-md-3">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <p class="text-muted mb-1">
+                                Morosidad
+                            </p>
+                            <p class="fs-5 fw-semibold mb-0">
+                                @Percentage(
+                                    statement.DelinquencyRate)
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <h3 class="h5 mb-3">
+                Préstamos activos
+            </h3>
+
+            @if (statement.ActiveLoans.Count == 0)
+            {
+                <div class="alert alert-info">
+                    Este inversionista no tiene
+                    préstamos activos.
+                </div>
+            }
+            else
+            {
+                <div class="card">
+                    <div class="table-responsive">
+
+                        <table class="table
+                                    table-hover
+                                    align-middle
+                                    mb-0">
+
+                            <thead>
+                                <tr>
+                                    <th>Cliente</th>
+                                    <th>Ruta</th>
+
+                                    <th class="text-end">
+                                        Saldo contractual
+                                    </th>
+
+                                    <th class="text-end">
+                                        Mora
+                                    </th>
+
+                                    <th class="text-end">
+                                        Total
+                                    </th>
+
+                                    <th>
+                                        Próximo pago
+                                    </th>
+
+                                    <th>
+                                        Estado
+                                    </th>
+
+                                    <th class="text-end">
+                                        Pagado
+                                    </th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+
+                                @foreach (
+                                    var loan in statement.ActiveLoans)
+                                {
+                                    <tr>
+
+                                        <td>
+                                            @loan.ClientName
+                                        </td>
+
+                                        <td>
+                                            @(string.IsNullOrWhiteSpace(
+                                                loan.CollectionRouteName)
+                                                ? "Sin ruta"
+                                                : loan.CollectionRouteName)
+                                        </td>
+
+                                        <td class="text-end">
+                                            @Money(
+                                                loan
+                                                    .ContractualBalanceOutstanding)
+                                        </td>
+
+                                        <td class="text-end">
+                                            @Money(
+                                                loan
+                                                    .LateFeeBalanceOutstanding)
+                                        </td>
+
+                                        <td class="text-end fw-semibold">
+                                            @Money(
+                                                loan.TotalOutstanding)
+                                        </td>
+
+                                        <td>
+                                            @loan.NextPaymentDate
+                                                .ToString("dd/MM/yyyy")
+                                        </td>
+
+                                        <td>
+                                            @(loan.IsOverdue
+                                                ? "Vencido"
+                                                : "Al día")
+                                        </td>
+
+                                        <td class="text-end">
+                                            @Percentage(
+                                                loan.PercentagePaid)
+                                        </td>
+
+                                    </tr>
+                                }
+
+                            </tbody>
+
+                        </table>
+
+                    </div>
+                </div>
+            }
+        }
+
+    </section>
+}
+
+@code {
+    private FinancialReportsSetup? _setup;
+
+    private FinancialPortfolioReportResponse?
+        _portfolio;
+
+    private Guid? _investorId;
+
+    private Guid? _collectionRouteId;
+
+    private bool _overdueOnly;
+
+    private bool _isInitialLoading = true;
+
+    private bool _isReportLoading;
+
+    private string? _initialErrorMessage;
+
+    private string? _reportErrorMessage;
+
+    private FinancialDelinquencyReportResponse?
+        _delinquency;
+
+    private Guid? _delinquencyInvestorId;
+
+    private Guid? _delinquencyCollectionRouteId;
+
+    private bool _isDelinquencyLoading;
+
+    private string? _delinquencyErrorMessage;
+
+    private FinancialCollectionsReportResponse?
+    _collections;
+
+    private DateTime _collectionsFrom =
+        DateTime.Today.AddDays(-29);
+
+    private DateTime _collectionsTo =
+        DateTime.Today;
+
+    private Guid? _collectionsInvestorId;
+
+    private Guid? _collectionsCollectorId;
+
+    private Guid? _collectionsRouteId;
+
+    private bool _isCollectionsLoading;
+
+    private string? _collectionsErrorMessage;
+
+    private FinancialInvestorStatementResponse?
+    _investorStatement;
+
+    private Guid? _statementInvestorId;
+
+    private bool _isStatementLoading;
+
+    private string? _statementErrorMessage;
+
+    private bool _isDownloadLoading;
+
+    private string? _downloadErrorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _setup =
+                await ReportsService
+                    .GetSetupAsync();
+
+            await LoadPortfolioAsync();
+
+            await LoadDelinquencyAsync();
+
+            await LoadCollectionsAsync();
+        }
+        catch (HttpRequestException)
+        {
+            _initialErrorMessage =
+                "No fue posible comunicarse con la API.";
+        }
+        catch (InvalidOperationException)
+        {
+            _initialErrorMessage =
+                "La respuesta recibida desde la API no es válida.";
+        }
+        catch (Exception)
+        {
+            _initialErrorMessage =
+                "Ocurrió un error inesperado al cargar los reportes.";
+        }
+        finally
+        {
+            _isInitialLoading = false;
+        }
+    }
+
+    private async Task LoadPortfolioAsync()
+    {
+        _reportErrorMessage = null;
+        _isReportLoading = true;
+
+        try
+        {
+            _portfolio =
+                await ReportsService
+                    .GetPortfolioAsync(
+                        _investorId,
+                        _collectionRouteId,
+                        _overdueOnly);
+        }
+        catch (ArgumentException ex)
+        {
+            _reportErrorMessage =
+                ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            _reportErrorMessage =
+                "No fue posible obtener el reporte de cartera.";
+        }
+        catch (InvalidOperationException)
+        {
+            _reportErrorMessage =
+                "La respuesta del reporte de cartera no es válida.";
+        }
+        catch (Exception)
+        {
+            _reportErrorMessage =
+                "Ocurrió un error inesperado al cargar la cartera.";
+        }
+        finally
+        {
+            _isReportLoading = false;
+        }
+    }
+
+    private async Task LoadDelinquencyAsync()
+    {
+        _delinquencyErrorMessage = null;
+        _isDelinquencyLoading = true;
+
+        try
+        {
+            _delinquency =
+                await ReportsService
+                    .GetDelinquencyAsync(
+                        _delinquencyInvestorId,
+                        _delinquencyCollectionRouteId);
+        }
+        catch (ArgumentException ex)
+        {
+            _delinquencyErrorMessage =
+                ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            _delinquencyErrorMessage =
+                "No fue posible obtener el reporte de morosidad.";
+        }
+        catch (InvalidOperationException)
+        {
+            _delinquencyErrorMessage =
+                "La respuesta del reporte de morosidad no es válida.";
+        }
+        catch (Exception)
+        {
+            _delinquencyErrorMessage =
+                "Ocurrió un error inesperado al cargar la morosidad.";
+        }
+        finally
+        {
+            _isDelinquencyLoading = false;
+        }
+    }
+
+    private async Task LoadCollectionsAsync()
+    {
+        _collectionsErrorMessage = null;
+
+        if (_collectionsFrom.Date >
+            _collectionsTo.Date)
+        {
+            _collectionsErrorMessage =
+                "La fecha Desde no puede ser posterior a la fecha Hasta.";
+
+            return;
+        }
+
+        _isCollectionsLoading = true;
+
+        try
+        {
+            _collections =
+                await ReportsService
+                    .GetCollectionsAsync(
+                        DateOnly.FromDateTime(
+                            _collectionsFrom),
+                        DateOnly.FromDateTime(
+                            _collectionsTo),
+                        _collectionsInvestorId,
+                        _collectionsCollectorId,
+                        _collectionsRouteId);
+        }
+        catch (ArgumentException ex)
+        {
+            _collectionsErrorMessage =
+                ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            _collectionsErrorMessage =
+                "No fue posible obtener el reporte de cobros.";
+        }
+        catch (InvalidOperationException)
+        {
+            _collectionsErrorMessage =
+                "La respuesta del reporte de cobros no es válida.";
+        }
+        catch (Exception)
+        {
+            _collectionsErrorMessage =
+                "Ocurrió un error inesperado al cargar los cobros.";
+        }
+        finally
+        {
+            _isCollectionsLoading = false;
+        }
+    }
+
+    private async Task LoadInvestorStatementAsync()
+    {
+        _statementErrorMessage = null;
+        _investorStatement = null;
+
+        if (!_statementInvestorId.HasValue)
+        {
+            _statementErrorMessage =
+                "Seleccione un inversionista.";
+
+            return;
+        }
+
+        _isStatementLoading = true;
+
+        try
+        {
+            _investorStatement =
+                await ReportsService
+                    .GetInvestorStatementAsync(
+                        _statementInvestorId.Value);
+
+            if (_investorStatement is null)
+            {
+                _statementErrorMessage =
+                    "No se encontró el inversionista seleccionado.";
+            }
+        }
+        catch (ArgumentException ex)
+        {
+            _statementErrorMessage =
+                ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            _statementErrorMessage =
+                "No fue posible obtener el estado financiero.";
+        }
+        catch (InvalidOperationException)
+        {
+            _statementErrorMessage =
+                "La respuesta del estado financiero no es válida.";
+        }
+        catch (Exception)
+        {
+            _statementErrorMessage =
+                "Ocurrió un error inesperado al cargar el inversionista.";
+        }
+        finally
+        {
+            _isStatementLoading = false;
+        }
+    }
+
+    private async Task DownloadFileAsync(
+        Func<Task<FinancialReportDownload>>
+            downloadFactory)
+    {
+        _downloadErrorMessage = null;
+        _isDownloadLoading = true;
+
+        try
+        {
+            var download =
+                await downloadFactory();
+
+            await using var stream =
+                new MemoryStream(
+                    download.Content);
+
+            using var streamReference =
+                new DotNetStreamReference(
+                    stream);
+
+            await JS.InvokeVoidAsync(
+                "SanesDownloads.downloadFileFromStream",
+                download.FileName,
+                download.ContentType,
+                streamReference);
+        }
+        catch (ArgumentException ex)
+        {
+            _downloadErrorMessage =
+                ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            _downloadErrorMessage =
+                "No fue posible descargar el archivo.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            _downloadErrorMessage =
+                ex.Message;
+        }
+        catch (Exception)
+        {
+            _downloadErrorMessage =
+                "Ocurrió un error inesperado durante la exportación.";
+        }
+        finally
+        {
+            _isDownloadLoading = false;
+        }
+    }
+
+    private Task DownloadPortfolioAsync()
+    {
+        return DownloadFileAsync(
+            () =>
+                ReportsService
+                    .ExportPortfolioAsync(
+                        _investorId,
+                        _collectionRouteId,
+                        _overdueOnly));
+    }
+
+    private Task DownloadDelinquencyAsync()
+    {
+        return DownloadFileAsync(
+            () =>
+                ReportsService
+                    .ExportDelinquencyAsync(
+                        _delinquencyInvestorId,
+                        _delinquencyCollectionRouteId));
+    }
+
+    private Task DownloadCollectionsAsync()
+    {
+        return DownloadFileAsync(
+            () =>
+                ReportsService
+                    .ExportCollectionsAsync(
+                        DateOnly.FromDateTime(
+                            _collectionsFrom),
+                        DateOnly.FromDateTime(
+                            _collectionsTo),
+                        _collectionsInvestorId,
+                        _collectionsCollectorId,
+                        _collectionsRouteId));
+    }
+
+    private Task DownloadInvestorStatementAsync()
+    {
+        if (!_statementInvestorId.HasValue)
+        {
+            _downloadErrorMessage =
+                "Seleccione un inversionista.";
+
+            return Task.CompletedTask;
+        }
+
+        return DownloadFileAsync(
+            () =>
+                ReportsService
+                    .ExportInvestorStatementAsync(
+                        _statementInvestorId.Value));
+    }
+
+    private string Money(
+        decimal value)
+    {
+        if (_setup is null)
+        {
+            return value.ToString("N2");
+        }
+
+        var symbol =
+            string.IsNullOrWhiteSpace(
+                _setup.Tenant.CurrencySymbol)
+                ? _setup.Tenant.CurrencyCode
+                : _setup.Tenant.CurrencySymbol;
+
+        return $"{symbol} {value:N2}";
+    }
+
+    private static string Percentage(
+        decimal value)
+    {
+        return $"{value:N2} %";
+    }
+    private static string AgingLabel(
+        string agingBucket)
+    {
+        return agingBucket switch
+        {
+            "LateFeeOnly" =>
+                "Solo mora",
+
+            _ =>
+                agingBucket
+        };
+    }
+}
