@@ -1,0 +1,974 @@
+@page "/admin/investors"
+
+@attribute [Authorize(Roles = WebRoles.Administrator)]
+@rendermode InteractiveServer
+
+@inject IInvestorsWebService InvestorsService
+
+<PageTitle>Inversionistas - Sanes</PageTitle>
+
+<div class="d-flex flex-wrap
+            justify-content-between
+            align-items-start
+            gap-3
+            mb-4">
+
+    <div>
+        <h1 class="mb-1">
+            Inversionistas
+        </h1>
+
+        <p class="text-muted mb-0">
+            Administración de inversionistas
+            registrados en el tenant actual.
+        </p>
+    </div>
+
+    <button type="button"
+            class="btn btn-primary"
+            @onclick="OpenCreate">
+
+        Nuevo inversionista
+
+    </button>
+
+</div>
+
+@if (!string.IsNullOrWhiteSpace(
+    _pageMessage))
+{
+    <div class="alert
+                @(_pageMessageIsError
+                    ? "alert-danger"
+                    : "alert-success")">
+
+        @_pageMessage
+
+    </div>
+}
+
+<div class="card mb-4">
+    <div class="card-body">
+
+        <div class="row g-3 align-items-end">
+
+            <div class="col-12 col-md-8">
+
+                <label class="form-label">
+                    Buscar
+                </label>
+
+                <input class="form-control"
+                       placeholder="Nombre, identificación, teléfono o correo"
+                       @bind="_search"
+                       @bind:event="oninput" />
+
+            </div>
+
+            <div class="col-12 col-md-4">
+
+                <div class="form-check mb-2">
+
+                    <input class="form-check-input"
+                           type="checkbox"
+                           id="showInactive"
+                           @bind="_showInactive" />
+
+                    <label class="form-check-label"
+                           for="showInactive">
+
+                        Mostrar inactivos
+
+                    </label>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+</div>
+
+@if (_isLoading)
+{
+    <div class="py-5 text-center">
+
+        <div class="spinner-border"
+             role="status">
+        </div>
+
+        <p class="text-muted mt-3">
+            Cargando inversionistas...
+        </p>
+
+    </div>
+}
+else if (_investors.Count == 0)
+{
+    <div class="alert alert-info">
+        No existen inversionistas registrados.
+    </div>
+}
+else
+{
+    var filtered =
+        FilteredInvestors.ToList();
+
+    if (filtered.Count == 0)
+    {
+        <div class="alert alert-info">
+            No existen inversionistas que coincidan
+            con los filtros seleccionados.
+        </div>
+    }
+    else
+    {
+        <div class="card mb-4">
+
+            <div class="table-responsive">
+
+                <table class="table
+                              table-hover
+                              align-middle
+                              mb-0">
+
+                    <thead>
+                        <tr>
+                            <th>Nombre</th>
+                            <th>Identificación</th>
+                            <th>Teléfono</th>
+                            <th>Correo</th>
+                            <th>Estado</th>
+                            <th class="text-end">
+                                Acciones
+                            </th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+
+                        @foreach (
+                            var investor in filtered)
+                        {
+                            <tr>
+
+                                <td>
+                                    <strong>
+                                        @investor.Name
+                                    </strong>
+                                </td>
+
+                                <td>
+                                    @DisplayValue(
+                                        investor.Identification)
+                                </td>
+
+                                <td>
+                                    @DisplayValue(
+                                        investor.Phone)
+                                </td>
+
+                                <td>
+                                    @DisplayValue(
+                                        investor.Email)
+                                </td>
+
+                                <td>
+                                    @if (investor.IsActive)
+                                    {
+                                        <span class="badge
+                                                     text-bg-success">
+                                            Activo
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge
+                                                     text-bg-secondary">
+                                            Inactivo
+                                        </span>
+                                    }
+                                </td>
+
+                                <td class="text-end">
+
+                                    @if (investor.IsActive)
+                                    {
+                                        <button type="button"
+                                                class="btn
+                                                       btn-sm
+                                                       btn-outline-primary
+                                                       me-2"
+                                                @onclick="() =>
+                                                    OpenEdit(investor)">
+
+                                            Editar
+
+                                        </button>
+
+                                        <button type="button"
+                                                class="btn
+                                                       btn-sm
+                                                       btn-outline-danger"
+                                                @onclick="() =>
+                                                    RequestDelete(investor)">
+
+                                            Desactivar
+
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <button type="button"
+                                                class="btn
+                                                       btn-sm
+                                                       btn-outline-success"
+                                                disabled="@_isSaving"
+                                                @onclick="() =>
+                                                    ReactivateAsync(investor)">
+
+                                            Reactivar
+
+                                        </button>
+                                    }
+
+                                </td>
+
+                            </tr>
+                        }
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </div>
+    }
+}
+
+@if (_pendingDeleteInvestor is not null)
+{
+    <div class="alert alert-warning">
+
+        <h2 class="h5">
+            Confirmar desactivación
+        </h2>
+
+        <p>
+            ¿Deseas desactivar al inversionista
+            <strong>
+                @_pendingDeleteInvestor.Name
+            </strong>?
+        </p>
+
+        <button type="button"
+                class="btn btn-danger me-2"
+                disabled="@_isSaving"
+                @onclick="ConfirmDeleteAsync">
+
+            Confirmar
+
+        </button>
+
+        <button type="button"
+                class="btn btn-outline-secondary"
+                disabled="@_isSaving"
+                @onclick="CancelDelete">
+
+            Cancelar
+
+        </button>
+
+    </div>
+}
+
+@if (_showCreateForm)
+{
+    <div class="card mb-4">
+
+        <div class="card-header">
+            <strong>
+                Nuevo inversionista
+            </strong>
+        </div>
+
+        <div class="card-body">
+
+            <EditForm Model="_createModel"
+                      OnValidSubmit="CreateAsync">
+
+                <DataAnnotationsValidator />
+                <ValidationSummary />
+
+                @InvestorFields(
+                    _createModel.Name,
+                    value => _createModel.Name = value,
+                    _createModel.Identification,
+                    value => _createModel.Identification = value,
+                    _createModel.Phone,
+                    value => _createModel.Phone = value,
+                    _createModel.Email,
+                    value => _createModel.Email = value,
+                    _createModel.Notes,
+                    value => _createModel.Notes = value)
+
+                <button type="submit"
+                        class="btn btn-primary me-2"
+                        disabled="@_isSaving">
+
+                    Guardar
+
+                </button>
+
+                <button type="button"
+                        class="btn btn-outline-secondary"
+                        disabled="@_isSaving"
+                        @onclick="CloseCreate">
+
+                    Cancelar
+
+                </button>
+
+            </EditForm>
+
+        </div>
+
+    </div>
+}
+
+@if (_editingInvestor is not null)
+{
+    <div class="card mb-4">
+
+        <div class="card-header">
+            <strong>
+                Editar inversionista
+            </strong>
+        </div>
+
+        <div class="card-body">
+
+            <EditForm Model="_editModel"
+                      OnValidSubmit="UpdateAsync">
+
+                <DataAnnotationsValidator />
+                <ValidationSummary />
+
+                @InvestorFields(
+                    _editModel.Name,
+                    value => _editModel.Name = value,
+                    _editModel.Identification,
+                    value => _editModel.Identification = value,
+                    _editModel.Phone,
+                    value => _editModel.Phone = value,
+                    _editModel.Email,
+                    value => _editModel.Email = value,
+                    _editModel.Notes,
+                    value => _editModel.Notes = value)
+
+                <button type="submit"
+                        class="btn btn-primary me-2"
+                        disabled="@_isSaving">
+
+                    Guardar cambios
+
+                </button>
+
+                <button type="button"
+                        class="btn btn-outline-secondary"
+                        disabled="@_isSaving"
+                        @onclick="CloseEdit">
+
+                    Cancelar
+
+                </button>
+
+            </EditForm>
+
+        </div>
+
+    </div>
+}
+
+@code {
+    private List<InvestorResponse> _investors =
+        new();
+
+    private string _search =
+        string.Empty;
+
+    private bool _showInactive;
+
+    private bool _isLoading = true;
+
+    private bool _isSaving;
+
+    private bool _showCreateForm;
+
+    private InvestorResponse?
+        _editingInvestor;
+
+    private InvestorResponse?
+        _pendingDeleteInvestor;
+
+    private CreateInvestorRequest _createModel =
+        new();
+
+    private UpdateInvestorRequest _editModel =
+        new();
+
+    private string? _pageMessage;
+
+    private bool _pageMessageIsError;
+
+    private IEnumerable<InvestorResponse>
+        FilteredInvestors
+    {
+        get
+        {
+            IEnumerable<InvestorResponse> query =
+                _investors;
+
+            if (!_showInactive)
+            {
+                query =
+                    query.Where(x =>
+                        x.IsActive);
+            }
+
+            if (!string.IsNullOrWhiteSpace(
+                _search))
+            {
+                var search =
+                    _search.Trim();
+
+                query =
+                    query.Where(x =>
+                        Contains(
+                            x.Name,
+                            search) ||
+                        Contains(
+                            x.Identification,
+                            search) ||
+                        Contains(
+                            x.Phone,
+                            search) ||
+                        Contains(
+                            x.Email,
+                            search));
+            }
+
+            return query
+                .OrderByDescending(x =>
+                    x.IsActive)
+                .ThenBy(x =>
+                    x.Name);
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        _isLoading = true;
+
+        try
+        {
+            _investors =
+                await InvestorsService
+                    .GetAllAsync(
+                        includeInactive: true);
+        }
+        catch (HttpRequestException)
+        {
+            SetError(
+                "No fue posible obtener los inversionistas.");
+        }
+        catch (InvalidOperationException)
+        {
+            SetError(
+                "La respuesta de inversionistas no es válida.");
+        }
+        catch (Exception)
+        {
+            SetError(
+                "Ocurrió un error inesperado al cargar los inversionistas.");
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void OpenCreate()
+    {
+        ClearMessage();
+
+        _editingInvestor = null;
+        _pendingDeleteInvestor = null;
+
+        _createModel =
+            new CreateInvestorRequest();
+
+        _showCreateForm = true;
+    }
+
+    private void CloseCreate()
+    {
+        _showCreateForm = false;
+    }
+
+    private void OpenEdit(
+        InvestorResponse investor)
+    {
+        ClearMessage();
+
+        _showCreateForm = false;
+        _pendingDeleteInvestor = null;
+
+        _editingInvestor =
+            investor;
+
+        _editModel =
+            new UpdateInvestorRequest
+            {
+                Name = investor.Name,
+                Phone = investor.Phone,
+                Email = investor.Email,
+                Identification =
+                    investor.Identification,
+                Notes = investor.Notes
+            };
+    }
+
+    private void CloseEdit()
+    {
+        _editingInvestor = null;
+    }
+
+    private async Task CreateAsync()
+    {
+        ClearMessage();
+        _isSaving = true;
+
+        try
+        {
+            await InvestorsService
+                .CreateAsync(
+                    _createModel);
+
+            _showCreateForm = false;
+
+            SetSuccess(
+                "Inversionista creado correctamente.");
+
+            await ReloadAsync();
+        }
+        catch (ArgumentException ex)
+        {
+            SetError(ex.Message);
+        }
+        catch (HttpRequestException)
+        {
+            SetError(
+                "No fue posible crear el inversionista.");
+        }
+        catch (Exception)
+        {
+            SetError(
+                "Ocurrió un error inesperado al crear el inversionista.");
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private async Task UpdateAsync()
+    {
+        if (_editingInvestor is null)
+        {
+            return;
+        }
+
+        ClearMessage();
+        _isSaving = true;
+
+        try
+        {
+            var updated =
+                await InvestorsService
+                    .UpdateAsync(
+                        _editingInvestor.Id,
+                        _editModel);
+
+            if (updated is null)
+            {
+                SetError(
+                    "El inversionista ya no existe o se encuentra inactivo.");
+
+                return;
+            }
+
+            _editingInvestor = null;
+
+            SetSuccess(
+                "Inversionista actualizado correctamente.");
+
+            await ReloadAsync();
+        }
+        catch (ArgumentException ex)
+        {
+            SetError(ex.Message);
+        }
+        catch (HttpRequestException)
+        {
+            SetError(
+                "No fue posible actualizar el inversionista.");
+        }
+        catch (Exception)
+        {
+            SetError(
+                "Ocurrió un error inesperado al actualizar el inversionista.");
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private void RequestDelete(
+        InvestorResponse investor)
+    {
+        ClearMessage();
+
+        _showCreateForm = false;
+        _editingInvestor = null;
+
+        _pendingDeleteInvestor =
+            investor;
+    }
+
+    private void CancelDelete()
+    {
+        _pendingDeleteInvestor = null;
+    }
+
+    private async Task ConfirmDeleteAsync()
+    {
+        if (_pendingDeleteInvestor is null)
+        {
+            return;
+        }
+
+        ClearMessage();
+        _isSaving = true;
+
+        try
+        {
+            var deleted =
+                await InvestorsService
+                    .DeleteAsync(
+                        _pendingDeleteInvestor.Id);
+
+            if (!deleted)
+            {
+                SetError(
+                    "El inversionista no fue encontrado.");
+
+                return;
+            }
+
+            _pendingDeleteInvestor = null;
+
+            SetSuccess(
+                "Inversionista desactivado correctamente.");
+
+            await ReloadAsync();
+        }
+        catch (HttpRequestException)
+        {
+            SetError(
+                "No fue posible desactivar el inversionista.");
+        }
+        catch (Exception)
+        {
+            SetError(
+                "Ocurrió un error inesperado al desactivar el inversionista.");
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private async Task ReactivateAsync(
+        InvestorResponse investor)
+    {
+        ClearMessage();
+        _isSaving = true;
+
+        try
+        {
+            var reactivated =
+                await InvestorsService
+                    .ReactivateAsync(
+                        investor.Id);
+
+            if (!reactivated)
+            {
+                SetError(
+                    "El inversionista no fue encontrado.");
+
+                return;
+            }
+
+            SetSuccess(
+                "Inversionista reactivado correctamente.");
+
+            await ReloadAsync();
+        }
+        catch (HttpRequestException)
+        {
+            SetError(
+                "No fue posible reactivar el inversionista.");
+        }
+        catch (Exception)
+        {
+            SetError(
+                "Ocurrió un error inesperado al reactivar el inversionista.");
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private void SetSuccess(
+        string message)
+    {
+        _pageMessage = message;
+        _pageMessageIsError = false;
+    }
+
+    private void SetError(
+        string message)
+    {
+        _pageMessage = message;
+        _pageMessageIsError = true;
+    }
+
+    private void ClearMessage()
+    {
+        _pageMessage = null;
+    }
+
+    private static bool Contains(
+        string? value,
+        string search)
+    {
+        return !string.IsNullOrWhiteSpace(
+            value) &&
+            value.Contains(
+                search,
+                StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string DisplayValue(
+        string? value)
+    {
+        return string.IsNullOrWhiteSpace(
+            value)
+            ? "—"
+            : value;
+    }
+
+    private static RenderFragment InvestorFields(
+        string name,
+        Action<string> setName,
+        string? identification,
+        Action<string?> setIdentification,
+        string? phone,
+        Action<string?> setPhone,
+        string? email,
+        Action<string?> setEmail,
+        string? notes,
+        Action<string?> setNotes) =>
+        builder =>
+        {
+            var sequence = 0;
+
+            builder.OpenElement(
+                sequence++,
+                "div");
+
+            builder.AddAttribute(
+                sequence++,
+                "class",
+                "row g-3 mb-3");
+
+            AddInput(
+                builder,
+                ref sequence,
+                "Nombre",
+                name,
+                value => setName(
+                    value ?? string.Empty),
+                "text",
+                "col-12 col-md-6");
+
+            AddInput(
+                builder,
+                ref sequence,
+                "Identificación",
+                identification,
+                setIdentification,
+                "text",
+                "col-12 col-md-6");
+
+            AddInput(
+                builder,
+                ref sequence,
+                "Teléfono",
+                phone,
+                setPhone,
+                "text",
+                "col-12 col-md-6");
+
+            AddInput(
+                builder,
+                ref sequence,
+                "Correo",
+                email,
+                setEmail,
+                "email",
+                "col-12 col-md-6");
+
+            builder.OpenElement(
+                sequence++,
+                "div");
+
+            builder.AddAttribute(
+                sequence++,
+                "class",
+                "col-12");
+
+            builder.OpenElement(
+                sequence++,
+                "label");
+
+            builder.AddAttribute(
+                sequence++,
+                "class",
+                "form-label");
+
+            builder.AddContent(
+                sequence++,
+                "Notas");
+
+            builder.CloseElement();
+
+            builder.OpenElement(
+                sequence++,
+                "textarea");
+
+            builder.AddAttribute(
+                sequence++,
+                "class",
+                "form-control");
+
+            builder.AddAttribute(
+                sequence++,
+                "rows",
+                "3");
+
+            builder.AddAttribute(
+                sequence++,
+                "value",
+                notes);
+
+            builder.AddAttribute(
+                sequence++,
+                "onchange",
+                EventCallback.Factory.CreateBinder<string?>(
+                    builder,
+                    setNotes,
+                    notes));
+
+            builder.CloseElement();
+
+            builder.CloseElement();
+
+            builder.CloseElement();
+        };
+
+    private static void AddInput(
+        RenderTreeBuilder builder,
+        ref int sequence,
+        string label,
+        string? value,
+        Action<string?> setter,
+        string type,
+        string cssClass)
+    {
+        builder.OpenElement(
+            sequence++,
+            "div");
+
+        builder.AddAttribute(
+            sequence++,
+            "class",
+            cssClass);
+
+        builder.OpenElement(
+            sequence++,
+            "label");
+
+        builder.AddAttribute(
+            sequence++,
+            "class",
+            "form-label");
+
+        builder.AddContent(
+            sequence++,
+            label);
+
+        builder.CloseElement();
+
+        builder.OpenElement(
+            sequence++,
+            "input");
+
+        builder.AddAttribute(
+            sequence++,
+            "class",
+            "form-control");
+
+        builder.AddAttribute(
+            sequence++,
+            "type",
+            type);
+
+        builder.AddAttribute(
+            sequence++,
+            "value",
+            value);
+
+        builder.AddAttribute(
+            sequence++,
+            "onchange",
+            EventCallback.Factory.CreateBinder<string?>(
+                builder,
+                setter,
+                value));
+
+        builder.CloseElement();
+
+        builder.CloseElement();
+    }
+}
