@@ -17,21 +17,32 @@ internal sealed class TestSanesApiClient
         _responses.Enqueue(response);
     }
 
-    public Task<HttpResponseMessage> SendAsync(
+    public async Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request,
         CancellationToken cancellationToken = default)
     {
+        string? body = null;
+
+        if (request.Content is not null)
+        {
+            body =
+                await request.Content
+                    .ReadAsStringAsync(
+                        cancellationToken);
+        }
+
         Requests.Add(
             new RecordedRequest(
                 request.Method,
                 request.RequestUri?.ToString()
-                    ?? string.Empty));
+                    ?? string.Empty,
+                body));
 
-        return Task.FromResult(
-            _responses.Dequeue());
+        return _responses.Dequeue();
     }
 
     public sealed record RecordedRequest(
         HttpMethod Method,
-        string Uri);
+        string Uri,
+        string? Body);
 }
