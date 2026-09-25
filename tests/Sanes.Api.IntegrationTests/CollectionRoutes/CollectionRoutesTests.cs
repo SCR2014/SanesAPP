@@ -63,6 +63,116 @@ public class CollectionRoutesTests
     }
 
     [Fact]
+    public async Task GetAll_WithIncludeInactive_ReturnsActiveAndInactiveRoutes()
+    {
+        var context =
+            await CreateContextAsync();
+
+        var activeRoute =
+            await CreateRouteAsync(
+                context.Client,
+                $"Ruta Active {Guid.NewGuid():N}");
+
+        var inactiveRoute =
+            await CreateRouteAsync(
+                context.Client,
+                $"Ruta Inactive {Guid.NewGuid():N}");
+
+        var deleteResponse =
+            await context.Client.DeleteAsync(
+                $"/api/collection-routes/{inactiveRoute.Id}");
+
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            deleteResponse.StatusCode);
+
+        var response =
+            await context.Client.GetAsync(
+                "/api/collection-routes?includeInactive=true");
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            response.StatusCode);
+
+        var routes =
+            await response.Content
+                .ReadFromJsonAsync<
+                    List<CollectionRouteResponse>>();
+
+        Assert.NotNull(routes);
+
+        var activeResult =
+            Assert.Single(
+                routes!,
+                x =>
+                    x.Id == activeRoute.Id);
+
+        var inactiveResult =
+            Assert.Single(
+                routes!,
+                x =>
+                    x.Id == inactiveRoute.Id);
+
+        Assert.True(
+            activeResult.IsActive);
+
+        Assert.False(
+            inactiveResult.IsActive);
+    }
+
+    [Fact]
+    public async Task GetAll_WithIncludeInactive_DoesNotExposeOtherTenantRoutes()
+    {
+        var tenant1 =
+            await CreateContextAsync();
+
+        var tenant2 =
+            await CreateContextAsync();
+
+        var route1 =
+            await CreateRouteAsync(
+                tenant1.Client,
+                $"Ruta Tenant 1 {Guid.NewGuid():N}");
+
+        var route2 =
+            await CreateRouteAsync(
+                tenant2.Client,
+                $"Ruta Tenant 2 {Guid.NewGuid():N}");
+
+        var response =
+            await tenant1.Client.GetAsync(
+                "/api/collection-routes?includeInactive=true");
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            response.StatusCode);
+
+        var routes =
+            await response.Content
+                .ReadFromJsonAsync<
+                    List<CollectionRouteResponse>>();
+
+        Assert.NotNull(routes);
+
+        Assert.Contains(
+            routes!,
+            x =>
+                x.Id == route1.Id);
+
+        Assert.DoesNotContain(
+            routes!,
+            x =>
+                x.Id == route2.Id);
+
+        Assert.All(
+            routes!,
+            x =>
+                Assert.Equal(
+                    tenant1.TenantId,
+                    x.TenantId));
+    }
+
+    [Fact]
     public async Task GetById_WithValidTenant_ReturnsRoute()
     {
         var context = await CreateContextAsync();

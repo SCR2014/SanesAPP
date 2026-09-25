@@ -1,0 +1,1240 @@
+@page "/admin/collection-routes"
+
+@attribute [Authorize(Roles = WebRoles.Administrator)]
+@rendermode InteractiveServer
+
+@inject ICollectionRoutesWebService RoutesService
+
+@inject IClientsWebService ClientsService
+
+<PageTitle>Rutas de cobranza - Sanes</PageTitle>
+
+<div class="d-flex flex-wrap
+            justify-content-between
+            align-items-start
+            gap-3 mb-4">
+
+    <div>
+        <h1 class="mb-1">
+            Rutas de cobranza
+        </h1>
+
+        <p class="text-muted mb-0">
+            Administración de las rutas
+            de cobranza del tenant actual.
+        </p>
+    </div>
+
+    <button type="button"
+            class="btn btn-primary"
+            @onclick="OpenCreate">
+        Nueva ruta
+    </button>
+
+</div>
+
+@if (!string.IsNullOrWhiteSpace(_message))
+{
+    <div class="alert
+                @(_messageIsError
+                    ? "alert-danger"
+                    : "alert-success")">
+        @_message
+    </div>
+}
+
+<div class="card mb-4">
+    <div class="card-body">
+
+        <div class="row g-3 align-items-end">
+
+            <div class="col-12 col-lg-8">
+
+                <label class="form-label">
+                    Buscar
+                </label>
+
+                <input class="form-control"
+                       placeholder="Nombre o descripción"
+                       @bind="_search"
+                       @bind:event="oninput" />
+
+            </div>
+
+            <div class="col-12 col-lg-4">
+
+                <div class="form-check mb-2">
+
+                    <input class="form-check-input"
+                           type="checkbox"
+                           id="showInactiveRoutes"
+                           @bind="_showInactive" />
+
+                    <label class="form-check-label"
+                           for="showInactiveRoutes">
+                        Mostrar inactivas
+                    </label>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+</div>
+
+@if (_isLoading)
+{
+    <div class="py-5 text-center">
+
+        <div class="spinner-border"
+             role="status">
+        </div>
+
+        <p class="text-muted mt-3">
+            Cargando rutas...
+        </p>
+
+    </div>
+}
+else
+{
+    var routes =
+        FilteredRoutes.ToList();
+
+    if (routes.Count == 0)
+    {
+        <div class="alert alert-info">
+            No existen rutas que coincidan
+            con los criterios seleccionados.
+        </div>
+    }
+    else
+    {
+        <div class="card mb-4">
+
+            <div class="table-responsive">
+
+                <table class="table
+                              table-hover
+                              align-middle
+                              mb-0">
+
+                    <thead>
+                        <tr>
+                            <th>Ruta</th>
+                            <th>Descripción</th>
+                            <th>Ordenamiento</th>
+                            <th>Estado</th>
+                            <th class="text-end">
+                                Acciones
+                            </th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+
+                        @foreach (var route in routes)
+                        {
+                            <tr>
+
+                                <td>
+                                    <strong>
+                                        @route.Name
+                                    </strong>
+                                </td>
+
+                                <td>
+                                    @DisplayValue(
+                                        route.Description)
+                                </td>
+
+                                <td>
+                                    @OrderModeText(
+                                        route.OrderMode)
+                                </td>
+
+                                <td>
+                                    @if (route.IsActive)
+                                    {
+                                        <span class="badge text-bg-success">
+                                            Activa
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge text-bg-secondary">
+                                            Inactiva
+                                        </span>
+                                    }
+                                </td>
+
+                                <td class="text-end">
+
+                                    @if (route.IsActive)
+                                    {
+                                        <button type="button"
+                                                class="btn
+                                                    btn-sm
+                                                    btn-outline-secondary
+                                                    me-2"
+                                                @onclick="() =>
+                                                    OpenClientsAsync(route)">
+
+                                            Clientes
+
+                                        </button>
+                                        <button type="button"
+                                                class="btn
+                                                       btn-sm
+                                                       btn-outline-primary
+                                                       me-2"
+                                                @onclick="() =>
+                                                    OpenEdit(route)">
+                                            Editar
+                                        </button>
+
+                                        <button type="button"
+                                                class="btn
+                                                       btn-sm
+                                                       btn-outline-danger"
+                                                @onclick="() =>
+                                                    RequestDelete(route)">
+                                            Desactivar
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <button type="button"
+                                                class="btn
+                                                       btn-sm
+                                                       btn-outline-success"
+                                                disabled="@_isSaving"
+                                                @onclick="() =>
+                                                    ReactivateAsync(route)">
+                                            Reactivar
+                                        </button>
+                                    }
+
+                                </td>
+
+                            </tr>
+                        }
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </div>
+    }
+}
+
+@if (_selectedRoute is not null)
+{
+    <div class="card mb-4">
+
+        <div class="card-header
+                    d-flex
+                    flex-wrap
+                    justify-content-between
+                    align-items-center
+                    gap-2">
+
+            <div>
+
+                <strong>
+                    Clientes de @_selectedRoute.Name
+                </strong>
+
+                <div class="small text-muted">
+
+                    Modo:
+                    @OrderModeText(
+                        _selectedRoute.OrderMode)
+
+                </div>
+
+            </div>
+
+            <button type="button"
+                    class="btn
+                           btn-sm
+                           btn-outline-secondary"
+                    @onclick="CloseClients">
+
+                Cerrar
+
+            </button>
+
+        </div>
+
+        <div class="card-body">
+
+            @if (_isLoadingClients)
+            {
+                <div class="py-4 text-center">
+
+                    <div class="spinner-border"
+                         role="status">
+                    </div>
+
+                    <p class="text-muted mt-3 mb-0">
+                        Cargando clientes...
+                    </p>
+
+                </div>
+            }
+            else if (_routeClients.Count == 0)
+            {
+                <div class="alert alert-info mb-0">
+
+                    Esta ruta todavía no tiene
+                    clientes asignados.
+
+                </div>
+            }
+            else
+            {
+                @if (_selectedRoute.OrderMode ==
+                    CollectionRouteOrderMode.Manual)
+                {
+                    <div class="alert alert-light border">
+
+                        Usa las flechas para cambiar
+                        el orden de visita y luego
+                        guarda el orden.
+
+                    </div>
+                }
+                else
+                {
+                    <div class="alert alert-light border">
+
+                        La ruta está configurada en
+                        modo automático. La optimización
+                        utiliza las coordenadas de los
+                        clientes para establecer el orden.
+
+                    </div>
+                }
+
+                <div class="table-responsive">
+
+                    <table class="table
+                                  table-sm
+                                  table-hover
+                                  align-middle">
+
+                        <thead>
+                            <tr>
+                                <th style="width: 90px;">
+                                    Orden
+                                </th>
+
+                                <th>Cliente</th>
+                                <th>Teléfono</th>
+                                <th>Coordenadas</th>
+
+                                @if (_selectedRoute.OrderMode ==
+                                    CollectionRouteOrderMode.Manual)
+                                {
+                                    <th class="text-end">
+                                        Mover
+                                    </th>
+                                }
+
+                            </tr>
+                        </thead>
+
+                        <tbody>
+
+                            @for (
+                                var index = 0;
+                                index < _routeClients.Count;
+                                index++)
+                            {
+                                var currentIndex =
+                                    index;
+
+                                var client =
+                                    _routeClients[index];
+
+                                <tr>
+
+                                    <td>
+
+                                        @if (client.CollectionRouteOrder
+                                            .HasValue)
+                                        {
+                                            <span class="badge
+                                                         text-bg-primary">
+                                                @client.CollectionRouteOrder
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge
+                                                         text-bg-secondary">
+                                                Sin orden
+                                            </span>
+                                        }
+
+                                    </td>
+
+                                    <td>
+                                        <strong>
+                                            @ClientName(client)
+                                        </strong>
+                                    </td>
+
+                                    <td>
+                                        @client.Phone
+                                    </td>
+
+                                    <td>
+                                        @CoordinatesText(client)
+                                    </td>
+
+                                    @if (_selectedRoute.OrderMode ==
+                                        CollectionRouteOrderMode.Manual)
+                                    {
+                                        <td class="text-end">
+
+                                            <button type="button"
+                                                    class="btn
+                                                           btn-sm
+                                                           btn-outline-secondary
+                                                           me-1"
+                                                    title="Subir"
+                                                    disabled="@(currentIndex == 0 ||
+                                                                _isSaving)"
+                                                    @onclick="() =>
+                                                        MoveClient(
+                                                            currentIndex,
+                                                            -1)">
+
+                                                ↑
+
+                                            </button>
+
+                                            <button type="button"
+                                                    class="btn
+                                                           btn-sm
+                                                           btn-outline-secondary"
+                                                    title="Bajar"
+                                                    disabled="@(currentIndex ==
+                                                                _routeClients.Count - 1 ||
+                                                                _isSaving)"
+                                                    @onclick="() =>
+                                                        MoveClient(
+                                                            currentIndex,
+                                                            1)">
+
+                                                ↓
+
+                                            </button>
+
+                                        </td>
+                                    }
+
+                                </tr>
+                            }
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+                @if (_selectedRoute.OrderMode ==
+                    CollectionRouteOrderMode.Manual)
+                {
+                    <div class="d-flex
+                                flex-wrap
+                                gap-2
+                                mt-3">
+
+                        <button type="button"
+                                class="btn btn-primary"
+                                disabled="@(!_manualOrderDirty ||
+                                            _isSaving)"
+                                @onclick="SaveManualOrderAsync">
+
+                            Guardar orden
+
+                        </button>
+
+                        <button type="button"
+                                class="btn
+                                       btn-outline-secondary"
+                                disabled="@(!_manualOrderDirty ||
+                                            _isSaving)"
+                                @onclick="ReloadRouteClientsAsync">
+
+                            Restablecer
+
+                        </button>
+
+                    </div>
+                }
+                else
+                {
+                    <hr class="my-4" />
+
+                    <h3 class="h5">
+                        Optimizar orden
+                    </h3>
+
+                    <p class="text-muted">
+
+                        El punto de inicio es opcional.
+                        Si se especifica, debes indicar
+                        tanto latitud como longitud.
+
+                    </p>
+
+                    <EditForm Model="_optimizeModel"
+                              OnValidSubmit="OptimizeRouteAsync">
+
+                        <DataAnnotationsValidator />
+                        <ValidationSummary />
+
+                        <div class="row g-3">
+
+                            <div class="col-12 col-md-5">
+
+                                <label class="form-label">
+                                    Latitud de inicio
+                                </label>
+
+                                <InputNumber class="form-control"
+                                             @bind-Value="_optimizeModel.StartLatitude" />
+
+                                <ValidationMessage
+                                    For="@(() =>
+                                        _optimizeModel.StartLatitude)" />
+
+                            </div>
+
+                            <div class="col-12 col-md-5">
+
+                                <label class="form-label">
+                                    Longitud de inicio
+                                </label>
+
+                                <InputNumber class="form-control"
+                                             @bind-Value="_optimizeModel.StartLongitude" />
+
+                                <ValidationMessage
+                                    For="@(() =>
+                                        _optimizeModel.StartLongitude)" />
+
+                            </div>
+
+                            <div class="col-12 col-md-2
+                                        d-flex
+                                        align-items-end">
+
+                                <button type="submit"
+                                        class="btn
+                                               btn-primary
+                                               w-100"
+                                        disabled="@_isSaving">
+
+                                    Optimizar
+
+                                </button>
+
+                            </div>
+
+                        </div>
+
+                    </EditForm>
+
+                    @if (ClientsWithoutCoordinates > 0)
+                    {
+                        <div class="alert
+                                    alert-warning
+                                    mt-3
+                                    mb-0">
+
+                            @ClientsWithoutCoordinates cliente(s)
+                            no tienen coordenadas válidas
+                            y permanecerán sin orden
+                            durante la optimización.
+
+                        </div>
+                    }
+                }
+            }
+
+        </div>
+
+    </div>
+}
+
+@if (_pendingDelete is not null)
+{
+    <div class="alert alert-warning">
+
+        <h2 class="h5">
+            Confirmar desactivación
+        </h2>
+
+        <p>
+            ¿Deseas desactivar la ruta
+            <strong>@_pendingDelete.Name</strong>?
+        </p>
+
+        <button type="button"
+                class="btn btn-danger me-2"
+                disabled="@_isSaving"
+                @onclick="ConfirmDeleteAsync">
+            Confirmar
+        </button>
+
+        <button type="button"
+                class="btn btn-outline-secondary"
+                disabled="@_isSaving"
+                @onclick="CancelDelete">
+            Cancelar
+        </button>
+
+    </div>
+}
+
+@if (_showForm)
+{
+    <div class="card mb-4">
+
+        <div class="card-header">
+            <strong>
+                @(_editingRoute is null
+                    ? "Nueva ruta"
+                    : "Editar ruta")
+            </strong>
+        </div>
+
+        <div class="card-body">
+
+            <CollectionRouteForm
+                Model="_formModel"
+                IsSaving="_isSaving"
+                SubmitText="@(_editingRoute is null
+                    ? "Guardar"
+                    : "Guardar cambios")"
+                OnValidSubmit="SaveAsync"
+                OnCancel="CloseForm" />
+
+        </div>
+
+    </div>
+}
+
+@code {
+    private List<CollectionRouteResponse> _routes =
+        new();
+
+    private string _search =
+        string.Empty;
+
+    private bool _showInactive;
+
+    private bool _isLoading = true;
+
+    private bool _isSaving;
+
+    private bool _showForm;
+
+    private CollectionRouteResponse?
+        _editingRoute;
+
+    private CollectionRouteResponse?
+        _pendingDelete;
+
+    private CollectionRouteFormModel _formModel =
+        new();
+
+    private string? _message;
+
+    private bool _messageIsError;
+
+    private CollectionRouteResponse?
+    _selectedRoute;
+
+    private List<ClientResponse> _routeClients =
+        new();
+
+    private bool _isLoadingClients;
+
+    private bool _manualOrderDirty;
+
+    private OptimizeCollectionRouteFormModel _optimizeModel =
+        new();
+
+    private IEnumerable<CollectionRouteResponse>
+        FilteredRoutes
+    {
+        get
+        {
+            IEnumerable<CollectionRouteResponse> query =
+                _routes;
+
+            if (!_showInactive)
+            {
+                query =
+                    query.Where(x =>
+                        x.IsActive);
+            }
+
+            if (!string.IsNullOrWhiteSpace(
+                _search))
+            {
+                var search =
+                    _search.Trim();
+
+                query =
+                    query.Where(x =>
+                        Contains(
+                            x.Name,
+                            search) ||
+                        Contains(
+                            x.Description,
+                            search));
+            }
+
+            return query
+                .OrderByDescending(x =>
+                    x.IsActive)
+                .ThenBy(x =>
+                    x.Name);
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _isLoading = true;
+
+        try
+        {
+            _routes =
+                await RoutesService.GetAllAsync(
+                    includeInactive: true);
+        }
+        catch (Exception)
+        {
+            SetError(
+                "No fue posible cargar las rutas de cobranza.");
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task ReloadAsync()
+    {
+        _routes =
+            await RoutesService.GetAllAsync(
+                includeInactive: true);
+    }
+
+    private void OpenCreate()
+    {
+        ClearMessage();
+        CloseClients();
+
+        _editingRoute = null;
+        _pendingDelete = null;
+
+        _formModel =
+            new CollectionRouteFormModel();
+
+        _showForm = true;
+    }
+
+    private void OpenEdit(
+        CollectionRouteResponse route)
+    {
+        ClearMessage();
+        CloseClients();
+
+        _pendingDelete = null;
+
+        _editingRoute =
+            route;
+
+        _formModel =
+            CollectionRouteFormModel
+                .FromResponse(route);
+
+        _showForm = true;
+    }
+
+    private void CloseForm()
+    {
+        _showForm = false;
+        _editingRoute = null;
+    }
+
+    private async Task SaveAsync()
+    {
+        ClearMessage();
+
+        _isSaving = true;
+
+        try
+        {
+            if (_editingRoute is null)
+            {
+                await RoutesService.CreateAsync(
+                    _formModel.ToCreateRequest());
+
+                SetSuccess(
+                    "Ruta creada correctamente.");
+            }
+            else
+            {
+                var updated =
+                    await RoutesService.UpdateAsync(
+                        _editingRoute.Id,
+                        _formModel.ToUpdateRequest());
+
+                if (updated is null)
+                {
+                    SetError(
+                        "La ruta ya no existe o se encuentra inactiva.");
+
+                    return;
+                }
+
+                SetSuccess(
+                    "Ruta actualizada correctamente.");
+            }
+
+            _showForm = false;
+            _editingRoute = null;
+
+            await ReloadAsync();
+        }
+        catch (ArgumentException ex)
+        {
+            SetError(ex.Message);
+        }
+        catch (Exception)
+        {
+            SetError(
+                "No fue posible guardar la ruta.");
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private void RequestDelete(
+        CollectionRouteResponse route)
+    {
+        ClearMessage();
+        CloseClients();
+
+        _showForm = false;
+        _editingRoute = null;
+
+        _pendingDelete =
+            route;
+    }
+
+    private void CancelDelete()
+    {
+        _pendingDelete = null;
+    }
+
+    private async Task ConfirmDeleteAsync()
+    {
+        if (_pendingDelete is null)
+        {
+            return;
+        }
+
+        ClearMessage();
+
+        _isSaving = true;
+
+        try
+        {
+            var deleted =
+                await RoutesService.DeleteAsync(
+                    _pendingDelete.Id);
+
+            if (!deleted)
+            {
+                SetError(
+                    "La ruta no fue encontrada.");
+
+                return;
+            }
+
+            _pendingDelete = null;
+
+            SetSuccess(
+                "Ruta desactivada correctamente.");
+
+            await ReloadAsync();
+        }
+        catch (Exception)
+        {
+            SetError(
+                "No fue posible desactivar la ruta.");
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private async Task ReactivateAsync(
+        CollectionRouteResponse route)
+    {
+        ClearMessage();
+
+        _isSaving = true;
+
+        try
+        {
+            var reactivated =
+                await RoutesService.ReactivateAsync(
+                    route.Id);
+
+            if (reactivated is null)
+            {
+                SetError(
+                    "La ruta no fue encontrada.");
+
+                return;
+            }
+
+            SetSuccess(
+                "Ruta reactivada correctamente.");
+
+            await ReloadAsync();
+        }
+        catch (Exception)
+        {
+            SetError(
+                "No fue posible reactivar la ruta.");
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private static string OrderModeText(
+        CollectionRouteOrderMode orderMode)
+    {
+        return orderMode switch
+        {
+            CollectionRouteOrderMode.Manual =>
+                "Manual",
+
+            CollectionRouteOrderMode.Automatic =>
+                "Automático",
+
+            _ =>
+                orderMode.ToString()
+        };
+    }
+
+    private static bool Contains(
+        string? value,
+        string search)
+    {
+        return !string.IsNullOrWhiteSpace(value) &&
+               value.Contains(
+                   search,
+                   StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string DisplayValue(
+        string? value)
+    {
+        return string.IsNullOrWhiteSpace(value)
+            ? "—"
+            : value;
+    }
+
+    private void SetSuccess(
+        string message)
+    {
+        _message = message;
+        _messageIsError = false;
+    }
+
+    private void SetError(
+        string message)
+    {
+        _message = message;
+        _messageIsError = true;
+    }
+
+    private void ClearMessage()
+    {
+        _message = null;
+    }
+
+    private async Task OpenClientsAsync(
+    CollectionRouteResponse route)
+    {
+        ClearMessage();
+
+        _showForm = false;
+        _editingRoute = null;
+        _pendingDelete = null;
+
+        _selectedRoute =
+            route;
+
+        _optimizeModel =
+            new OptimizeCollectionRouteFormModel();
+
+        await ReloadRouteClientsAsync();
+    }
+
+    private async Task ReloadRouteClientsAsync()
+    {
+        if (_selectedRoute is null)
+        {
+            return;
+        }
+
+        _isLoadingClients = true;
+
+        try
+        {
+            _routeClients =
+                await ClientsService.GetAllAsync(
+                    collectionRouteId:
+                        _selectedRoute.Id);
+
+            _manualOrderDirty =
+                false;
+        }
+        catch (HttpRequestException)
+        {
+            SetError(
+                "No fue posible cargar los clientes de la ruta.");
+        }
+        catch (Exception)
+        {
+            SetError(
+                "Ocurrió un error al cargar los clientes de la ruta.");
+        }
+        finally
+        {
+            _isLoadingClients = false;
+        }
+    }
+
+    private void CloseClients()
+    {
+        _selectedRoute = null;
+
+        _routeClients.Clear();
+
+        _manualOrderDirty = false;
+
+        _optimizeModel =
+            new OptimizeCollectionRouteFormModel();
+    }
+
+    private void MoveClient(
+        int index,
+        int direction)
+    {
+        var targetIndex =
+            index + direction;
+
+        if (index < 0 ||
+            index >= _routeClients.Count ||
+            targetIndex < 0 ||
+            targetIndex >= _routeClients.Count)
+        {
+            return;
+        }
+
+        var client =
+            _routeClients[index];
+
+        _routeClients.RemoveAt(
+            index);
+
+        _routeClients.Insert(
+            targetIndex,
+            client);
+
+        for (var current = 0;
+            current < _routeClients.Count;
+            current++)
+        {
+            _routeClients[current]
+                .CollectionRouteOrder =
+                    current + 1;
+        }
+
+        _manualOrderDirty =
+            true;
+    }
+
+    private async Task SaveManualOrderAsync()
+    {
+        if (_selectedRoute is null ||
+            _selectedRoute.OrderMode !=
+                CollectionRouteOrderMode.Manual)
+        {
+            return;
+        }
+
+        ClearMessage();
+
+        _isSaving = true;
+
+        try
+        {
+            var clientIds =
+                _routeClients
+                    .Select(x => x.Id)
+                    .ToArray();
+
+            var saved =
+                await RoutesService
+                    .ReorderClientsAsync(
+                        _selectedRoute.Id,
+                        clientIds);
+
+            if (!saved)
+            {
+                SetError(
+                    "La ruta no fue encontrada.");
+
+                return;
+            }
+
+            SetSuccess(
+                "Orden de clientes guardado correctamente.");
+
+            await ReloadRouteClientsAsync();
+        }
+        catch (ArgumentException ex)
+        {
+            SetError(ex.Message);
+
+            await ReloadRouteClientsAsync();
+        }
+        catch (Exception)
+        {
+            SetError(
+                "No fue posible guardar el orden de clientes.");
+
+            await ReloadRouteClientsAsync();
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private async Task OptimizeRouteAsync()
+    {
+        if (_selectedRoute is null ||
+            _selectedRoute.OrderMode !=
+                CollectionRouteOrderMode.Automatic)
+        {
+            return;
+        }
+
+        ClearMessage();
+
+        _isSaving = true;
+
+        try
+        {
+            var optimized =
+                await RoutesService
+                    .OptimizeAsync(
+                        _selectedRoute.Id,
+                        _optimizeModel.ToRequest());
+
+            if (!optimized)
+            {
+                SetError(
+                    "La ruta no fue encontrada.");
+
+                return;
+            }
+
+            SetSuccess(
+                "Ruta optimizada correctamente.");
+
+            await ReloadRouteClientsAsync();
+        }
+        catch (ArgumentException ex)
+        {
+            SetError(ex.Message);
+        }
+        catch (Exception)
+        {
+            SetError(
+                "No fue posible optimizar la ruta.");
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private static string ClientName(
+        ClientResponse client)
+    {
+        return string.Join(
+            " ",
+            new[]
+            {
+                client.FirstName,
+                client.LastName
+            }
+            .Where(x =>
+                !string.IsNullOrWhiteSpace(x)));
+    }
+
+    private static string CoordinatesText(
+        ClientResponse client)
+    {
+        if (!client.Latitude.HasValue ||
+            !client.Longitude.HasValue)
+        {
+            return "Sin coordenadas";
+        }
+
+        return
+            $"{client.Latitude.Value:0.######}, " +
+            $"{client.Longitude.Value:0.######}";
+    }
+
+    private int ClientsWithoutCoordinates =>
+        _routeClients.Count(x =>
+            !x.Latitude.HasValue ||
+            !x.Longitude.HasValue ||
+            x.Latitude.Value < -90m ||
+            x.Latitude.Value > 90m ||
+            x.Longitude.Value < -180m ||
+            x.Longitude.Value > 180m);
+}

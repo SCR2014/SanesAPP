@@ -55,12 +55,14 @@ public class CollectionRoutesController : ControllerBase
 
     [HttpGet]
     public async Task<ActionResult<List<CollectionRouteResponse>>> GetAll(
+        [FromQuery] bool includeInactive,
         CancellationToken cancellationToken)
     {
-
-        var routes = await _collectionRouteService.GetAllAsync(
-            _currentUserService.TenantId,
-            cancellationToken);
+        var routes =
+            await _collectionRouteService.GetAllAsync(
+                _currentUserService.TenantId,
+                cancellationToken,
+                includeInactive);
 
         return Ok(routes);
     }

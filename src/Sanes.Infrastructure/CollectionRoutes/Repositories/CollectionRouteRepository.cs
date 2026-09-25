@@ -37,6 +37,33 @@ public class CollectionRouteRepository : ICollectionRouteRepository
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<List<CollectionRoute>> GetByTenantAsync(
+        Guid tenantId,
+        CancellationToken cancellationToken = default,
+        bool includeInactive = false)
+    {
+        var query =
+            _dbContext.CollectionRoutes
+                .AsNoTracking()
+                .Where(x =>
+                    x.TenantId == tenantId);
+
+        if (!includeInactive)
+        {
+            query =
+                query.Where(x =>
+                    x.IsActive);
+        }
+
+        return await query
+            .OrderByDescending(x =>
+                x.IsActive)
+            .ThenBy(x =>
+                x.Name)
+            .ToListAsync(
+                cancellationToken);
+    }
+
     public async Task<CollectionRoute?> GetByIdIncludingInactiveAsync(
         Guid id,
         Guid tenantId,

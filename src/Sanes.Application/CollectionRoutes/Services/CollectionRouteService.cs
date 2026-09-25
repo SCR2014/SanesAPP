@@ -80,11 +80,15 @@ public class CollectionRouteService : ICollectionRouteService
 
     public async Task<List<CollectionRouteResponse>> GetAllAsync(
         Guid tenantId,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool includeInactive = false)
     {
-        var routes = await _collectionRouteRepository.GetActiveByTenantAsync(
-            tenantId,
-            cancellationToken);
+        var routes =
+            await _collectionRouteRepository
+                .GetByTenantAsync(
+                    tenantId,
+                    cancellationToken,
+                    includeInactive);
 
         return routes
             .Select(MapToResponse)

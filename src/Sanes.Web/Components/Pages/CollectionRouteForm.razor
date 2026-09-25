@@ -1,0 +1,110 @@
+<EditForm Model="Model"
+          OnValidSubmit="HandleValidSubmit">
+
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+
+    <div class="row g-3">
+
+        <div class="col-12 col-md-6">
+
+            <label class="form-label">
+                Nombre *
+            </label>
+
+            <InputText class="form-control"
+                       @bind-Value="Model.Name" />
+
+            <ValidationMessage
+                For="@(() => Model.Name)" />
+
+        </div>
+
+        <div class="col-12 col-md-6">
+
+            <label class="form-label">
+                Modo de ordenamiento
+            </label>
+
+            <InputSelect class="form-select"
+                         @bind-Value="Model.OrderMode">
+
+                <option value="@CollectionRouteOrderMode.Manual">
+                    Manual
+                </option>
+
+                <option value="@CollectionRouteOrderMode.Automatic">
+                    Automático
+                </option>
+
+            </InputSelect>
+
+            <div class="form-text">
+                Manual permite definir el orden de cobro.
+                Automático permite optimizarlo por coordenadas.
+            </div>
+
+        </div>
+
+        <div class="col-12">
+
+            <label class="form-label">
+                Descripción
+            </label>
+
+            <InputTextArea class="form-control"
+                           rows="3"
+                           @bind-Value="Model.Description" />
+
+        </div>
+
+    </div>
+
+    <div class="mt-4">
+
+        <button type="submit"
+                class="btn btn-primary me-2"
+                disabled="@IsSaving">
+            @SubmitText
+        </button>
+
+        <button type="button"
+                class="btn btn-outline-secondary"
+                disabled="@IsSaving"
+                @onclick="HandleCancel">
+            Cancelar
+        </button>
+
+    </div>
+
+</EditForm>
+
+@code {
+    [Parameter]
+    [EditorRequired]
+    public CollectionRouteFormModel Model { get; set; } =
+        null!;
+
+    [Parameter]
+    public string SubmitText { get; set; } =
+        "Guardar";
+
+    [Parameter]
+    public bool IsSaving { get; set; }
+
+    [Parameter]
+    public EventCallback OnValidSubmit { get; set; }
+
+    [Parameter]
+    public EventCallback OnCancel { get; set; }
+
+    private Task HandleValidSubmit()
+    {
+        return OnValidSubmit.InvokeAsync();
+    }
+
+    private Task HandleCancel()
+    {
+        return OnCancel.InvokeAsync();
+    }
+}
