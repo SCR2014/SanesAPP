@@ -1,38 +1,32 @@
 using Sanes.Application.Clients.DTOs;
+using Sanes.Application.CollectionRoutes.DTOs;
 
-namespace Sanes.Application.Clients.Services;
+namespace Sanes.Web.Clients;
 
-public interface IClientService
+public interface IClientsWebService
 {
+    Task<List<ClientResponse>> GetAllAsync(
+        Guid? collectionRouteId = null,
+        bool includeInactive = false,
+        CancellationToken cancellationToken = default);
+
+    Task<List<CollectionRouteResponse>> GetRoutesAsync(
+        CancellationToken cancellationToken = default);
+
     Task<ClientResponse> CreateAsync(
-        Guid tenantId,
         CreateClientRequest request,
         CancellationToken cancellationToken = default);
 
-    Task<List<ClientResponse>> GetAllAsync(
-        Guid tenantId,
-        Guid? collectionRouteId = null,
-        CancellationToken cancellationToken = default,
-        bool includeInactive = false);
-
-    Task<ClientResponse?> GetByIdAsync(
-        Guid tenantId,
-        Guid clientId,
-        CancellationToken cancellationToken = default);
-
     Task<ClientResponse?> UpdateAsync(
-        Guid tenantId,
         Guid clientId,
         UpdateClientRequest request,
         CancellationToken cancellationToken = default);
 
     Task<bool> DeleteAsync(
-        Guid tenantId,
         Guid clientId,
         CancellationToken cancellationToken = default);
 
     Task<bool> ReactivateAsync(
-        Guid tenantId,
         Guid clientId,
         CancellationToken cancellationToken = default);
 }

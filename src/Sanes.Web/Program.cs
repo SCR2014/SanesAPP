@@ -11,6 +11,7 @@ using System.Security.Claims;
 using Sanes.Web.Dashboard;
 using Sanes.Web.FinancialReports;
 using Sanes.Web.Investors;
+using Sanes.Web.Clients;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -80,6 +81,10 @@ builder.Services.AddScoped<
 builder.Services.AddScoped<
     IInvestorsWebService,
     InvestorsWebService>();
+
+builder.Services.AddScoped<
+    IClientsWebService,
+    ClientsWebService>();
 
 // Web authentication
 builder.Services

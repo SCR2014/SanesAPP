@@ -11,7 +11,8 @@ public interface IClientRepository
     Task<List<Client>> GetAllAsync(
         Guid tenantId,
         Guid? collectionRouteId = null,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        bool includeInactive = false);
 
     Task<Client?> GetByIdAsync(
         Guid tenantId,

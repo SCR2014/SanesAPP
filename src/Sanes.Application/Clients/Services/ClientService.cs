@@ -98,12 +98,15 @@ public class ClientService : IClientService
     public async Task<List<ClientResponse>> GetAllAsync(
         Guid tenantId,
         Guid? collectionRouteId = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool includeInactive = false)
     {
-        var clients = await _clientRepository.GetAllAsync(
-            tenantId,
-            collectionRouteId,
-            cancellationToken);
+        var clients =
+            await _clientRepository.GetAllAsync(
+                tenantId,
+                collectionRouteId,
+                cancellationToken,
+                includeInactive);
 
         return clients
             .Select(Map)
