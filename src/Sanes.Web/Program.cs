@@ -12,6 +12,7 @@ using Sanes.Web.Dashboard;
 using Sanes.Web.FinancialReports;
 using Sanes.Web.Investors;
 using Sanes.Web.Clients;
+using Sanes.Web.CollectionRoutes;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -85,6 +86,10 @@ builder.Services.AddScoped<
 builder.Services.AddScoped<
     IClientsWebService,
     ClientsWebService>();
+
+builder.Services.AddScoped<
+    ICollectionRoutesWebService,
+    CollectionRoutesWebService>();
 
 // Web authentication
 builder.Services

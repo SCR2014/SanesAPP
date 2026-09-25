@@ -11,7 +11,8 @@ public interface ICollectionRouteService
 
     Task<List<CollectionRouteResponse>> GetAllAsync(
         Guid tenantId,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        bool includeInactive = false);
 
     Task<CollectionRouteResponse?> GetByIdAsync(
         Guid id,

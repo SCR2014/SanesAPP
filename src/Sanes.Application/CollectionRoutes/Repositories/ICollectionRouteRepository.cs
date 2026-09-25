@@ -13,6 +13,11 @@ public interface ICollectionRouteRepository
         Guid tenantId,
         CancellationToken cancellationToken = default);
 
+    Task<List<CollectionRoute>> GetByTenantAsync(
+        Guid tenantId,
+        CancellationToken cancellationToken = default,
+        bool includeInactive = false);
+
     Task<CollectionRoute?> GetByIdIncludingInactiveAsync(
         Guid id,
         Guid tenantId,
