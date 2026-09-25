@@ -55,13 +55,15 @@ public class ClientsController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<List<ClientResponse>>> GetAll(
         [FromQuery] Guid? collectionRouteId,
+        [FromQuery] bool includeInactive,
         CancellationToken cancellationToken)
     {
-
-        var clients = await _clientService.GetAllAsync(
-            _currentUserService.TenantId,
-            collectionRouteId,
-            cancellationToken);
+        var clients =
+            await _clientService.GetAllAsync(
+                _currentUserService.TenantId,
+                collectionRouteId,
+                cancellationToken,
+                includeInactive);
 
         return Ok(clients);
     }

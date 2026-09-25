@@ -1,0 +1,228 @@
+<EditForm Model="Model"
+          OnValidSubmit="HandleValidSubmit">
+
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+
+    <div class="row g-3">
+
+        <div class="col-12 col-md-6">
+
+            <label class="form-label">
+                Nombre *
+            </label>
+
+            <InputText class="form-control"
+                       @bind-Value="Model.FirstName" />
+
+            <ValidationMessage
+                For="@(() => Model.FirstName)" />
+
+        </div>
+
+        <div class="col-12 col-md-6">
+
+            <label class="form-label">
+                Apellido
+            </label>
+
+            <InputText class="form-control"
+                       @bind-Value="Model.LastName" />
+
+            <ValidationMessage
+                For="@(() => Model.LastName)" />
+
+        </div>
+
+        <div class="col-12 col-md-6">
+
+            <label class="form-label">
+                Teléfono *
+            </label>
+
+            <InputText class="form-control"
+                       @bind-Value="Model.Phone" />
+
+            <ValidationMessage
+                For="@(() => Model.Phone)" />
+
+        </div>
+
+        <div class="col-12 col-md-6">
+
+            <label class="form-label">
+                Teléfono secundario
+            </label>
+
+            <InputText class="form-control"
+                       @bind-Value="Model.SecondaryPhone" />
+
+        </div>
+
+        <div class="col-12 col-md-4">
+
+            <label class="form-label">
+                Tipo de identificación
+            </label>
+
+            <InputText class="form-control"
+                       @bind-Value="Model.IdentificationType" />
+
+        </div>
+
+        <div class="col-12 col-md-4">
+
+            <label class="form-label">
+                Identificación
+            </label>
+
+            <InputText class="form-control"
+                       @bind-Value="Model.Identification" />
+
+        </div>
+
+        <div class="col-12 col-md-4">
+
+            <label class="form-label">
+                Número social
+            </label>
+
+            <InputText class="form-control"
+                       @bind-Value="Model.SocialNumber" />
+
+        </div>
+
+        <div class="col-12">
+
+            <label class="form-label">
+                Dirección
+            </label>
+
+            <InputText class="form-control"
+                       @bind-Value="Model.Address" />
+
+        </div>
+
+        <div class="col-12 col-md-6">
+
+            <label class="form-label">
+                Ruta de cobranza
+            </label>
+
+            <InputSelect class="form-select"
+                         @bind-Value="Model.CollectionRouteId">
+
+                <option value="">
+                    Sin ruta asignada
+                </option>
+
+                @foreach (var route in Routes)
+                {
+                    <option value="@route.Id">
+                        @route.Name
+                    </option>
+                }
+
+            </InputSelect>
+
+        </div>
+
+        <div class="col-12 col-md-3">
+
+            <label class="form-label">
+                Latitud
+            </label>
+
+            <InputNumber class="form-control"
+                         @bind-Value="Model.Latitude" />
+
+            <ValidationMessage
+                For="@(() => Model.Latitude)" />
+
+        </div>
+
+        <div class="col-12 col-md-3">
+
+            <label class="form-label">
+                Longitud
+            </label>
+
+            <InputNumber class="form-control"
+                         @bind-Value="Model.Longitude" />
+
+            <ValidationMessage
+                For="@(() => Model.Longitude)" />
+
+        </div>
+
+        <div class="col-12">
+
+            <label class="form-label">
+                Notas
+            </label>
+
+            <InputTextArea class="form-control"
+                           rows="3"
+                           @bind-Value="Model.Notes" />
+
+        </div>
+
+    </div>
+
+    <div class="mt-4">
+
+        <button type="submit"
+                class="btn btn-primary me-2"
+                disabled="@IsSaving">
+
+            @SubmitText
+
+        </button>
+
+        <button type="button"
+                class="btn btn-outline-secondary"
+                disabled="@IsSaving"
+                @onclick="HandleCancel">
+
+            Cancelar
+
+        </button>
+
+    </div>
+
+</EditForm>
+
+@code {
+    [Parameter]
+    [EditorRequired]
+    public ClientFormModel Model { get; set; } =
+        null!;
+
+    [Parameter]
+    public IReadOnlyList<CollectionRouteResponse>
+        Routes { get; set; } =
+            Array.Empty<CollectionRouteResponse>();
+
+    [Parameter]
+    public string SubmitText { get; set; } =
+        "Guardar";
+
+    [Parameter]
+    public bool IsSaving { get; set; }
+
+    [Parameter]
+    public EventCallback OnValidSubmit { get; set; }
+
+    [Parameter]
+    public EventCallback OnCancel { get; set; }
+
+    private Task HandleValidSubmit()
+    {
+        return OnValidSubmit.InvokeAsync();
+    }
+
+    private Task HandleCancel()
+    {
+        return OnCancel.InvokeAsync();
+    }
+}

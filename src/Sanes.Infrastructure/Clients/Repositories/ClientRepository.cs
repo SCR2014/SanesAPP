@@ -24,32 +24,52 @@ public class ClientRepository : IClientRepository
     public async Task<List<Client>> GetAllAsync(
         Guid tenantId,
         Guid? collectionRouteId = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool includeInactive = false)
     {
-        var query = _dbContext.Clients
-            .AsNoTracking()
-            .Where(x =>
-                x.TenantId == tenantId &&
-                x.IsActive);
+        var query =
+            _dbContext.Clients
+                .AsNoTracking()
+                .Where(x =>
+                    x.TenantId == tenantId);
+
+        if (!includeInactive)
+        {
+            query =
+                query.Where(x =>
+                    x.IsActive);
+        }
 
         if (collectionRouteId.HasValue)
-            query = query.Where(
-                x => x.CollectionRouteId == collectionRouteId.Value);
+        {
+            query =
+                query.Where(x =>
+                    x.CollectionRouteId ==
+                    collectionRouteId.Value);
+        }
 
         if (collectionRouteId.HasValue)
         {
             return await query
-                .OrderBy(x => x.CollectionRouteOrder == null)
-                .ThenBy(x => x.CollectionRouteOrder)
-                .ThenBy(x => x.FirstName)
-                .ThenBy(x => x.LastName)
-                .ToListAsync(cancellationToken);
+                .OrderBy(x =>
+                    x.CollectionRouteOrder == null)
+                .ThenBy(x =>
+                    x.CollectionRouteOrder)
+                .ThenBy(x =>
+                    x.FirstName)
+                .ThenBy(x =>
+                    x.LastName)
+                .ToListAsync(
+                    cancellationToken);
         }
 
         return await query
-            .OrderBy(x => x.FirstName)
-            .ThenBy(x => x.LastName)
-            .ToListAsync(cancellationToken);
+            .OrderBy(x =>
+                x.FirstName)
+            .ThenBy(x =>
+                x.LastName)
+            .ToListAsync(
+                cancellationToken);
     }
 
     public async Task<Client?> GetByIdAsync(

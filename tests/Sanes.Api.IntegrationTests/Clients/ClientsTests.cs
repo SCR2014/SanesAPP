@@ -469,6 +469,243 @@ public class ClientsTests
             response.StatusCode);
     }
 
+    [Fact]
+    public async Task GetAll_WithoutIncludeInactive_ExcludesInactiveClients()
+    {
+        var context =
+            await CreateContextAsync();
+
+        var activeClient =
+            await CreateClientAsync(
+                context.Client);
+
+        var inactiveClient =
+            await CreateClientAsync(
+                context.Client);
+
+        var deleteResponse =
+            await context.Client.DeleteAsync(
+                $"/api/clients/{inactiveClient.Id}");
+
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            deleteResponse.StatusCode);
+
+        var response =
+            await context.Client.GetAsync(
+                "/api/clients");
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            response.StatusCode);
+
+        var clients =
+            await response.Content
+                .ReadFromJsonAsync<
+                    List<ClientResponse>>();
+
+        Assert.NotNull(clients);
+
+        Assert.Contains(
+            clients!,
+            x =>
+                x.Id == activeClient.Id);
+
+        Assert.DoesNotContain(
+            clients!,
+            x =>
+                x.Id == inactiveClient.Id);
+
+        Assert.All(
+            clients!,
+            x =>
+                Assert.True(
+                    x.IsActive));
+    }
+
+    [Fact]
+    public async Task GetAll_WithIncludeInactive_ReturnsActiveAndInactiveClients()
+    {
+        var context =
+            await CreateContextAsync();
+
+        var activeClient =
+            await CreateClientAsync(
+                context.Client);
+
+        var inactiveClient =
+            await CreateClientAsync(
+                context.Client);
+
+        var deleteResponse =
+            await context.Client.DeleteAsync(
+                $"/api/clients/{inactiveClient.Id}");
+
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            deleteResponse.StatusCode);
+
+        var response =
+            await context.Client.GetAsync(
+                "/api/clients?includeInactive=true");
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            response.StatusCode);
+
+        var clients =
+            await response.Content
+                .ReadFromJsonAsync<
+                    List<ClientResponse>>();
+
+        Assert.NotNull(clients);
+
+        var activeResult =
+            Assert.Single(
+                clients!,
+                x =>
+                    x.Id == activeClient.Id);
+
+        var inactiveResult =
+            Assert.Single(
+                clients!,
+                x =>
+                    x.Id == inactiveClient.Id);
+
+        Assert.True(
+            activeResult.IsActive);
+
+        Assert.False(
+            inactiveResult.IsActive);
+    }
+
+    [Fact]
+    public async Task GetAll_WithIncludeInactive_DoesNotExposeOtherTenantClients()
+    {
+        var tenant1 =
+            await CreateContextAsync();
+
+        var tenant2 =
+            await CreateContextAsync();
+
+        var tenant1Client =
+            await CreateClientAsync(
+                tenant1.Client);
+
+        var tenant2Client =
+            await CreateClientAsync(
+                tenant2.Client);
+
+        var response =
+            await tenant1.Client.GetAsync(
+                "/api/clients?includeInactive=true");
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            response.StatusCode);
+
+        var clients =
+            await response.Content
+                .ReadFromJsonAsync<
+                    List<ClientResponse>>();
+
+        Assert.NotNull(clients);
+
+        Assert.Contains(
+            clients!,
+            x =>
+                x.Id == tenant1Client.Id);
+
+        Assert.DoesNotContain(
+            clients!,
+            x =>
+                x.Id == tenant2Client.Id);
+
+        Assert.All(
+            clients!,
+            x =>
+                Assert.Equal(
+                    tenant1.TenantId,
+                    x.TenantId));
+    }
+
+    [Fact]
+    public async Task GetAll_WithRouteAndIncludeInactive_PreservesRouteFilter()
+    {
+        var context =
+            await CreateContextAsync();
+
+        var route1 =
+            await CreateRouteAsync(
+                context.TenantId);
+
+        var route2 =
+            await CreateRouteAsync(
+                context.TenantId);
+
+        var activeRoute1 =
+            await CreateClientAsync(
+                context.Client,
+                route1.Id);
+
+        var inactiveRoute1 =
+            await CreateClientAsync(
+                context.Client,
+                route1.Id);
+
+        var route2Client =
+            await CreateClientAsync(
+                context.Client,
+                route2.Id);
+
+        var deleteResponse =
+            await context.Client.DeleteAsync(
+                $"/api/clients/{inactiveRoute1.Id}");
+
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            deleteResponse.StatusCode);
+
+        var response =
+            await context.Client.GetAsync(
+                $"/api/clients" +
+                $"?collectionRouteId={route1.Id}" +
+                "&includeInactive=true");
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            response.StatusCode);
+
+        var clients =
+            await response.Content
+                .ReadFromJsonAsync<
+                    List<ClientResponse>>();
+
+        Assert.NotNull(clients);
+
+        Assert.Contains(
+            clients!,
+            x =>
+                x.Id == activeRoute1.Id);
+
+        Assert.Contains(
+            clients!,
+            x =>
+                x.Id == inactiveRoute1.Id);
+
+        Assert.DoesNotContain(
+            clients!,
+            x =>
+                x.Id == route2Client.Id);
+
+        Assert.All(
+            clients!,
+            x =>
+                Assert.Equal(
+                    route1.Id,
+                    x.CollectionRouteId));
+    }
+
     // ============================================================
     // HELPERS
     // ============================================================
