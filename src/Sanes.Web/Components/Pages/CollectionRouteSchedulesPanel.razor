@@ -1,0 +1,649 @@
+@inject ICollectionRouteSchedulesWebService SchedulesService
+
+<div class="card mb-4">
+
+    <div class="card-header
+                d-flex
+                flex-wrap
+                justify-content-between
+                align-items-center
+                gap-2">
+
+        <div>
+
+            <strong>
+                Horarios de @Route.Name
+            </strong>
+
+            <div class="small text-muted">
+                Días y horarios de cobranza.
+            </div>
+
+        </div>
+
+        <button type="button"
+                class="btn btn-sm btn-outline-secondary"
+                @onclick="CloseAsync">
+
+            Cerrar
+
+        </button>
+
+    </div>
+
+    <div class="card-body">
+
+        @if (!string.IsNullOrWhiteSpace(
+            _message))
+        {
+            <div class="alert
+                        @(_messageIsError
+                            ? "alert-danger"
+                            : "alert-success")">
+
+                @_message
+
+            </div>
+        }
+
+        <div class="d-flex
+                    flex-wrap
+                    justify-content-between
+                    align-items-center
+                    gap-3
+                    mb-3">
+
+            <div class="form-check">
+
+                <input class="form-check-input"
+                       type="checkbox"
+                       id="showInactiveSchedules"
+                       @bind="_showInactive" />
+
+                <label class="form-check-label"
+                       for="showInactiveSchedules">
+
+                    Mostrar inactivos
+
+                </label>
+
+            </div>
+
+            <button type="button"
+                    class="btn btn-primary btn-sm"
+                    @onclick="OpenCreate">
+
+                Nuevo horario
+
+            </button>
+
+        </div>
+
+        @if (_isLoading)
+        {
+            <div class="py-4 text-center">
+
+                <div class="spinner-border"
+                     role="status">
+                </div>
+
+                <p class="text-muted mt-3 mb-0">
+                    Cargando horarios...
+                </p>
+
+            </div>
+        }
+        else
+        {
+            var schedules =
+                FilteredSchedules.ToList();
+
+            if (schedules.Count == 0)
+            {
+                <div class="alert alert-info">
+
+                    No existen horarios configurados.
+
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
+
+                    <table class="table
+                                  table-hover
+                                  align-middle">
+
+                        <thead>
+                            <tr>
+                                <th>Día</th>
+                                <th>Horario</th>
+                                <th>Estado</th>
+                                <th class="text-end">
+                                    Acciones
+                                </th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+
+                            @foreach (
+                                var schedule in schedules)
+                            {
+                                <tr>
+
+                                    <td>
+                                        <strong>
+                                            @DayText(
+                                                schedule.DayOfWeek)
+                                        </strong>
+                                    </td>
+
+                                    <td>
+                                        @ScheduleTimeText(
+                                            schedule)
+                                    </td>
+
+                                    <td>
+
+                                        @if (schedule.IsActive)
+                                        {
+                                            <span class="badge
+                                                         text-bg-success">
+
+                                                Activo
+
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge
+                                                         text-bg-secondary">
+
+                                                Inactivo
+
+                                            </span>
+                                        }
+
+                                    </td>
+
+                                    <td class="text-end">
+
+                                        @if (schedule.IsActive)
+                                        {
+                                            <button type="button"
+                                                    class="btn
+                                                           btn-sm
+                                                           btn-outline-primary
+                                                           me-2"
+                                                    @onclick="() =>
+                                                        OpenEdit(schedule)">
+
+                                                Editar
+
+                                            </button>
+
+                                            <button type="button"
+                                                    class="btn
+                                                           btn-sm
+                                                           btn-outline-danger"
+                                                    @onclick="() =>
+                                                        RequestDelete(schedule)">
+
+                                                Desactivar
+
+                                            </button>
+                                        }
+                                        else
+                                        {
+                                            <button type="button"
+                                                    class="btn
+                                                           btn-sm
+                                                           btn-outline-success"
+                                                    disabled="@_isSaving"
+                                                    @onclick="() =>
+                                                        ReactivateAsync(schedule)">
+
+                                                Reactivar
+
+                                            </button>
+                                        }
+
+                                    </td>
+
+                                </tr>
+                            }
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+            }
+        }
+
+        @if (_pendingDelete is not null)
+        {
+            <div class="alert alert-warning">
+
+                <h3 class="h6">
+                    Confirmar desactivación
+                </h3>
+
+                <p>
+                    ¿Deseas desactivar el horario de
+                    <strong>
+                        @DayText(
+                            _pendingDelete.DayOfWeek)
+                    </strong>?
+                </p>
+
+                <button type="button"
+                        class="btn btn-danger me-2"
+                        disabled="@_isSaving"
+                        @onclick="ConfirmDeleteAsync">
+
+                    Confirmar
+
+                </button>
+
+                <button type="button"
+                        class="btn btn-outline-secondary"
+                        disabled="@_isSaving"
+                        @onclick="CancelDelete">
+
+                    Cancelar
+
+                </button>
+
+            </div>
+        }
+
+        @if (_showForm)
+        {
+            <div class="border rounded p-3 mt-3">
+
+                <h3 class="h5">
+
+                    @(_editingSchedule is null
+                        ? "Nuevo horario"
+                        : "Editar horario")
+
+                </h3>
+
+                <CollectionRouteScheduleForm
+                    Model="_formModel"
+                    IsSaving="_isSaving"
+                    SubmitText="@(_editingSchedule is null
+                        ? "Guardar"
+                        : "Guardar cambios")"
+                    OnValidSubmit="SaveAsync"
+                    OnCancel="CloseForm" />
+
+            </div>
+        }
+
+    </div>
+
+</div>
+
+@code {
+    [Parameter]
+    [EditorRequired]
+    public CollectionRouteResponse Route { get; set; } =
+        null!;
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    private List<CollectionRouteScheduleResponse> _schedules =
+        new();
+
+    private Guid? _loadedRouteId;
+
+    private bool _showInactive;
+
+    private bool _isLoading;
+
+    private bool _isSaving;
+
+    private bool _showForm;
+
+    private CollectionRouteScheduleResponse?
+        _editingSchedule;
+
+    private CollectionRouteScheduleResponse?
+        _pendingDelete;
+
+    private CollectionRouteScheduleFormModel _formModel =
+        new();
+
+    private string? _message;
+
+    private bool _messageIsError;
+
+    private IEnumerable<CollectionRouteScheduleResponse>
+        FilteredSchedules =>
+            _schedules
+                .Where(x =>
+                    _showInactive ||
+                    x.IsActive)
+                .OrderBy(x =>
+                    x.DayOfWeek);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedRouteId ==
+            Route.Id)
+        {
+            return;
+        }
+
+        _loadedRouteId =
+            Route.Id;
+
+        _showForm = false;
+        _editingSchedule = null;
+        _pendingDelete = null;
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _isLoading = true;
+
+        try
+        {
+            _schedules =
+                await SchedulesService.GetAllAsync(
+                    Route.Id,
+                    includeInactive: true);
+        }
+        catch (ArgumentException ex)
+        {
+            SetError(
+                ex.Message);
+        }
+        catch (Exception)
+        {
+            SetError(
+                "No fue posible cargar los horarios.");
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task ReloadAsync()
+    {
+        _schedules =
+            await SchedulesService.GetAllAsync(
+                Route.Id,
+                includeInactive: true);
+    }
+
+    private void OpenCreate()
+    {
+        ClearMessage();
+
+        _editingSchedule = null;
+        _pendingDelete = null;
+
+        _formModel =
+            new CollectionRouteScheduleFormModel();
+
+        _showForm = true;
+    }
+
+    private void OpenEdit(
+        CollectionRouteScheduleResponse schedule)
+    {
+        ClearMessage();
+
+        _pendingDelete = null;
+
+        _editingSchedule =
+            schedule;
+
+        _formModel =
+            CollectionRouteScheduleFormModel
+                .FromResponse(
+                    schedule);
+
+        _showForm = true;
+    }
+
+    private void CloseForm()
+    {
+        _showForm = false;
+        _editingSchedule = null;
+    }
+
+    private async Task SaveAsync()
+    {
+        ClearMessage();
+
+        _isSaving = true;
+
+        try
+        {
+            if (_editingSchedule is null)
+            {
+                await SchedulesService.CreateAsync(
+                    _formModel.ToCreateRequest(
+                        Route.Id));
+
+                SetSuccess(
+                    "Horario creado correctamente.");
+            }
+            else
+            {
+                var updated =
+                    await SchedulesService.UpdateAsync(
+                        _editingSchedule.Id,
+                        Route.Id,
+                        _formModel.ToUpdateRequest());
+
+                if (updated is null)
+                {
+                    SetError(
+                        "El horario ya no existe o se encuentra inactivo.");
+
+                    return;
+                }
+
+                SetSuccess(
+                    "Horario actualizado correctamente.");
+            }
+
+            _showForm = false;
+            _editingSchedule = null;
+
+            await ReloadAsync();
+        }
+        catch (ArgumentException ex)
+        {
+            SetError(
+                ex.Message);
+        }
+        catch (Exception)
+        {
+            SetError(
+                "No fue posible guardar el horario.");
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private void RequestDelete(
+        CollectionRouteScheduleResponse schedule)
+    {
+        ClearMessage();
+
+        _showForm = false;
+        _editingSchedule = null;
+
+        _pendingDelete =
+            schedule;
+    }
+
+    private void CancelDelete()
+    {
+        _pendingDelete = null;
+    }
+
+    private async Task ConfirmDeleteAsync()
+    {
+        if (_pendingDelete is null)
+        {
+            return;
+        }
+
+        ClearMessage();
+
+        _isSaving = true;
+
+        try
+        {
+            var deleted =
+                await SchedulesService.DeleteAsync(
+                    _pendingDelete.Id,
+                    Route.Id);
+
+            if (!deleted)
+            {
+                SetError(
+                    "El horario no fue encontrado.");
+
+                return;
+            }
+
+            _pendingDelete = null;
+
+            SetSuccess(
+                "Horario desactivado correctamente.");
+
+            await ReloadAsync();
+        }
+        catch (Exception)
+        {
+            SetError(
+                "No fue posible desactivar el horario.");
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private async Task ReactivateAsync(
+        CollectionRouteScheduleResponse schedule)
+    {
+        ClearMessage();
+
+        _isSaving = true;
+
+        try
+        {
+            var reactivated =
+                await SchedulesService.ReactivateAsync(
+                    schedule.Id,
+                    Route.Id);
+
+            if (reactivated is null)
+            {
+                SetError(
+                    "El horario no fue encontrado.");
+
+                return;
+            }
+
+            SetSuccess(
+                "Horario reactivado correctamente.");
+
+            await ReloadAsync();
+        }
+        catch (Exception)
+        {
+            SetError(
+                "No fue posible reactivar el horario.");
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private Task CloseAsync()
+    {
+        return OnClose.InvokeAsync();
+    }
+
+    private static string DayText(
+        CollectionWeekDay day)
+    {
+        return day switch
+        {
+            CollectionWeekDay.Monday =>
+                "Lunes",
+
+            CollectionWeekDay.Tuesday =>
+                "Martes",
+
+            CollectionWeekDay.Wednesday =>
+                "Miércoles",
+
+            CollectionWeekDay.Thursday =>
+                "Jueves",
+
+            CollectionWeekDay.Friday =>
+                "Viernes",
+
+            CollectionWeekDay.Saturday =>
+                "Sábado",
+
+            CollectionWeekDay.Sunday =>
+                "Domingo",
+
+            _ =>
+                day.ToString()
+        };
+    }
+
+    private static string ScheduleTimeText(
+        CollectionRouteScheduleResponse schedule)
+    {
+        if (!schedule.StartTime.HasValue ||
+            !schedule.EndTime.HasValue)
+        {
+            return "Sin horario definido";
+        }
+
+        return
+            $"{schedule.StartTime.Value:HH\\:mm} - " +
+            $"{schedule.EndTime.Value:HH\\:mm}";
+    }
+
+    private void SetSuccess(
+        string message)
+    {
+        _message = message;
+        _messageIsError = false;
+    }
+
+    private void SetError(
+        string message)
+    {
+        _message = message;
+        _messageIsError = true;
+    }
+
+    private void ClearMessage()
+    {
+        _message = null;
+    }
+}

@@ -57,6 +57,32 @@ public class CollectionRouteScheduleRepository
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<List<CollectionRouteSchedule>> GetByRouteAsync(
+        Guid collectionRouteId,
+        CancellationToken cancellationToken = default,
+        bool includeInactive = false)
+    {
+        var query =
+            _dbContext.CollectionRouteSchedules
+                .AsNoTracking()
+                .Where(x =>
+                    x.CollectionRouteId ==
+                    collectionRouteId);
+
+        if (!includeInactive)
+        {
+            query =
+                query.Where(x =>
+                    x.IsActive);
+        }
+
+        return await query
+            .OrderBy(x =>
+                x.DayOfWeek)
+            .ToListAsync(
+                cancellationToken);
+    }
+
     public async Task<bool> DayExistsAsync(
         Guid collectionRouteId,
         CollectionWeekDay dayOfWeek,

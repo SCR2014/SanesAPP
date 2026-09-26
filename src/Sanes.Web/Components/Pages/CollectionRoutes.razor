@@ -180,6 +180,17 @@ else
                                                     btn-outline-secondary
                                                     me-2"
                                                 @onclick="() =>
+                                                    OpenSchedules(route)">
+
+                                            Horarios
+
+                                        </button>
+                                        <button type="button"
+                                                class="btn
+                                                    btn-sm
+                                                    btn-outline-secondary
+                                                    me-2"
+                                                @onclick="() =>
                                                     OpenClientsAsync(route)">
 
                                             Clientes
@@ -576,6 +587,13 @@ else
     </div>
 }
 
+@if (_scheduleRoute is not null)
+{
+    <CollectionRouteSchedulesPanel
+        Route="_scheduleRoute"
+        OnClose="CloseSchedules" />
+}
+
 @if (_pendingDelete is not null)
 {
     <div class="alert alert-warning">
@@ -675,6 +693,9 @@ else
     private OptimizeCollectionRouteFormModel _optimizeModel =
         new();
 
+    private CollectionRouteResponse?
+        _scheduleRoute;
+
     private IEnumerable<CollectionRouteResponse>
         FilteredRoutes
     {
@@ -751,6 +772,7 @@ else
     {
         ClearMessage();
         CloseClients();
+        _scheduleRoute = null;
 
         _editingRoute = null;
         _pendingDelete = null;
@@ -767,6 +789,7 @@ else
         ClearMessage();
         CloseClients();
 
+        _scheduleRoute = null;
         _pendingDelete = null;
 
         _editingRoute =
@@ -846,11 +869,34 @@ else
         ClearMessage();
         CloseClients();
 
+        _scheduleRoute = null;
         _showForm = false;
         _editingRoute = null;
 
         _pendingDelete =
             route;
+    }
+
+    private void OpenSchedules(
+        CollectionRouteResponse route)
+    {
+        ClearMessage();
+
+        _selectedRoute = null;
+        _routeClients.Clear();
+        _manualOrderDirty = false;
+
+        _showForm = false;
+        _editingRoute = null;
+        _pendingDelete = null;
+
+        _scheduleRoute =
+            route;
+    }
+
+    private void CloseSchedules()
+    {
+        _scheduleRoute = null;
     }
 
     private void CancelDelete()
@@ -995,6 +1041,7 @@ else
     CollectionRouteResponse route)
     {
         ClearMessage();
+        _scheduleRoute = null;
 
         _showForm = false;
         _editingRoute = null;

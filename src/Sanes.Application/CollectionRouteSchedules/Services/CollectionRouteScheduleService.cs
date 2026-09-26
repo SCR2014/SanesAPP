@@ -59,7 +59,7 @@ public class CollectionRouteScheduleService
         if (dayExists)
         {
             throw new ArgumentException(
-                "This collection day is already configured for the route.");
+                "Este día de cobro ya está configurado para la ruta.");
         }
 
         var now = DateTime.UtcNow;
@@ -95,7 +95,8 @@ public class CollectionRouteScheduleService
         GetAllAsync(
             Guid tenantId,
             Guid collectionRouteId,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default,
+            bool includeInactive = false)
     {
         ValidateIdentifiers(
             tenantId,
@@ -114,9 +115,10 @@ public class CollectionRouteScheduleService
         }
 
         var schedules =
-            await _scheduleRepository.GetActiveByRouteAsync(
+            await _scheduleRepository.GetByRouteAsync(
                 collectionRouteId,
-                cancellationToken);
+                cancellationToken,
+                includeInactive);
 
         return schedules
             .Select(Map)
@@ -217,7 +219,7 @@ public class CollectionRouteScheduleService
         if (dayExists)
         {
             throw new ArgumentException(
-                "This collection day is already configured for the route.");
+                "Este día de cobro ya está configurado para la ruta.");
         }
 
         schedule.DayOfWeek =
