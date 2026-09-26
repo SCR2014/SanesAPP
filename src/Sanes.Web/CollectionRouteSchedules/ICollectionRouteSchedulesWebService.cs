@@ -1,42 +1,31 @@
 using Sanes.Application.CollectionRouteSchedules.DTOs;
 
-namespace Sanes.Application.CollectionRouteSchedules.Services;
+namespace Sanes.Web.CollectionRouteSchedules;
 
-public interface ICollectionRouteScheduleService
+public interface ICollectionRouteSchedulesWebService
 {
+    Task<List<CollectionRouteScheduleResponse>> GetAllAsync(
+        Guid collectionRouteId,
+        bool includeInactive = false,
+        CancellationToken cancellationToken = default);
+
     Task<CollectionRouteScheduleResponse> CreateAsync(
-        Guid tenantId,
         CreateCollectionRouteScheduleRequest request,
         CancellationToken cancellationToken = default);
 
-    Task<List<CollectionRouteScheduleResponse>> GetAllAsync(
-        Guid tenantId,
-        Guid collectionRouteId,
-        CancellationToken cancellationToken = default,
-        bool includeInactive = false);
-
-    Task<CollectionRouteScheduleResponse?> GetByIdAsync(
-        Guid id,
-        Guid tenantId,
-        Guid collectionRouteId,
-        CancellationToken cancellationToken = default);
-
     Task<CollectionRouteScheduleResponse?> UpdateAsync(
-        Guid id,
-        Guid tenantId,
+        Guid scheduleId,
         Guid collectionRouteId,
         UpdateCollectionRouteScheduleRequest request,
         CancellationToken cancellationToken = default);
 
     Task<bool> DeleteAsync(
-        Guid id,
-        Guid tenantId,
+        Guid scheduleId,
         Guid collectionRouteId,
         CancellationToken cancellationToken = default);
 
     Task<CollectionRouteScheduleResponse?> ReactivateAsync(
-        Guid id,
-        Guid tenantId,
+        Guid scheduleId,
         Guid collectionRouteId,
         CancellationToken cancellationToken = default);
 }

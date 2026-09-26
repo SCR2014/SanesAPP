@@ -557,6 +557,222 @@ public class CollectionRouteSchedulesTests
             response.StatusCode);
     }
 
+    [Fact]
+    public async Task GetAll_WithoutIncludeInactive_ExcludesInactiveSchedule()
+    {
+        var context =
+            await CreateContextAsync();
+
+        var routeId =
+            await CreateRouteAsync(
+                context.Client);
+
+        var monday =
+            await CreateScheduleAsync(
+                context.Client,
+                routeId,
+                CollectionWeekDay.Monday);
+
+        var tuesday =
+            await CreateScheduleAsync(
+                context.Client,
+                routeId,
+                CollectionWeekDay.Tuesday);
+
+        var deleteResponse =
+            await context.Client.DeleteAsync(
+                $"/api/collection-route-schedules/{tuesday.Id}" +
+                $"?collectionRouteId={routeId}");
+
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            deleteResponse.StatusCode);
+
+        var response =
+            await context.Client.GetAsync(
+                $"/api/collection-route-schedules" +
+                $"?collectionRouteId={routeId}");
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            response.StatusCode);
+
+        var schedules =
+            await response.Content
+                .ReadFromJsonAsync<
+                    List<CollectionRouteScheduleResponse>>();
+
+        Assert.NotNull(schedules);
+
+        Assert.Contains(
+            schedules!,
+            x =>
+                x.Id == monday.Id);
+
+        Assert.DoesNotContain(
+            schedules!,
+            x =>
+                x.Id == tuesday.Id);
+
+        Assert.All(
+            schedules!,
+            x =>
+                Assert.True(
+                    x.IsActive));
+    }
+
+    [Fact]
+    public async Task GetAll_WithIncludeInactive_ReturnsActiveAndInactiveSchedules()
+    {
+        var context =
+            await CreateContextAsync();
+
+        var routeId =
+            await CreateRouteAsync(
+                context.Client);
+
+        var monday =
+            await CreateScheduleAsync(
+                context.Client,
+                routeId,
+                CollectionWeekDay.Monday);
+
+        var tuesday =
+            await CreateScheduleAsync(
+                context.Client,
+                routeId,
+                CollectionWeekDay.Tuesday);
+
+        var deleteResponse =
+            await context.Client.DeleteAsync(
+                $"/api/collection-route-schedules/{tuesday.Id}" +
+                $"?collectionRouteId={routeId}");
+
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            deleteResponse.StatusCode);
+
+        var response =
+            await context.Client.GetAsync(
+                $"/api/collection-route-schedules" +
+                $"?collectionRouteId={routeId}" +
+                "&includeInactive=true");
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            response.StatusCode);
+
+        var schedules =
+            await response.Content
+                .ReadFromJsonAsync<
+                    List<CollectionRouteScheduleResponse>>();
+
+        Assert.NotNull(schedules);
+
+        var active =
+            Assert.Single(
+                schedules!,
+                x =>
+                    x.Id == monday.Id);
+
+        var inactive =
+            Assert.Single(
+                schedules!,
+                x =>
+                    x.Id == tuesday.Id);
+
+        Assert.True(
+            active.IsActive);
+
+        Assert.False(
+            inactive.IsActive);
+    }
+
+    [Fact]
+    public async Task GetAll_WithIncludeInactive_PreservesRouteIsolation()
+    {
+        var context =
+            await CreateContextAsync();
+
+        var route1 =
+            await CreateRouteAsync(
+                context.Client);
+
+        var route2 =
+            await CreateRouteAsync(
+                context.Client);
+
+        var schedule1 =
+            await CreateScheduleAsync(
+                context.Client,
+                route1,
+                CollectionWeekDay.Monday);
+
+        var schedule2 =
+            await CreateScheduleAsync(
+                context.Client,
+                route2,
+                CollectionWeekDay.Tuesday);
+
+        var response =
+            await context.Client.GetAsync(
+                $"/api/collection-route-schedules" +
+                $"?collectionRouteId={route1}" +
+                "&includeInactive=true");
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            response.StatusCode);
+
+        var schedules =
+            await response.Content
+                .ReadFromJsonAsync<
+                    List<CollectionRouteScheduleResponse>>();
+
+        Assert.NotNull(schedules);
+
+        Assert.Contains(
+            schedules!,
+            x =>
+                x.Id == schedule1.Id);
+
+        Assert.DoesNotContain(
+            schedules!,
+            x =>
+                x.Id == schedule2.Id);
+
+        Assert.All(
+            schedules!,
+            x =>
+                Assert.Equal(
+                    route1,
+                    x.CollectionRouteId));
+    }
+
+    [Fact]
+    public async Task GetAll_WithRouteFromDifferentTenant_ReturnsBadRequest()
+    {
+        var tenant1 =
+            await CreateContextAsync();
+
+        var tenant2 =
+            await CreateContextAsync();
+
+        var routeId =
+            await CreateRouteAsync(
+                tenant1.Client);
+
+        var response =
+            await tenant2.Client.GetAsync(
+                $"/api/collection-route-schedules" +
+                $"?collectionRouteId={routeId}" +
+                "&includeInactive=true");
+
+        Assert.Equal(
+            HttpStatusCode.BadRequest,
+            response.StatusCode);
+    }
+
     // ============================================================
     // HELPERS
     // ============================================================

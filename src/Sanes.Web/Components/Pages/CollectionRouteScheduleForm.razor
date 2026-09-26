@@ -1,0 +1,140 @@
+<EditForm Model="Model"
+          OnValidSubmit="HandleValidSubmit">
+
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+
+    <div class="row g-3">
+
+        <div class="col-12 col-md-4">
+
+            <label class="form-label">
+                Día
+            </label>
+
+            <InputSelect class="form-select"
+                         @bind-Value="Model.DayOfWeek">
+
+                <option value="@CollectionWeekDay.Monday">
+                    Lunes
+                </option>
+
+                <option value="@CollectionWeekDay.Tuesday">
+                    Martes
+                </option>
+
+                <option value="@CollectionWeekDay.Wednesday">
+                    Miércoles
+                </option>
+
+                <option value="@CollectionWeekDay.Thursday">
+                    Jueves
+                </option>
+
+                <option value="@CollectionWeekDay.Friday">
+                    Viernes
+                </option>
+
+                <option value="@CollectionWeekDay.Saturday">
+                    Sábado
+                </option>
+
+                <option value="@CollectionWeekDay.Sunday">
+                    Domingo
+                </option>
+
+            </InputSelect>
+
+        </div>
+
+        <div class="col-12 col-md-4">
+
+            <label class="form-label">
+                Hora de inicio
+            </label>
+
+            <InputText type="time"
+                    class="form-control"
+                    @bind-Value="Model.StartTime" />
+
+            <ValidationMessage
+                For="@(() => Model.StartTime)" />
+
+        </div>
+
+        <div class="col-12 col-md-4">
+
+            <label class="form-label">
+                Hora de fin
+            </label>
+
+            <InputText type="time"
+                    class="form-control"
+                    @bind-Value="Model.EndTime" />
+
+            <ValidationMessage
+                For="@(() => Model.EndTime)" />
+
+        </div>
+
+    </div>
+
+    <div class="form-text mt-2">
+
+        Las horas son opcionales.
+        Si defines una, debes definir ambas.
+
+    </div>
+
+    <div class="mt-4">
+
+        <button type="submit"
+                class="btn btn-primary me-2"
+                disabled="@IsSaving">
+
+            @SubmitText
+
+        </button>
+
+        <button type="button"
+                class="btn btn-outline-secondary"
+                disabled="@IsSaving"
+                @onclick="HandleCancel">
+
+            Cancelar
+
+        </button>
+
+    </div>
+
+</EditForm>
+
+@code {
+    [Parameter]
+    [EditorRequired]
+    public CollectionRouteScheduleFormModel Model { get; set; } =
+        null!;
+
+    [Parameter]
+    public string SubmitText { get; set; } =
+        "Guardar";
+
+    [Parameter]
+    public bool IsSaving { get; set; }
+
+    [Parameter]
+    public EventCallback OnValidSubmit { get; set; }
+
+    [Parameter]
+    public EventCallback OnCancel { get; set; }
+
+    private Task HandleValidSubmit()
+    {
+        return OnValidSubmit.InvokeAsync();
+    }
+
+    private Task HandleCancel()
+    {
+        return OnCancel.InvokeAsync();
+    }
+}

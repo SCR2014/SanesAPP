@@ -56,14 +56,17 @@ public class CollectionRouteSchedulesController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<List<CollectionRouteScheduleResponse>>> GetAll(
         [FromQuery] Guid collectionRouteId,
+        [FromQuery] bool includeInactive,
         CancellationToken cancellationToken)
     {
         try
         {
-            var result = await _service.GetAllAsync(
-                _currentUserService.TenantId,
-                collectionRouteId,
-                cancellationToken);
+            var result =
+                await _service.GetAllAsync(
+                    _currentUserService.TenantId,
+                    collectionRouteId,
+                    cancellationToken,
+                    includeInactive);
 
             return Ok(result);
         }

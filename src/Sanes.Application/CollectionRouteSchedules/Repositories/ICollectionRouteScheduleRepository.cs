@@ -19,6 +19,11 @@ public interface ICollectionRouteScheduleRepository
         Guid collectionRouteId,
         CancellationToken cancellationToken = default);
 
+    Task<List<CollectionRouteSchedule>> GetByRouteAsync(
+        Guid collectionRouteId,
+        CancellationToken cancellationToken = default,
+        bool includeInactive = false);
+
     Task<bool> DayExistsAsync(
         Guid collectionRouteId,
         CollectionWeekDay dayOfWeek,
