@@ -10,6 +10,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Sanes.Application.Common.Persistence;
 using Sanes.Application.Payments.Repositories;
 using Sanes.Domain.Enums;
+using System.Text.Json;
+using Sanes.Application.CollectionRoutes.DTOs;
+using Sanes.Application.FieldCollections.DTOs;
 
 namespace Sanes.Api.IntegrationTests.PaymentReceipts;
 
@@ -510,7 +513,7 @@ public class PaymentReceiptsTests
     }
 
     [Fact]
-    public async Task Collector_CanReadReceipt()
+    public async Task Collector_CannotReadReceiptNotCollectedByThem()
     {
         var scenario =
             await CreateScenarioAsync();
@@ -530,28 +533,192 @@ public class PaymentReceiptsTests
             await CreateCollectorAsync(
                 scenario.Context);
 
-        using var loginClient =
-            _factory.CreateClient();
-
-        var token =
-            await TestAuthenticationHelper.LoginAsync(
-                loginClient,
+        using var collectorClient =
+            await LoginCollectorAsync(
                 scenario.Context.TenantId,
-                collector.Username,
-                collector.Password);
+                collector);
+
+        var urls =
+            new[]
+            {
+                $"/api/payments/{payment.Id}/receipt",
+                $"/api/payment-receipts/{receipt.Id}",
+                "/api/payment-receipts/by-number/" +
+                receipt.ReceiptNumber
+            };
+
+        foreach (var url in urls)
+        {
+            var response =
+                await collectorClient.GetAsync(
+                    url);
+
+            Assert.Equal(
+                HttpStatusCode.NotFound,
+                response.StatusCode);
+        }
+    }
+
+    [Fact]
+    public async Task Collector_CanReadOwnReceipt()
+    {
+        var scenario =
+            await CreateCollectorReceiptScenarioAsync();
 
         using var collectorClient =
-            TestAuthenticationHelper
-                .CreateAuthenticatedClient(
-                    _factory,
-                    token);
+            scenario.CollectorClient;
+
+        var urls =
+            new[]
+            {
+                $"/api/payments/{scenario.Receipt.PaymentId}/receipt",
+                $"/api/payment-receipts/{scenario.Receipt.Id}",
+                "/api/payment-receipts/by-number/" +
+                scenario.Receipt.ReceiptNumber
+            };
+
+        foreach (var url in urls)
+        {
+            var response =
+                await collectorClient.GetAsync(
+                    url);
+
+            Assert.Equal(
+                HttpStatusCode.OK,
+                response.StatusCode);
+        }
+    }
+
+    [Fact]
+    public async Task Collector_GetAll_ReturnsOnlyOwnReceipts()
+    {
+        var scenario =
+            await CreateCollectorReceiptScenarioAsync();
+
+        using var collectorClient =
+            scenario.CollectorClient;
+
+        /*
+        * Creamos además un pago administrativo
+        * dentro del mismo tenant.
+        *
+        * El Collector no debe verlo.
+        */
+        await CreatePaymentAsync(
+            scenario.Context.Client,
+            scenario.Loan.Id,
+            100m);
+
+        var fakeCollectorId =
+            Guid.NewGuid();
 
         var response =
             await collectorClient.GetAsync(
-                $"/api/payment-receipts/{receipt.Id}");
+                "/api/payment-receipts" +
+                $"?collectorId={fakeCollectorId}");
 
         Assert.Equal(
             HttpStatusCode.OK,
+            response.StatusCode);
+
+        var result =
+            await response.Content
+                .ReadFromJsonAsync<
+                    PaymentReceiptListResponse>();
+
+        Assert.NotNull(result);
+
+        Assert.Equal(
+            1,
+            result.TotalCount);
+
+        var item =
+            Assert.Single(
+                result.Items);
+
+        Assert.Equal(
+            scenario.Receipt.Id,
+            item.Id);
+
+        Assert.Equal(
+            scenario.Collector.Id,
+            item.CollectedByAppUserId);
+    }
+
+    [Fact]
+    public async Task Administrator_CanFilterReceiptsByCollector()
+    {
+        var scenario =
+            await CreateCollectorReceiptScenarioAsync();
+
+        using var collectorClient =
+            scenario.CollectorClient;
+
+        await CreatePaymentAsync(
+            scenario.Context.Client,
+            scenario.Loan.Id,
+            100m);
+
+        var response =
+            await scenario.Context.Client.GetAsync(
+                "/api/payment-receipts" +
+                $"?collectorId={scenario.Collector.Id}");
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            response.StatusCode);
+
+        var result =
+            await response.Content
+                .ReadFromJsonAsync<
+                    PaymentReceiptListResponse>();
+
+        Assert.NotNull(result);
+
+        Assert.Equal(
+            1,
+            result.TotalCount);
+
+        var item =
+            Assert.Single(
+                result.Items);
+
+        Assert.Equal(
+            scenario.Receipt.Id,
+            item.Id);
+    }
+
+    [Fact]
+    public async Task Administrator_CanReadCollectorReceipt()
+    {
+        var scenario =
+            await CreateCollectorReceiptScenarioAsync();
+
+        using var collectorClient =
+            scenario.CollectorClient;
+
+        var response =
+            await scenario.Context.Client.GetAsync(
+                $"/api/payment-receipts/" +
+                $"{scenario.Receipt.Id}");
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ReceiptList_WithoutToken_ReturnsUnauthorized()
+    {
+        using var client =
+            _factory.CreateClient();
+
+        var response =
+            await client.GetAsync(
+                "/api/payment-receipts");
+
+        Assert.Equal(
+            HttpStatusCode.Unauthorized,
             response.StatusCode);
     }
 
@@ -688,8 +855,9 @@ public class PaymentReceiptsTests
     }
 
     private static async Task<ClientResponse>
-        CreateClientAsync(
-            HttpClient client)
+    CreateClientAsync(
+        HttpClient client,
+        Guid? collectionRouteId = null)
     {
         var response =
             await client.PostAsJsonAsync(
@@ -708,7 +876,10 @@ public class PaymentReceiptsTests
                             9999999)}",
 
                     Address =
-                        "Santiago"
+                        "Santiago",
+
+                    CollectionRouteId =
+                        collectionRouteId
                 });
 
         response.EnsureSuccessStatusCode();
@@ -727,7 +898,8 @@ public class PaymentReceiptsTests
         CreateLoanAsync(
             HttpClient client,
             Guid investorId,
-            Guid clientId)
+            Guid clientId,
+            DateTime? startDate = null)
     {
         var response =
             await client.PostAsJsonAsync(
@@ -757,6 +929,7 @@ public class PaymentReceiptsTests
                      * escenario genere mora.
                      */
                     StartDate =
+                        startDate ??
                         DateTime.UtcNow.Date,
 
                     Notes =
@@ -776,6 +949,190 @@ public class PaymentReceiptsTests
     }
 
     // ============================================================
+// LIST
+// ============================================================
+
+    [Fact]
+    public async Task GetAll_AsAdministrator_ReturnsPagedReceiptsNewestFirst()
+    {
+        var scenario =
+            await CreateScenarioAsync();
+
+        var firstPayment =
+            await CreatePaymentAsync(
+                scenario.Context.Client,
+                scenario.Loan.Id,
+                100m);
+
+        var secondPayment =
+            await CreatePaymentAsync(
+                scenario.Context.Client,
+                scenario.Loan.Id,
+                100m);
+
+        var response =
+            await scenario.Context.Client.GetAsync(
+                "/api/payment-receipts?page=1&pageSize=50");
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            response.StatusCode);
+
+        var result =
+            await response.Content
+                .ReadFromJsonAsync<
+                    PaymentReceiptListResponse>();
+
+        Assert.NotNull(result);
+
+        Assert.Equal(
+            1,
+            result.Page);
+
+        Assert.Equal(
+            50,
+            result.PageSize);
+
+        Assert.Equal(
+            2,
+            result.TotalCount);
+
+        Assert.Equal(
+            2,
+            result.Items.Count);
+
+        Assert.Equal(
+            secondPayment.Id,
+            result.Items[0].PaymentId);
+
+        Assert.Equal(
+            firstPayment.Id,
+            result.Items[1].PaymentId);
+    }
+
+    [Fact]
+    public async Task GetAll_SearchAndDateRange_ReturnsMatchingReceipt()
+    {
+        var scenario =
+            await CreateScenarioAsync();
+
+        var payment =
+            await CreatePaymentAsync(
+                scenario.Context.Client,
+                scenario.Loan.Id,
+                100m);
+
+        var receipt =
+            await GetReceiptByPaymentAsync(
+                scenario.Context.Client,
+                payment.Id);
+
+        var date =
+            DateOnly.FromDateTime(
+                receipt.PaymentDate);
+
+        var search =
+            receipt.ReceiptNumber
+                .ToLowerInvariant();
+
+        var response =
+            await scenario.Context.Client.GetAsync(
+                "/api/payment-receipts" +
+                $"?from={date:yyyy-MM-dd}" +
+                $"&to={date:yyyy-MM-dd}" +
+                $"&search={Uri.EscapeDataString(search)}");
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            response.StatusCode);
+
+        var result =
+            await response.Content
+                .ReadFromJsonAsync<
+                    PaymentReceiptListResponse>();
+
+        Assert.NotNull(result);
+
+        var item =
+            Assert.Single(
+                result.Items);
+
+        Assert.Equal(
+            receipt.Id,
+            item.Id);
+    }
+
+    [Theory]
+    [InlineData("/api/payment-receipts?page=0")]
+    [InlineData("/api/payment-receipts?pageSize=0")]
+    [InlineData("/api/payment-receipts?pageSize=101")]
+    [InlineData(
+        "/api/payment-receipts" +
+        "?from=2026-09-30&to=2026-09-01")]
+    public async Task GetAll_WithInvalidQuery_ReturnsBadRequest(
+        string url)
+    {
+        var scenario =
+            await CreateScenarioAsync();
+
+        var response =
+            await scenario.Context.Client.GetAsync(
+                url);
+
+        Assert.Equal(
+            HttpStatusCode.BadRequest,
+            response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetAll_CrossTenant_DoesNotLeakReceipts()
+    {
+        var tenant1 =
+            await CreateScenarioAsync();
+
+        var tenant2 =
+            await CreateScenarioAsync();
+
+        var tenant1Payment =
+            await CreatePaymentAsync(
+                tenant1.Context.Client,
+                tenant1.Loan.Id,
+                100m);
+
+        await CreatePaymentAsync(
+            tenant2.Context.Client,
+            tenant2.Loan.Id,
+            100m);
+
+        var response =
+            await tenant1.Context.Client.GetAsync(
+                "/api/payment-receipts");
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            response.StatusCode);
+
+        var result =
+            await response.Content
+                .ReadFromJsonAsync<
+                    PaymentReceiptListResponse>();
+
+        Assert.NotNull(result);
+
+        Assert.Equal(
+            1,
+            result.TotalCount);
+
+        var item =
+            Assert.Single(
+                result.Items);
+
+        Assert.Equal(
+            tenant1Payment.Id,
+            item.PaymentId);
+    }
+
+    // ============================================================
     // COLLECTOR
     // ============================================================
 
@@ -790,7 +1147,8 @@ public class PaymentReceiptsTests
             $"receipt-collector-{suffix}";
 
         var password =
-            TestAuthenticationHelper.DefaultPassword;
+            TestAuthenticationHelper
+                .DefaultPassword;
 
         var response =
             await context.Client.PostAsJsonAsync(
@@ -816,9 +1174,170 @@ public class PaymentReceiptsTests
 
         response.EnsureSuccessStatusCode();
 
+        var json =
+            await response.Content
+                .ReadFromJsonAsync<JsonElement>();
+
         return new CollectorCredentials(
+            json.GetProperty("id")
+                .GetGuid(),
             username,
             password);
+    }
+
+    private async Task<HttpClient>
+        LoginCollectorAsync(
+            Guid tenantId,
+            CollectorCredentials collector)
+    {
+        using var loginClient =
+            _factory.CreateClient();
+
+        var token =
+            await TestAuthenticationHelper
+                .LoginAsync(
+                    loginClient,
+                    tenantId,
+                    collector.Username,
+                    collector.Password);
+
+        return TestAuthenticationHelper
+            .CreateAuthenticatedClient(
+                _factory,
+                token);
+    }
+
+    private static async Task<Guid>
+        CreateRouteAsync(
+            HttpClient administratorClient)
+    {
+        var response =
+            await administratorClient.PostAsJsonAsync(
+                "/api/collection-routes",
+                new CreateCollectionRouteRequest
+                {
+                    Name =
+                        $"Receipt Route {Guid.NewGuid():N}",
+
+                    Description =
+                        "Payment receipt integration test"
+                });
+
+        response.EnsureSuccessStatusCode();
+
+        var route =
+            await response.Content
+                .ReadFromJsonAsync<
+                    CollectionRouteResponse>();
+
+        Assert.NotNull(
+            route);
+
+        return route.Id;
+    }
+
+    private static async Task
+        AssignRouteAsync(
+            HttpClient administratorClient,
+            Guid collectorId,
+            Guid routeId)
+    {
+        var response =
+            await administratorClient.PostAsync(
+                $"/api/app-users/{collectorId}" +
+                $"/collection-routes/{routeId}",
+                null);
+
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            response.StatusCode);
+    }
+
+    private async Task<CollectorReceiptScenario>
+        CreateCollectorReceiptScenarioAsync()
+    {
+        var context =
+            await TestAuthenticationHelper
+                .CreateAdministratorContextAsync(
+                    _factory);
+
+        var routeId =
+            await CreateRouteAsync(
+                context.Client);
+
+        var collector =
+            await CreateCollectorAsync(
+                context);
+
+        await AssignRouteAsync(
+            context.Client,
+            collector.Id,
+            routeId);
+
+        var investor =
+            await CreateInvestorAsync(
+                context.Client);
+
+        var client =
+            await CreateClientAsync(
+                context.Client,
+                routeId);
+
+        var loan =
+            await CreateLoanAsync(
+                context.Client,
+                investor.Id,
+                client.Id,
+                DateTime.UtcNow.Date
+                    .AddDays(-7));
+
+        var collectorClient =
+            await LoginCollectorAsync(
+                context.TenantId,
+                collector);
+
+        var paymentResponse =
+            await collectorClient.PostAsJsonAsync(
+                "/api/field-collections/payments",
+                new CreateFieldCollectionPaymentRequest
+                {
+                    CollectionRouteId =
+                        routeId,
+
+                    LoanId =
+                        loan.Id,
+
+                    Amount =
+                        100m,
+
+                    PaymentType =
+                        PaymentType.Regular,
+
+                    Notes =
+                        "Collector payment receipt test"
+                });
+
+        paymentResponse.EnsureSuccessStatusCode();
+
+        var fieldPayment =
+            await paymentResponse.Content
+                .ReadFromJsonAsync<
+                    FieldCollectionPaymentResponse>();
+
+        Assert.NotNull(
+            fieldPayment);
+
+        var receipt =
+            await GetReceiptByPaymentAsync(
+                collectorClient,
+                fieldPayment.PaymentId);
+
+        return new CollectorReceiptScenario(
+            context,
+            collector,
+            collectorClient,
+            loan,
+            receipt);
     }
 
     private sealed record ReceiptScenario(
@@ -828,6 +1347,14 @@ public class PaymentReceiptsTests
         LoanResponse Loan);
 
     private sealed record CollectorCredentials(
+        Guid Id,
         string Username,
         string Password);
+
+    private sealed record CollectorReceiptScenario(
+        TestTenantContext Context,
+        CollectorCredentials Collector,
+        HttpClient CollectorClient,
+        LoanResponse Loan,
+        PaymentReceiptResponse Receipt);
 }

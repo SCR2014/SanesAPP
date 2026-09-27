@@ -1,0 +1,556 @@
+@page "/receipts"
+
+@attribute [Authorize(
+    Roles =
+        WebRoles.Administrator +
+        "," +
+        WebRoles.Collector)]
+
+@rendermode InteractiveServer
+
+@inject IPaymentReceiptsWebService ReceiptsService
+
+<PageTitle>Recibos - Sanes</PageTitle>
+
+<div class="d-flex flex-wrap
+            justify-content-between
+            align-items-start
+            gap-3
+            mb-4">
+
+    <div>
+        <h1 class="mb-1">
+            Recibos
+        </h1>
+
+        <p class="text-muted mb-0">
+            Consulta de recibos disponibles
+            para tu usuario.
+        </p>
+    </div>
+
+</div>
+
+@if (!string.IsNullOrWhiteSpace(
+    _pageMessage))
+{
+    <div class="alert alert-danger">
+        @_pageMessage
+    </div>
+}
+
+<div class="card mb-4">
+
+    <div class="card-body">
+
+        <div class="row g-3 align-items-end">
+
+            <div class="col-12 col-lg-4">
+
+                <label class="form-label">
+                    Buscar
+                </label>
+
+                <input class="form-control"
+                       maxlength="150"
+                       placeholder="Número, cliente o cobrador"
+                       @bind="_search"
+                       @bind:event="oninput" />
+
+            </div>
+
+            <div class="col-12 col-md-6 col-lg-3">
+
+                <label class="form-label">
+                    Desde
+                </label>
+
+                <input type="date"
+                       class="form-control"
+                       @bind="_from" />
+
+            </div>
+
+            <div class="col-12 col-md-6 col-lg-3">
+
+                <label class="form-label">
+                    Hasta
+                </label>
+
+                <input type="date"
+                       class="form-control"
+                       @bind="_to" />
+
+            </div>
+
+            <div class="col-12 col-lg-2">
+
+                <div class="d-grid gap-2">
+
+                    <button type="button"
+                            class="btn btn-primary"
+                            disabled="@_isLoading"
+                            @onclick="ApplyFiltersAsync">
+
+                        Buscar
+
+                    </button>
+
+                    <button type="button"
+                            class="btn btn-outline-secondary"
+                            disabled="@_isLoading"
+                            @onclick="ClearFiltersAsync">
+
+                        Limpiar
+
+                    </button>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+@if (_selectedReceipt is not null)
+{
+    <FieldCollectionReceiptCard
+        Receipt="_selectedReceipt"
+        Heading="Detalle del recibo"
+        Closed="CloseReceipt" />
+}
+
+@if (_isLoading)
+{
+    <div class="py-5 text-center">
+
+        <div class="spinner-border"
+             role="status">
+        </div>
+
+        <p class="text-muted mt-3">
+            Cargando recibos...
+        </p>
+
+    </div>
+}
+else if (_result is null ||
+         _result.Items.Count == 0)
+{
+    <div class="alert alert-info">
+        No existen recibos que coincidan
+        con los filtros seleccionados.
+    </div>
+}
+else
+{
+    <div class="card mb-3">
+
+        <div class="table-responsive">
+
+            <table class="table
+                          table-hover
+                          align-middle
+                          mb-0">
+
+                <thead>
+                    <tr>
+                        <th>Recibo</th>
+                        <th>Fecha</th>
+                        <th>Cliente</th>
+                        <th>Tipo</th>
+                        <th>Cobrador</th>
+                        <th class="text-end">
+                            Recibido
+                        </th>
+                        <th class="text-end">
+                            Pendiente
+                        </th>
+                        <th class="text-end">
+                            Acciones
+                        </th>
+                    </tr>
+                </thead>
+
+                <tbody>
+
+                    @foreach (
+                        var receipt in _result.Items)
+                    {
+                        <tr>
+
+                            <td>
+                                <strong>
+                                    @receipt.ReceiptNumber
+                                </strong>
+                            </td>
+
+                            <td>
+                                @receipt.PaymentDate.ToString(
+                                    "dd/MM/yyyy HH:mm")
+                            </td>
+
+                            <td>
+                                @receipt.ClientName
+                            </td>
+
+                            <td>
+                                @PaymentTypeText(
+                                    receipt.PaymentType)
+                            </td>
+
+                            <td>
+                                @DisplayValue(
+                                    receipt.CollectedByName)
+                            </td>
+
+                            <td class="text-end">
+                                @Money(
+                                    receipt,
+                                    receipt.AmountReceived)
+                            </td>
+
+                            <td class="text-end">
+                                @Money(
+                                    receipt,
+                                    receipt.TotalOutstandingAfter)
+                            </td>
+
+                            <td class="text-end">
+
+                                <button type="button"
+                                        class="btn
+                                               btn-sm
+                                               btn-outline-primary"
+                                        @onclick="() =>
+                                            OpenReceipt(receipt)">
+
+                                    Ver
+
+                                </button>
+
+                            </td>
+
+                        </tr>
+                    }
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+    </div>
+
+    <div class="d-flex flex-wrap
+                justify-content-between
+                align-items-center
+                gap-3">
+
+        <div class="text-muted small">
+            Mostrando
+            @FirstVisibleItem
+            -
+            @LastVisibleItem
+            de
+            @_result.TotalCount
+            recibos
+        </div>
+
+        <div class="d-flex
+                    align-items-center
+                    gap-2">
+
+            <button type="button"
+                    class="btn btn-outline-secondary"
+                    disabled="@(_isLoading ||
+                                _result.Page <= 1)"
+                    @onclick="PreviousPageAsync">
+
+                Anterior
+
+            </button>
+
+            <span class="small">
+                Página @_result.Page
+                de @TotalPages
+            </span>
+
+            <button type="button"
+                    class="btn btn-outline-secondary"
+                    disabled="@(_isLoading ||
+                                _result.Page >= TotalPages)"
+                    @onclick="NextPageAsync">
+
+                Siguiente
+
+            </button>
+
+        </div>
+
+    </div>
+}
+
+@code {
+    private const int PageSize = 25;
+
+    private PaymentReceiptListResponse?
+        _result;
+
+    private PaymentReceiptResponse?
+        _selectedReceipt;
+
+    private string _search =
+        string.Empty;
+
+    private DateOnly? _from;
+
+    private DateOnly? _to;
+
+    private int _page = 1;
+
+    private bool _isLoading = true;
+
+    private string? _pageMessage;
+
+    private int TotalPages
+    {
+        get
+        {
+            if (_result is null ||
+                _result.TotalCount == 0)
+            {
+                return 1;
+            }
+
+            return (int)Math.Ceiling(
+                _result.TotalCount /
+                (double)_result.PageSize);
+        }
+    }
+
+    private int FirstVisibleItem
+    {
+        get
+        {
+            if (_result is null ||
+                _result.TotalCount == 0)
+            {
+                return 0;
+            }
+
+            return
+                ((_result.Page - 1) *
+                 _result.PageSize) +
+                1;
+        }
+    }
+
+    private int LastVisibleItem
+    {
+        get
+        {
+            if (_result is null)
+            {
+                return 0;
+            }
+
+            return Math.Min(
+                _result.Page *
+                _result.PageSize,
+                _result.TotalCount);
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _isLoading = true;
+        _pageMessage = null;
+
+        try
+        {
+            var request =
+                new PaymentReceiptListRequest
+                {
+                    From =
+                        _from,
+
+                    To =
+                        _to,
+
+                    Search =
+                        string.IsNullOrWhiteSpace(
+                            _search)
+                            ? null
+                            : _search.Trim(),
+
+                    Page =
+                        _page,
+
+                    PageSize =
+                        PageSize
+                };
+
+            _result =
+                await ReceiptsService
+                    .GetPagedAsync(
+                        request);
+        }
+        catch (ArgumentException ex)
+        {
+            _pageMessage =
+                ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            _pageMessage =
+                "No fue posible cargar los recibos.";
+        }
+        catch (InvalidOperationException)
+        {
+            _pageMessage =
+                "La respuesta recibida desde la API no es válida.";
+        }
+        catch (Exception)
+        {
+            _pageMessage =
+                "Ocurrió un error inesperado al cargar los recibos.";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task ApplyFiltersAsync()
+    {
+        if (_from.HasValue &&
+            _to.HasValue &&
+            _from.Value >
+            _to.Value)
+        {
+            _pageMessage =
+                "La fecha desde no puede ser posterior a la fecha hasta.";
+
+            return;
+        }
+
+        _page = 1;
+        _selectedReceipt = null;
+
+        await LoadAsync();
+    }
+
+    private async Task ClearFiltersAsync()
+    {
+        _search =
+            string.Empty;
+
+        _from = null;
+        _to = null;
+        _page = 1;
+
+        _selectedReceipt = null;
+        _pageMessage = null;
+
+        await LoadAsync();
+    }
+
+    private async Task PreviousPageAsync()
+    {
+        if (_page <= 1)
+        {
+            return;
+        }
+
+        _page--;
+        _selectedReceipt = null;
+
+        await LoadAsync();
+    }
+
+    private async Task NextPageAsync()
+    {
+        if (_result is null ||
+            _page >= TotalPages)
+        {
+            return;
+        }
+
+        _page++;
+        _selectedReceipt = null;
+
+        await LoadAsync();
+    }
+
+    private void OpenReceipt(
+        PaymentReceiptResponse receipt)
+    {
+        _selectedReceipt =
+            receipt;
+
+        _pageMessage = null;
+    }
+
+    private void CloseReceipt()
+    {
+        _selectedReceipt = null;
+    }
+
+    private static string Money(
+        PaymentReceiptResponse receipt,
+        decimal amount)
+    {
+        var symbol =
+            !string.IsNullOrWhiteSpace(
+                receipt.CurrencySymbol)
+                ? receipt.CurrencySymbol
+                : receipt.CurrencyCode;
+
+        if (string.IsNullOrWhiteSpace(
+                symbol))
+        {
+            return amount.ToString(
+                "N2");
+        }
+
+        return
+            $"{symbol} {amount:N2}";
+    }
+
+    private static string PaymentTypeText(
+        PaymentType paymentType)
+    {
+        return paymentType switch
+        {
+            PaymentType.Regular =>
+                "Pago regular",
+
+            PaymentType.Partial =>
+                "Pago parcial",
+
+            PaymentType.FullSettlement =>
+                "Pago total",
+
+            _ =>
+                paymentType.ToString()
+        };
+    }
+
+    private static string DisplayValue(
+        string? value)
+    {
+        return string.IsNullOrWhiteSpace(
+            value)
+            ? "—"
+            : value;
+    }
+}

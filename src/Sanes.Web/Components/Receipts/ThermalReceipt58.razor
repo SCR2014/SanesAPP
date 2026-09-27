@@ -1,0 +1,194 @@
+<div class="sanes-print-receipt">
+
+    <div class="thermal-center thermal-title">
+        @Receipt.TenantName
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(
+        Receipt.TenantLegalName))
+    {
+        <div class="thermal-center">
+            @Receipt.TenantLegalName
+        </div>
+    }
+
+    <div class="thermal-center thermal-section-title">
+        RECIBO DE PAGO
+    </div>
+
+    <div class="thermal-center thermal-receipt-number">
+        @Receipt.ReceiptNumber
+    </div>
+
+    <div class="thermal-separator"></div>
+
+    <div class="thermal-row">
+        <span>Fecha:</span>
+        <span>
+            @Receipt.PaymentDate.ToString(
+                "dd/MM/yyyy HH:mm")
+        </span>
+    </div>
+
+    <div class="thermal-block">
+        <div>
+            Cliente:
+        </div>
+
+        <strong>
+            @Receipt.ClientName
+        </strong>
+    </div>
+
+    <div class="thermal-block">
+        <div>
+            Tipo:
+        </div>
+
+        <strong>
+            @PaymentTypeText(
+                Receipt.PaymentType)
+        </strong>
+    </div>
+
+    <div class="thermal-separator"></div>
+
+    <div class="thermal-row thermal-total">
+        <span>Monto recibido</span>
+
+        <span>
+            @Money(
+                Receipt.AmountReceived)
+        </span>
+    </div>
+
+    <div class="thermal-row">
+        <span>Aplicado a mora</span>
+
+        <span>
+            @Money(
+                Receipt.LateFeeAmountApplied)
+        </span>
+    </div>
+
+    <div class="thermal-row">
+        <span>Aplicado préstamo</span>
+
+        <span>
+            @Money(
+                Receipt.LoanBalanceAmountApplied)
+        </span>
+    </div>
+
+    <div class="thermal-separator"></div>
+
+    <div class="thermal-row">
+        <span>Saldo contractual</span>
+
+        <span>
+            @Money(
+                Receipt.ContractualBalanceAfter)
+        </span>
+    </div>
+
+    <div class="thermal-row">
+        <span>Mora pendiente</span>
+
+        <span>
+            @Money(
+                Receipt.LateFeeBalanceAfter)
+        </span>
+    </div>
+
+    <div class="thermal-row thermal-total">
+        <span>Total pendiente</span>
+
+        <span>
+            @Money(
+                Receipt.TotalOutstandingAfter)
+        </span>
+    </div>
+
+    <div class="thermal-separator"></div>
+
+    <div class="thermal-block">
+        <div>
+            Cobrador:
+        </div>
+
+        <strong>
+            @(Receipt.CollectedByName ??
+              "No especificado")
+        </strong>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(
+        Receipt.Notes))
+    {
+        <div class="thermal-block">
+            <div>
+                Notas:
+            </div>
+
+            <span>
+                @Receipt.Notes
+            </span>
+        </div>
+    }
+
+    <div class="thermal-separator"></div>
+
+    <div class="thermal-center thermal-footer">
+        Gracias por su pago
+    </div>
+
+    <div class="thermal-center thermal-small">
+        @Receipt.ReceiptNumber
+    </div>
+
+</div>
+
+@code {
+    [Parameter]
+    public PaymentReceiptResponse Receipt { get; set; } =
+        default!;
+
+    private string Money(
+        decimal amount)
+    {
+        var currency =
+            !string.IsNullOrWhiteSpace(
+                Receipt.CurrencySymbol)
+                ? Receipt.CurrencySymbol
+                : Receipt.CurrencyCode;
+
+        if (string.IsNullOrWhiteSpace(
+                currency))
+        {
+            return amount.ToString(
+                "N2");
+        }
+
+        return
+            $"{currency} {amount:N2}";
+    }
+
+    private static string PaymentTypeText(
+        PaymentType paymentType)
+    {
+        return paymentType switch
+        {
+            PaymentType.Regular =>
+                "Pago regular",
+
+            PaymentType.Partial =>
+                "Pago parcial",
+
+            PaymentType.FullSettlement =>
+                "Pago total",
+
+            _ =>
+                paymentType.ToString()
+        };
+    }
+}

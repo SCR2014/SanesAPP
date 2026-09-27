@@ -15,6 +15,8 @@ using Sanes.Web.Clients;
 using Sanes.Web.CollectionRoutes;
 using Sanes.Web.CollectionRouteSchedules;
 using Sanes.Web.FieldCollections;
+using Sanes.Web.PaymentReceipts;
+using Sanes.Web.Printing;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -100,6 +102,18 @@ builder.Services.AddScoped<
 builder.Services.AddScoped<
     IFieldCollectionsWebService,
     FieldCollectionsWebService>();
+
+builder.Services.AddScoped<
+    IPaymentReceiptsWebService,
+    PaymentReceiptsWebService>();
+
+builder.Services.AddScoped<
+    IEscPosReceiptEncoder,
+    EscPosReceiptEncoder>();
+
+builder.Services.AddScoped<
+    IReceiptPrinter,
+    BrowserSerialReceiptPrinter>();
 
 // Web authentication
 builder.Services

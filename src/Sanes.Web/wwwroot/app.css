@@ -58,3 +58,126 @@ h1:focus {
 .form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
     text-align: start;
 }
+
+/* ============================================================
+   THERMAL RECEIPT - 58 MM
+   ============================================================ */
+
+.sanes-print-receipt {
+    display: none;
+}
+
+@media print {
+
+    @page {
+        margin: 0;
+    }
+
+    html,
+    body {
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #fff !important;
+    }
+
+    body * {
+        visibility: hidden !important;
+    }
+
+    .sanes-print-receipt,
+    .sanes-print-receipt * {
+        visibility: visible !important;
+    }
+
+    .sanes-print-receipt {
+        display: block !important;
+        position: absolute;
+        left: 0;
+        top: 0;
+
+        width: 58mm;
+        max-width: 58mm;
+
+        box-sizing: border-box;
+
+        margin: 0;
+        padding: 3mm 3mm 5mm 3mm;
+
+        background: #fff !important;
+        color: #000 !important;
+
+        font-family:
+            "Courier New",
+            Courier,
+            monospace;
+
+        font-size: 9pt;
+        line-height: 1.25;
+
+        overflow-wrap: anywhere;
+        word-break: normal;
+    }
+
+    .thermal-center {
+        text-align: center;
+    }
+
+    .thermal-title {
+        font-size: 11pt;
+        font-weight: 700;
+        margin-bottom: 1mm;
+    }
+
+    .thermal-section-title {
+        font-size: 10pt;
+        font-weight: 700;
+        margin-top: 3mm;
+    }
+
+    .thermal-receipt-number {
+        font-weight: 700;
+        margin-top: 1mm;
+    }
+
+    .thermal-separator {
+        border-top: 1px dashed #000;
+        margin: 2.5mm 0;
+    }
+
+    .thermal-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 2mm;
+
+        margin-bottom: 1mm;
+    }
+
+    .thermal-row > span:first-child {
+        flex: 1 1 auto;
+    }
+
+    .thermal-row > span:last-child {
+        flex: 0 0 auto;
+        text-align: right;
+        white-space: nowrap;
+    }
+
+    .thermal-total {
+        font-weight: 700;
+    }
+
+    .thermal-block {
+        margin-top: 2mm;
+        margin-bottom: 2mm;
+    }
+
+    .thermal-footer {
+        font-weight: 700;
+        margin-top: 3mm;
+    }
+
+    .thermal-small {
+        font-size: 8pt;
+        margin-top: 2mm;
+    }
+}

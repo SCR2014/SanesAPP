@@ -21,4 +21,11 @@ public interface IPaymentReceiptService
             Guid tenantId,
             string receiptNumber,
             CancellationToken cancellationToken = default);
+
+    Task<PaymentReceiptListResponse>
+        GetPagedAsync(
+            Guid tenantId,
+            PaymentReceiptListRequest request,
+            Guid? collectedByAppUserId,
+            CancellationToken cancellationToken = default);
 }

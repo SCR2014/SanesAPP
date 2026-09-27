@@ -1,3 +1,6 @@
+@inject IJSRuntime JS
+@inject IReceiptPrinter ReceiptPrinter
+
 <div class="card border-success mb-4">
 
     <div class="card-header">
@@ -11,7 +14,7 @@
             <div>
 
                 <strong>
-                    Pago registrado correctamente
+                    @Heading
                 </strong>
 
                 <div class="small text-muted">
@@ -20,13 +23,43 @@
 
             </div>
 
-            <button type="button"
-                    class="btn btn-sm btn-outline-secondary"
-                    @onclick="CloseAsync">
+            <div class="d-flex gap-2">
 
-                Cerrar
+                <button type="button"
+                        class="btn btn-sm btn-outline-primary"
+                        @onclick="PrintAsync">
 
-            </button>
+                    <span class="bi bi-printer"
+                        aria-hidden="true">
+                    </span>
+
+                    Imprimir
+
+                </button>
+                <button type="button"
+                        class="btn btn-sm btn-outline-success"
+                        disabled="@_isThermalPrinting"
+                        @onclick="PrintThermalAsync">
+                    @if (_isThermalPrinting)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1"></span>
+                        <span>Imprimiendo...</span>
+                    }
+                    else
+                    {
+                        <span>Imprimir térmica</span>
+                    }
+                </button>
+
+                <button type="button"
+                        class="btn btn-sm btn-outline-secondary"
+                        @onclick="CloseAsync">
+
+                    Cerrar
+
+                </button>
+
+            </div>
 
         </div>
 
@@ -216,8 +249,11 @@
     </div>
 
 </div>
-
+<ThermalReceipt58 Receipt="Receipt" />
 @code {
+    [Parameter]
+    public string Heading { get; set; } =
+        "Pago registrado correctamente";
     [Parameter]
     public PaymentReceiptResponse Receipt { get; set; } =
         default!;
@@ -267,5 +303,31 @@
     private async Task CloseAsync()
     {
         await Closed.InvokeAsync();
+    }
+    private async Task PrintAsync()
+    {
+        await JS.InvokeVoidAsync(
+            "SanesPrinting.printReceipt");
+    }
+    private bool _isThermalPrinting;
+
+    private async Task PrintThermalAsync()
+    {
+        if (_isThermalPrinting)
+        {
+            return;
+        }
+
+        _isThermalPrinting = true;
+
+        try
+        {
+            await ReceiptPrinter.PrintAsync(
+                Receipt);
+        }
+        finally
+        {
+            _isThermalPrinting = false;
+        }
     }
 }
