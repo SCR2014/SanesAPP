@@ -1,0 +1,345 @@
+@inject IFieldCollectionsWebService FieldCollectionsService
+
+<div class="border rounded p-3 mt-3 bg-light">
+
+    <div class="d-flex
+                justify-content-between
+                align-items-start
+                gap-3
+                mb-3">
+
+        <div>
+
+            <h4 class="h6 mb-1">
+                Registrar pago
+            </h4>
+
+            <div class="small text-muted">
+                @ClientName(Client)
+            </div>
+
+        </div>
+
+        <button type="button"
+                class="btn-close"
+                aria-label="Cerrar"
+                disabled="@_isSubmitting"
+                @onclick="CancelAsync">
+        </button>
+
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(
+        _errorMessage))
+    {
+        <div class="alert alert-danger">
+            @_errorMessage
+        </div>
+    }
+
+    <div class="row g-2 mb-3">
+
+        <div class="col-12 col-md-6">
+
+            <button type="button"
+                    class="btn btn-outline-primary w-100"
+                    disabled="@_isSubmitting"
+                    @onclick="UseSuggestedAmount">
+
+                Usar cobro sugerido:
+                @Money(Loan.CollectionAmountDue)
+
+            </button>
+
+        </div>
+
+        <div class="col-12 col-md-6">
+
+            <button type="button"
+                    class="btn btn-outline-secondary w-100"
+                    disabled="@_isSubmitting"
+                    @onclick="UseTotalOutstanding">
+
+                Usar total pendiente:
+                @Money(Loan.TotalOutstanding)
+
+            </button>
+
+        </div>
+
+    </div>
+
+    <EditForm Model="_model"
+              OnValidSubmit="SubmitAsync">
+
+        <DataAnnotationsValidator />
+
+        <div class="mb-3">
+
+            <label class="form-label">
+                Tipo de pago
+            </label>
+
+            <InputSelect class="form-select"
+                         @bind-Value="_model.PaymentType"
+                         disabled="@_isSubmitting">
+
+                <option value="@PaymentType.Regular">
+                    Pago regular
+                </option>
+
+                <option value="@PaymentType.Partial">
+                    Pago parcial
+                </option>
+
+                <option value="@PaymentType.FullSettlement">
+                    Pago total
+                </option>
+
+            </InputSelect>
+
+        </div>
+
+        <div class="mb-3">
+
+            <label class="form-label">
+                Monto recibido
+            </label>
+
+            <InputNumber class="form-control"
+                         @bind-Value="_model.Amount"
+                         disabled="@_isSubmitting" />
+
+            <ValidationMessage For="() => _model.Amount" />
+
+        </div>
+
+        <div class="mb-3">
+
+            <label class="form-label">
+                Notas
+            </label>
+
+            <InputTextArea class="form-control"
+                           rows="3"
+                           @bind-Value="_model.Notes"
+                           disabled="@_isSubmitting" />
+
+            <ValidationMessage For="() => _model.Notes" />
+
+        </div>
+
+        <div class="alert alert-info small">
+
+            <strong>Pago regular:</strong>
+            pago de una o más cuotas normales.
+
+            <br />
+
+            <strong>Pago parcial:</strong>
+            pago menor que una cuota contractual
+            aplicada al préstamo.
+
+            <br />
+
+            <strong>Pago total:</strong>
+            debe cubrir exactamente todo el saldo
+            pendiente, incluyendo mora.
+
+        </div>
+
+        <div class="d-flex
+                    flex-wrap
+                    justify-content-end
+                    gap-2">
+
+            <button type="button"
+                    class="btn btn-outline-secondary"
+                    disabled="@_isSubmitting"
+                    @onclick="CancelAsync">
+
+                Cancelar
+
+            </button>
+
+            <button type="submit"
+                    class="btn btn-primary"
+                    disabled="@_isSubmitting">
+
+                @if (_isSubmitting)
+                {
+                    <span class="spinner-border
+                                 spinner-border-sm
+                                 me-2">
+                    </span>
+
+                    <span>
+                        Registrando...
+                    </span>
+                }
+                else
+                {
+                    <span>
+                        Registrar pago
+                    </span>
+                }
+
+            </button>
+
+        </div>
+
+    </EditForm>
+
+</div>
+
+@code {
+    [Parameter]
+    public Guid CollectionRouteId { get; set; }
+
+    [Parameter]
+    public FieldCollectionClientResponse Client { get; set; } =
+        default!;
+
+    [Parameter]
+    public FieldCollectionLoanResponse Loan { get; set; } =
+        default!;
+
+    [Parameter]
+    public EventCallback<PaymentReceiptResponse>
+        PaymentCompleted { get; set; }
+
+    [Parameter]
+    public EventCallback Cancelled { get; set; }
+
+    private FieldCollectionPaymentFormModel _model =
+        new();
+
+    private Guid? _loadedLoanId;
+
+    private bool _isSubmitting;
+
+    private string? _errorMessage;
+
+    protected override void OnParametersSet()
+    {
+        if (_loadedLoanId ==
+            Loan.LoanId)
+        {
+            return;
+        }
+
+        _loadedLoanId =
+            Loan.LoanId;
+
+        _model =
+            FieldCollectionPaymentFormModel
+                .ForLoan(
+                    Loan);
+
+        _errorMessage = null;
+    }
+
+    private void UseSuggestedAmount()
+    {
+        _model.Amount =
+            Loan.CollectionAmountDue;
+
+        _model.PaymentType =
+            PaymentType.Regular;
+
+        _errorMessage = null;
+    }
+
+    private void UseTotalOutstanding()
+    {
+        _model.Amount =
+            Loan.TotalOutstanding;
+
+        _model.PaymentType =
+            PaymentType.FullSettlement;
+
+        _errorMessage = null;
+    }
+
+    private async Task SubmitAsync()
+    {
+        _isSubmitting = true;
+        _errorMessage = null;
+
+        try
+        {
+            var request =
+                _model.ToRequest(
+                    CollectionRouteId,
+                    Loan.LoanId);
+
+            var payment =
+                await FieldCollectionsService
+                    .CreatePaymentAsync(
+                        request);
+
+            var receipt =
+                await FieldCollectionsService
+                    .GetReceiptByPaymentAsync(
+                        payment.PaymentId);
+
+            if (receipt is null)
+            {
+                _errorMessage =
+                    "El pago fue registrado, pero no fue posible recuperar el recibo.";
+
+                return;
+            }
+
+            await PaymentCompleted
+                .InvokeAsync(
+                    receipt);
+        }
+        catch (ArgumentException ex)
+        {
+            _errorMessage =
+                ex.Message;
+        }
+        catch (Exception)
+        {
+            _errorMessage =
+                "No fue posible registrar el pago.";
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+
+    private async Task CancelAsync()
+    {
+        if (_isSubmitting)
+        {
+            return;
+        }
+
+        await Cancelled.InvokeAsync();
+    }
+
+    private static string ClientName(
+        FieldCollectionClientResponse client)
+    {
+        return string.Join(
+            " ",
+            new[]
+            {
+                client.FirstName,
+                client.LastName
+            }
+            .Where(x =>
+                !string.IsNullOrWhiteSpace(
+                    x)));
+    }
+
+    private static string Money(
+        decimal amount)
+    {
+        return amount.ToString(
+            "N2");
+    }
+}
