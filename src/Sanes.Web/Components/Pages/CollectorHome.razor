@@ -2,15 +2,952 @@
 
 @attribute [Authorize(Roles = WebRoles.Collector)]
 
+@rendermode InteractiveServer
+
+@inject IFieldCollectionsWebService FieldCollectionsService
+
 <PageTitle>Cobranza - Sanes</PageTitle>
 
-<h1>Cobranza</h1>
+<div class="d-flex
+            flex-wrap
+            justify-content-between
+            align-items-start
+            gap-3
+            mb-4">
 
-<p class="lead">
-    Área operativa de cobranza de SanesApp.
-</p>
+    <div>
 
-<p class="text-muted">
-    Aquí se incorporará posteriormente la experiencia
-    de Field Collections para cobradores.
-</p>
+        <h1 class="mb-1">
+            Cobranza
+        </h1>
+
+        <p class="text-muted mb-0">
+            Agenda operativa de cobranza.
+        </p>
+
+    </div>
+
+    <div style="min-width: 220px;">
+
+        <label class="form-label"
+               for="collectionDate">
+
+            Fecha de cobranza
+
+        </label>
+
+        <input id="collectionDate"
+               type="date"
+               class="form-control"
+               value="@_selectedDate.ToString("yyyy-MM-dd")"
+               @onchange="OnDateChangedAsync" />
+
+    </div>
+
+</div>
+
+@if (!string.IsNullOrWhiteSpace(
+    _errorMessage))
+{
+    <div class="alert alert-danger">
+        @_errorMessage
+    </div>
+}
+
+@if (_lastReceipt is not null)
+{
+    <FieldCollectionReceiptCard
+        Receipt="_lastReceipt"
+        Closed="CloseReceipt" />
+}
+
+@if (_isLoading)
+{
+    <div class="py-5 text-center">
+
+        <div class="spinner-border"
+             role="status">
+        </div>
+
+        <p class="text-muted mt-3">
+            Cargando cobranza...
+        </p>
+
+    </div>
+}
+else if (_daily is null)
+{
+    <div class="alert alert-info">
+
+        No fue posible cargar la cobranza.
+
+    </div>
+}
+else
+{
+    <div class="mb-4">
+
+        <div class="d-flex
+                    flex-wrap
+                    justify-content-between
+                    align-items-end
+                    gap-2">
+
+            <div>
+
+                <h2 class="h4 mb-1">
+                    @_daily.CollectorName
+                </h2>
+
+                <div class="text-muted">
+                    @FormatDate(_daily.Date)
+                </div>
+
+            </div>
+
+            <button type="button"
+                    class="btn btn-outline-secondary btn-sm"
+                    disabled="@_isLoading"
+                    @onclick="ReloadAsync">
+
+                Actualizar
+
+            </button>
+
+        </div>
+
+    </div>
+
+    <div class="row g-3 mb-4">
+
+        <div class="col-6 col-lg-3">
+
+            <div class="card h-100">
+                <div class="card-body">
+
+                    <div class="text-muted small">
+                        Rutas
+                    </div>
+
+                    <div class="fs-4 fw-semibold">
+                        @_daily.RoutesCount
+                    </div>
+
+                </div>
+            </div>
+
+        </div>
+
+        <div class="col-6 col-lg-3">
+
+            <div class="card h-100">
+                <div class="card-body">
+
+                    <div class="text-muted small">
+                        Clientes
+                    </div>
+
+                    <div class="fs-4 fw-semibold">
+                        @_daily.ClientsCount
+                    </div>
+
+                </div>
+            </div>
+
+        </div>
+
+        <div class="col-6 col-lg-3">
+
+            <div class="card h-100">
+                <div class="card-body">
+
+                    <div class="text-muted small">
+                        Préstamos
+                    </div>
+
+                    <div class="fs-4 fw-semibold">
+                        @_daily.LoansCount
+                    </div>
+
+                </div>
+            </div>
+
+        </div>
+
+        <div class="col-6 col-lg-3">
+
+            <div class="card h-100">
+                <div class="card-body">
+
+                    <div class="text-muted small">
+                        Cobro esperado
+                    </div>
+
+                    <div class="fs-4 fw-semibold">
+                        @Money(
+                            _daily.TotalCollectionAmountDue)
+                    </div>
+
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+    <div class="row g-3 mb-4">
+
+        <div class="col-12 col-md-4">
+
+            <div class="card h-100">
+                <div class="card-body">
+
+                    <div class="text-muted small">
+                        Saldo contractual
+                    </div>
+
+                    <div class="fs-5 fw-semibold">
+                        @Money(
+                            _daily.TotalBalance)
+                    </div>
+
+                </div>
+            </div>
+
+        </div>
+
+        <div class="col-12 col-md-4">
+
+            <div class="card h-100">
+                <div class="card-body">
+
+                    <div class="text-muted small">
+                        Mora pendiente
+                    </div>
+
+                    <div class="fs-5 fw-semibold">
+                        @Money(
+                            _daily.TotalLateFeeBalance)
+                    </div>
+
+                </div>
+            </div>
+
+        </div>
+
+        <div class="col-12 col-md-4">
+
+            <div class="card h-100">
+                <div class="card-body">
+
+                    <div class="text-muted small">
+                        Total pendiente
+                    </div>
+
+                    <div class="fs-5 fw-semibold">
+                        @Money(
+                            _daily.TotalOutstanding)
+                    </div>
+
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+    @if (_daily.Routes.Count == 0)
+    {
+        <div class="alert alert-info">
+
+            No tienes rutas de cobranza programadas
+            para esta fecha.
+
+        </div>
+    }
+    else
+    {
+        <div class="d-grid gap-3">
+
+            @foreach (
+                var route in _daily.Routes)
+            {
+                <div class="card">
+
+                    <div class="card-header">
+
+                        <div class="d-flex
+                                    flex-wrap
+                                    justify-content-between
+                                    align-items-center
+                                    gap-3">
+
+                            <div>
+
+                                <h2 class="h5 mb-1">
+                                    @route.CollectionRouteName
+                                </h2>
+
+                                <div class="small text-muted">
+
+                                    @RouteScheduleText(
+                                        route)
+
+                                </div>
+
+                            </div>
+
+                            <div class="d-flex
+                                        flex-wrap
+                                        align-items-center
+                                        gap-2">
+
+                                <span class="badge text-bg-light">
+
+                                    @route.ClientsCount
+                                    cliente(s)
+
+                                </span>
+
+                                <span class="badge text-bg-light">
+
+                                    @route.LoansCount
+                                    préstamo(s)
+
+                                </span>
+
+                                <button type="button"
+                                        class="btn
+                                               btn-sm
+                                               btn-outline-primary"
+                                        @onclick="() =>
+                                            ToggleRoute(
+                                                route.CollectionRouteId)">
+
+                                    @(IsRouteExpanded(
+                                        route.CollectionRouteId)
+                                        ? "Ocultar"
+                                        : "Ver ruta")
+
+                                </button>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <div class="card-body">
+
+                        <div class="row g-3">
+
+                            <div class="col-6 col-lg-3">
+
+                                <div class="small text-muted">
+                                    Saldo
+                                </div>
+
+                                <strong>
+                                    @Money(
+                                        route.TotalBalance)
+                                </strong>
+
+                            </div>
+
+                            <div class="col-6 col-lg-3">
+
+                                <div class="small text-muted">
+                                    Mora
+                                </div>
+
+                                <strong>
+                                    @Money(
+                                        route.TotalLateFeeBalance)
+                                </strong>
+
+                            </div>
+
+                            <div class="col-6 col-lg-3">
+
+                                <div class="small text-muted">
+                                    Total pendiente
+                                </div>
+
+                                <strong>
+                                    @Money(
+                                        route.TotalOutstanding)
+                                </strong>
+
+                            </div>
+
+                            <div class="col-6 col-lg-3">
+
+                                <div class="small text-muted">
+                                    Cobro esperado
+                                </div>
+
+                                <strong>
+                                    @Money(
+                                        route.TotalCollectionAmountDue)
+                                </strong>
+
+                            </div>
+
+                        </div>
+
+                        @if (IsRouteExpanded(
+                            route.CollectionRouteId))
+                        {
+                            <hr />
+
+                            @if (route.Clients.Count == 0)
+                            {
+                                <div class="alert
+                                            alert-light
+                                            border
+                                            mb-0">
+
+                                    La ruta está programada,
+                                    pero no tiene clientes con
+                                    préstamos pendientes de cobro
+                                    para esta fecha.
+
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="d-grid gap-3">
+
+                                    @foreach (
+                                        var client in route.Clients)
+                                    {
+                                        <div class="border
+                                                    rounded
+                                                    p-3">
+
+                                            <div class="d-flex
+                                                        flex-wrap
+                                                        justify-content-between
+                                                        align-items-start
+                                                        gap-2">
+
+                                                <div>
+
+                                                    <div class="d-flex
+                                                                align-items-center
+                                                                gap-2">
+
+                                                        @if (
+                                                            client.CollectionRouteOrder
+                                                                .HasValue)
+                                                        {
+                                                            <span class="badge
+                                                                         text-bg-secondary">
+
+                                                                #@client.CollectionRouteOrder
+
+                                                            </span>
+                                                        }
+
+                                                        <h3 class="h6 mb-0">
+                                                            @ClientName(
+                                                                client)
+                                                        </h3>
+
+                                                    </div>
+
+                                                    <div class="small
+                                                                text-muted
+                                                                mt-2">
+
+                                                        @client.Phone
+
+                                                    </div>
+
+                                                    @if (
+                                                        !string.IsNullOrWhiteSpace(
+                                                            client.Address))
+                                                    {
+                                                        <div class="small
+                                                                    text-muted">
+
+                                                            @client.Address
+
+                                                        </div>
+                                                    }
+
+                                                    @if (
+                                                        client.Latitude.HasValue &&
+                                                        client.Longitude.HasValue)
+                                                    {
+                                                        <div class="small
+                                                                    text-muted">
+
+                                                            @client.Latitude.Value.ToString(
+                                                                "0.######"),
+                                                            @client.Longitude.Value.ToString(
+                                                                "0.######")
+
+                                                        </div>
+                                                    }
+
+                                                </div>
+
+                                                <button type="button"
+                                                        class="btn
+                                                               btn-sm
+                                                               btn-outline-secondary"
+                                                        @onclick="() =>
+                                                            ToggleClient(
+                                                                client.ClientId)">
+
+                                                    @(IsClientExpanded(
+                                                        client.ClientId)
+                                                        ? "Ocultar préstamos"
+                                                        : "Ver préstamos")
+
+                                                </button>
+
+                                            </div>
+
+                                            @if (IsClientExpanded(
+                                                client.ClientId))
+                                            {
+                                                <div class="mt-3">
+
+                                                    @foreach (
+                                                        var loan in client.Loans)
+                                                    {
+                                                        <div class="card
+                                                                    mb-2">
+
+                                                            <div class="card-body">
+
+                                                                <div class="d-flex
+                                                                            flex-wrap
+                                                                            justify-content-between
+                                                                            align-items-start
+                                                                            gap-2
+                                                                            mb-3">
+
+                                                                    <div>
+
+                                                                        <strong>
+                                                                            Préstamo
+                                                                        </strong>
+
+                                                                        <div class="small
+                                                                                    text-muted">
+
+                                                                            @ShortId(
+                                                                                loan.LoanId)
+
+                                                                        </div>
+
+                                                                    </div>
+
+                                                                    @if (loan.IsOverdue)
+                                                                    {
+                                                                        <span class="badge
+                                                                                     text-bg-danger">
+
+                                                                            En mora
+
+                                                                        </span>
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        <span class="badge
+                                                                                     text-bg-success">
+
+                                                                            Al día
+
+                                                                        </span>
+                                                                    }
+
+                                                                </div>
+
+                                                                <div class="row g-3">
+
+                                                                    <div class="col-6
+                                                                                col-lg-3">
+
+                                                                        <div class="small
+                                                                                    text-muted">
+                                                                            Saldo
+                                                                        </div>
+
+                                                                        <strong>
+                                                                            @Money(
+                                                                                loan.Balance)
+                                                                        </strong>
+
+                                                                    </div>
+
+                                                                    <div class="col-6
+                                                                                col-lg-3">
+
+                                                                        <div class="small
+                                                                                    text-muted">
+                                                                            Mora
+                                                                        </div>
+
+                                                                        <strong>
+                                                                            @Money(
+                                                                                loan.LateFeeBalance)
+                                                                        </strong>
+
+                                                                    </div>
+
+                                                                    <div class="col-6
+                                                                                col-lg-3">
+
+                                                                        <div class="small
+                                                                                    text-muted">
+                                                                            Total pendiente
+                                                                        </div>
+
+                                                                        <strong>
+                                                                            @Money(
+                                                                                loan.TotalOutstanding)
+                                                                        </strong>
+
+                                                                    </div>
+
+                                                                    <div class="col-6
+                                                                                col-lg-3">
+
+                                                                        <div class="small
+                                                                                    text-muted">
+                                                                            Cobro sugerido
+                                                                        </div>
+
+                                                                        <strong>
+                                                                            @Money(
+                                                                                loan.CollectionAmountDue)
+                                                                        </strong>
+
+                                                                    </div>
+
+                                                                </div>
+
+                                                                <div class="row g-3 mt-1">
+
+                                                                    <div class="col-6
+                                                                                col-lg-3">
+
+                                                                        <div class="small
+                                                                                    text-muted">
+                                                                            Cuota
+                                                                        </div>
+
+                                                                        <span>
+                                                                            @Money(
+                                                                                loan.InstallmentAmount)
+                                                                        </span>
+
+                                                                    </div>
+
+                                                                    <div class="col-6
+                                                                                col-lg-3">
+
+                                                                        <div class="small
+                                                                                    text-muted">
+                                                                            Próximo vencimiento
+                                                                        </div>
+
+                                                                        <span>
+                                                                            @loan.NextPaymentDate.ToString(
+                                                                                "dd/MM/yyyy")
+                                                                        </span>
+
+                                                                    </div>
+
+                                                                    <div class="col-6
+                                                                                col-lg-3">
+
+                                                                        <div class="small
+                                                                                    text-muted">
+                                                                            Días vencido
+                                                                        </div>
+
+                                                                        <span>
+                                                                            @loan.DaysOverdue
+                                                                        </span>
+
+                                                                    </div>
+
+                                                                    <div class="col-6
+                                                                                col-lg-3">
+
+                                                                        <div class="small
+                                                                                    text-muted">
+                                                                            Cuotas vencidas
+                                                                        </div>
+
+                                                                        <span>
+                                                                            @loan.OverdueInstallments
+                                                                        </span>
+
+                                                                    </div>
+
+                                                                </div>
+                                                                <div class="d-flex
+                                                                            justify-content-end
+                                                                            mt-3">
+
+                                                                    <button type="button" class="btn btn-primary btn-sm" @onclick="() => OpenPayment(loan)">
+                                                                        Registrar pago
+                                                                    </button>
+
+                                                                </div>
+                                                                @if (IsPaymentOpen(
+                                                                    loan.LoanId))
+                                                                {
+                                                                    <FieldCollectionPaymentPanel
+                                                                        @key="loan.LoanId"
+                                                                        CollectionRouteId="route.CollectionRouteId"
+                                                                        Client="client"
+                                                                        Loan="loan"
+                                                                        PaymentCompleted="OnPaymentCompletedAsync"
+                                                                        Cancelled="ClosePayment" />
+                                                                }
+
+                                                            </div>
+
+                                                        </div>
+                                                    }
+
+                                                </div>
+                                            }
+
+                                        </div>
+                                    }
+
+                                </div>
+                            }
+                        }
+
+                    </div>
+
+                </div>
+            }
+
+        </div>
+    }
+}
+
+@code {
+    private DateOnly _selectedDate =
+        DateOnly.FromDateTime(
+            DateTime.Today);
+
+    private FieldCollectionDailyResponse? _daily;
+
+    private bool _isLoading;
+
+    private string? _errorMessage;
+
+    private readonly HashSet<Guid> _expandedRoutes =
+        new();
+
+    private readonly HashSet<Guid> _expandedClients =
+        new();
+
+    private Guid? _paymentLoanId;
+
+    private PaymentReceiptResponse? _lastReceipt;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _isLoading = true;
+        _errorMessage = null;
+
+        try
+        {
+            _daily =
+                await FieldCollectionsService.GetDailyAsync(
+                    _selectedDate);
+        }
+        catch (ArgumentException ex)
+        {
+            _errorMessage =
+                ex.Message;
+
+            _daily = null;
+        }
+        catch (Exception)
+        {
+            _errorMessage =
+                "No fue posible cargar la cobranza.";
+
+            _daily = null;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task ReloadAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task OnDateChangedAsync(
+        ChangeEventArgs args)
+    {
+        var value =
+            args.Value?.ToString();
+
+        if (!DateOnly.TryParseExact(
+                value,
+                "yyyy-MM-dd",
+                out var date))
+        {
+            _errorMessage =
+                "La fecha seleccionada no es válida.";
+
+            return;
+        }
+
+        _selectedDate =
+            date;
+
+        _expandedRoutes.Clear();
+        _expandedClients.Clear();
+
+        _paymentLoanId = null;
+        _lastReceipt = null;
+
+        await LoadAsync();
+    }
+
+    private void ToggleRoute(
+        Guid routeId)
+    {
+        if (!_expandedRoutes.Add(
+            routeId))
+        {
+            _expandedRoutes.Remove(
+                routeId);
+        }
+    }
+
+    private bool IsRouteExpanded(
+        Guid routeId)
+    {
+        return _expandedRoutes.Contains(
+            routeId);
+    }
+
+    private void ToggleClient(
+        Guid clientId)
+    {
+        if (!_expandedClients.Add(
+            clientId))
+        {
+            _expandedClients.Remove(
+                clientId);
+        }
+    }
+
+    private bool IsClientExpanded(
+        Guid clientId)
+    {
+        return _expandedClients.Contains(
+            clientId);
+    }
+
+    private static string ClientName(
+        FieldCollectionClientResponse client)
+    {
+        return string.Join(
+            " ",
+            new[]
+            {
+                client.FirstName,
+                client.LastName
+            }
+            .Where(x =>
+                !string.IsNullOrWhiteSpace(
+                    x)));
+    }
+
+    private static string RouteScheduleText(
+        FieldCollectionRouteResponse route)
+    {
+        if (!route.StartTime.HasValue ||
+            !route.EndTime.HasValue)
+        {
+            return "Sin horario definido";
+        }
+
+        return
+            $"{route.StartTime.Value:HH\\:mm} - " +
+            $"{route.EndTime.Value:HH\\:mm}";
+    }
+
+    private static string FormatDate(
+        DateOnly date)
+    {
+        return date.ToString(
+            "dd/MM/yyyy");
+    }
+
+    private static string Money(
+        decimal amount)
+    {
+        return amount.ToString(
+            "N2");
+    }
+
+    private static string ShortId(
+        Guid id)
+    {
+        return id
+            .ToString("N")[..8]
+            .ToUpperInvariant();
+    }
+
+
+    private bool IsPaymentOpen(
+        Guid loanId)
+    {
+        return _paymentLoanId ==
+            loanId;
+    }
+
+    private void ClosePayment()
+    {
+        _paymentLoanId = null;
+    }
+    private void OpenPayment(
+        FieldCollectionLoanResponse loan)
+    {
+        _paymentLoanId =
+            loan.LoanId;
+
+        _lastReceipt = null;
+    }
+    private async Task OnPaymentCompletedAsync(
+        PaymentReceiptResponse receipt)
+    {
+        _lastReceipt =
+            receipt;
+
+        _paymentLoanId =
+            null;
+
+        await LoadAsync();
+    }
+    private void CloseReceipt()
+    {
+        _lastReceipt = null;
+    }
+}

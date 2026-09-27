@@ -1,0 +1,271 @@
+<div class="card border-success mb-4">
+
+    <div class="card-header">
+
+        <div class="d-flex
+                    flex-wrap
+                    justify-content-between
+                    align-items-center
+                    gap-2">
+
+            <div>
+
+                <strong>
+                    Pago registrado correctamente
+                </strong>
+
+                <div class="small text-muted">
+                    Recibo @Receipt.ReceiptNumber
+                </div>
+
+            </div>
+
+            <button type="button"
+                    class="btn btn-sm btn-outline-secondary"
+                    @onclick="CloseAsync">
+
+                Cerrar
+
+            </button>
+
+        </div>
+
+    </div>
+
+    <div class="card-body">
+
+        <div class="row g-3">
+
+            <div class="col-12 col-md-6 col-lg-3">
+
+                <div class="small text-muted">
+                    Cliente
+                </div>
+
+                <strong>
+                    @Receipt.ClientName
+                </strong>
+
+            </div>
+
+            <div class="col-12 col-md-6 col-lg-3">
+
+                <div class="small text-muted">
+                    Monto recibido
+                </div>
+
+                <strong>
+                    @Money(
+                        Receipt.AmountReceived)
+                </strong>
+
+            </div>
+
+            <div class="col-12 col-md-6 col-lg-3">
+
+                <div class="small text-muted">
+                    Aplicado a mora
+                </div>
+
+                <strong>
+                    @Money(
+                        Receipt.LateFeeAmountApplied)
+                </strong>
+
+            </div>
+
+            <div class="col-12 col-md-6 col-lg-3">
+
+                <div class="small text-muted">
+                    Aplicado al préstamo
+                </div>
+
+                <strong>
+                    @Money(
+                        Receipt.LoanBalanceAmountApplied)
+                </strong>
+
+            </div>
+
+        </div>
+
+        <hr />
+
+        <div class="row g-3">
+
+            <div class="col-12 col-md-4">
+
+                <div class="small text-muted">
+                    Saldo contractual restante
+                </div>
+
+                <strong>
+                    @Money(
+                        Receipt.ContractualBalanceAfter)
+                </strong>
+
+            </div>
+
+            <div class="col-12 col-md-4">
+
+                <div class="small text-muted">
+                    Mora restante
+                </div>
+
+                <strong>
+                    @Money(
+                        Receipt.LateFeeBalanceAfter)
+                </strong>
+
+            </div>
+
+            <div class="col-12 col-md-4">
+
+                <div class="small text-muted">
+                    Total pendiente
+                </div>
+
+                <strong>
+                    @Money(
+                        Receipt.TotalOutstandingAfter)
+                </strong>
+
+            </div>
+
+        </div>
+
+        <hr />
+
+        <div class="row g-3">
+
+            <div class="col-12 col-md-4">
+
+                <div class="small text-muted">
+                    Tipo de pago
+                </div>
+
+                <span>
+                    @PaymentTypeText(
+                        Receipt.PaymentType)
+                </span>
+
+            </div>
+
+            <div class="col-12 col-md-4">
+
+                <div class="small text-muted">
+                    Cobrador
+                </div>
+
+                <span>
+                    @(Receipt.CollectedByName ??
+                      "No especificado")
+                </span>
+
+            </div>
+
+            <div class="col-12 col-md-4">
+
+                <div class="small text-muted">
+                    Fecha
+                </div>
+
+                <span>
+                    @Receipt.PaymentDate.ToString(
+                        "dd/MM/yyyy HH:mm")
+                </span>
+
+            </div>
+
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(
+            Receipt.Notes))
+        {
+            <hr />
+
+            <div>
+
+                <div class="small text-muted">
+                    Notas
+                </div>
+
+                <span>
+                    @Receipt.Notes
+                </span>
+
+            </div>
+        }
+
+        <hr />
+
+        <div class="small text-muted">
+
+            @Receipt.TenantName
+
+            @if (!string.IsNullOrWhiteSpace(
+                Receipt.TenantLegalName))
+            {
+                <span>
+                    · @Receipt.TenantLegalName
+                </span>
+            }
+
+        </div>
+
+    </div>
+
+</div>
+
+@code {
+    [Parameter]
+    public PaymentReceiptResponse Receipt { get; set; } =
+        default!;
+
+    [Parameter]
+    public EventCallback Closed { get; set; }
+
+    private string Money(
+        decimal amount)
+    {
+        var symbol =
+            !string.IsNullOrWhiteSpace(
+                Receipt.CurrencySymbol)
+                ? Receipt.CurrencySymbol
+                : Receipt.CurrencyCode;
+
+        if (string.IsNullOrWhiteSpace(
+            symbol))
+        {
+            return amount.ToString(
+                "N2");
+        }
+
+        return
+            $"{symbol} {amount:N2}";
+    }
+
+    private static string PaymentTypeText(
+        PaymentType paymentType)
+    {
+        return paymentType switch
+        {
+            PaymentType.Regular =>
+                "Pago regular",
+
+            PaymentType.Partial =>
+                "Pago parcial",
+
+            PaymentType.FullSettlement =>
+                "Pago total",
+
+            _ =>
+                paymentType.ToString()
+        };
+    }
+
+    private async Task CloseAsync()
+    {
+        await Closed.InvokeAsync();
+    }
+}
