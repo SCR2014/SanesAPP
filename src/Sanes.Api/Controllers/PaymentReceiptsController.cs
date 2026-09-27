@@ -34,6 +34,62 @@ public class PaymentReceiptsController
     }
 
     // ============================================================
+    // LIST
+    // ============================================================
+
+    [HttpGet(
+        "api/payment-receipts")]
+    [ProducesResponseType(
+        typeof(PaymentReceiptListResponse),
+        StatusCodes.Status200OK)]
+    [ProducesResponseType(
+        StatusCodes.Status400BadRequest)]
+    public async Task<
+        ActionResult<PaymentReceiptListResponse>>
+        GetAll(
+            [FromQuery]
+            PaymentReceiptListRequest request,
+            CancellationToken cancellationToken)
+    {
+        try
+        {
+            var collectedByAppUserId =
+                _currentUserService.Role ==
+                AppUserRole.Collector
+                    ? _currentUserService.AppUserId
+                    : request.CollectorId;
+
+            var result =
+                await _paymentReceiptService
+                    .GetPagedAsync(
+                        _currentUserService.TenantId,
+                        request,
+                        collectedByAppUserId,
+                        cancellationToken);
+
+            return Ok(
+                result);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(
+                new
+                {
+                    message = ex.Message
+                });
+        }
+        catch (OverflowException)
+        {
+            return BadRequest(
+                new
+                {
+                    message =
+                        "The requested page is outside the supported range."
+                });
+        }
+    }
+
+    // ============================================================
     // BY PAYMENT
     // ============================================================
 
@@ -57,7 +113,8 @@ public class PaymentReceiptsController
                     paymentId,
                     cancellationToken);
 
-        if (receipt is null)
+        if (receipt is null ||
+            !CanReadReceipt(receipt))
         {
             return NotFound();
         }
@@ -90,7 +147,8 @@ public class PaymentReceiptsController
                     receiptId,
                     cancellationToken);
 
-        if (receipt is null)
+        if (receipt is null ||
+            !CanReadReceipt(receipt))
         {
             return NotFound();
         }
@@ -123,12 +181,32 @@ public class PaymentReceiptsController
                     receiptNumber,
                     cancellationToken);
 
-        if (receipt is null)
+        if (receipt is null ||
+            !CanReadReceipt(receipt))
         {
             return NotFound();
         }
 
         return Ok(
             receipt);
+    }
+
+    // ============================================================
+    // AUTHORIZATION
+    // ============================================================
+
+    private bool CanReadReceipt(
+        PaymentReceiptResponse receipt)
+    {
+        if (_currentUserService.Role ==
+            AppUserRole.Administrator)
+        {
+            return true;
+        }
+
+        return
+            receipt.CollectedByAppUserId.HasValue &&
+            receipt.CollectedByAppUserId.Value ==
+            _currentUserService.AppUserId;
     }
 }

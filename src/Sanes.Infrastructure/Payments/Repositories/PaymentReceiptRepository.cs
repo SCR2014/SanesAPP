@@ -56,6 +56,90 @@ public class PaymentReceiptRepository
                 cancellationToken);
     }
 
+    public async Task<(List<PaymentReceipt> Items, int TotalCount)>
+        GetPagedAsync(
+            Guid tenantId,
+            DateTime? fromInclusive,
+            DateTime? toExclusive,
+            string? search,
+            Guid? collectedByAppUserId,
+            int skip,
+            int take,
+            CancellationToken cancellationToken = default)
+    {
+        var query =
+            _dbContext.PaymentReceipts
+                .AsNoTracking()
+                .Where(x =>
+                    x.TenantId == tenantId);
+
+        if (fromInclusive.HasValue)
+        {
+            query =
+                query.Where(x =>
+                    x.PaymentDate >=
+                    fromInclusive.Value);
+        }
+
+        if (toExclusive.HasValue)
+        {
+            query =
+                query.Where(x =>
+                    x.PaymentDate <
+                    toExclusive.Value);
+        }
+
+        if (collectedByAppUserId.HasValue)
+        {
+            query =
+                query.Where(x =>
+                    x.CollectedByAppUserId ==
+                    collectedByAppUserId.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var pattern =
+                $"%{search}%";
+
+            query =
+                query.Where(x =>
+                    EF.Functions.ILike(
+                        x.ReceiptNumber,
+                        pattern) ||
+                    EF.Functions.ILike(
+                        x.ClientName,
+                        pattern) ||
+                    (
+                        x.CollectedByName != null &&
+                        EF.Functions.ILike(
+                            x.CollectedByName,
+                            pattern)
+                    ));
+        }
+
+        var totalCount =
+            await query.CountAsync(
+                cancellationToken);
+
+        var items =
+            await query
+                .OrderByDescending(x =>
+                    x.PaymentDate)
+                .ThenByDescending(x =>
+                    x.CreatedAt)
+                .ThenByDescending(x =>
+                    x.SequenceNumber)
+                .Skip(skip)
+                .Take(take)
+                .ToListAsync(
+                    cancellationToken);
+
+        return (
+            items,
+            totalCount);
+    }
+
     public async Task<PaymentReceipt?> GetByNumberAsync(
         Guid tenantId,
         string receiptNumber,

@@ -23,6 +23,16 @@ public interface IPaymentReceiptRepository
         string receiptNumber,
         CancellationToken cancellationToken = default);
 
+    Task<(List<PaymentReceipt> Items, int TotalCount)> GetPagedAsync(
+        Guid tenantId,
+        DateTime? fromInclusive,
+        DateTime? toExclusive,
+        string? search,
+        Guid? collectedByAppUserId,
+        int skip,
+        int take,
+        CancellationToken cancellationToken = default);
+
     Task<int> GetNextSequenceNumberAsync(
         Guid tenantId,
         int year,
