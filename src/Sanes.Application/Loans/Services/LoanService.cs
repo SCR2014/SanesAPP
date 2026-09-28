@@ -191,7 +191,11 @@ public class LoanService : ILoanService
         await _loanRepository.SaveChangesAsync(
             cancellationToken);
 
-        return Map(loan);
+        return Map(
+            loan,
+            investor.Name,
+            BuildClientName(
+                client));
     }
 
     public async Task<List<LoanResponse>> GetAllAsync(
@@ -203,7 +207,7 @@ public class LoanService : ILoanService
             cancellationToken);
 
         return loans
-            .Select(Map)
+            .Select(loan => Map(loan))
             .ToList();
     }
 
@@ -624,7 +628,30 @@ public class LoanService : ILoanService
             : value.Trim();
     }
 
-    private static LoanResponse Map(Loan loan)
+    private static string BuildClientName(
+        Client? client)
+    {
+        if (client is null)
+        {
+            return string.Empty;
+        }
+
+        return string.Join(
+            " ",
+            new[]
+            {
+                client.FirstName,
+                client.LastName
+            }
+            .Where(x =>
+                !string.IsNullOrWhiteSpace(
+                    x)));
+    }
+
+    private static LoanResponse Map(
+        Loan loan,
+        string? investorName = null,
+        string? clientName = null)
     {
         var totalAmount =
             loan.InstallmentAmount * loan.TotalInstallments;
@@ -638,6 +665,16 @@ public class LoanService : ILoanService
             TenantId = loan.TenantId,
             InvestorId = loan.InvestorId,
             ClientId = loan.ClientId,
+
+            InvestorName =
+                investorName
+                ?? loan.Investor?.Name
+                ?? string.Empty,
+
+            ClientName =
+                clientName
+                ?? BuildClientName(
+                    loan.Client),
 
             PrincipalAmount = loan.PrincipalAmount,
             InstallmentAmount = loan.InstallmentAmount,

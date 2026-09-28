@@ -17,6 +17,7 @@ using Sanes.Web.CollectionRouteSchedules;
 using Sanes.Web.FieldCollections;
 using Sanes.Web.PaymentReceipts;
 using Sanes.Web.Printing;
+using Sanes.Web.Loans;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -114,6 +115,10 @@ builder.Services.AddScoped<
 builder.Services.AddScoped<
     IReceiptPrinter,
     BrowserSerialReceiptPrinter>();
+
+builder.Services.AddScoped<
+    ILoansWebService,
+    LoansWebService>();
 
 // Web authentication
 builder.Services

@@ -42,119 +42,150 @@
 
         <AuthorizeView Roles="@WebRoles.Administrator">
             <Authorized>
+
                 <div class="nav-item px-3">
                     <NavLink class="nav-link"
-                            href="admin/dashboard">
+                             href="admin/dashboard">
+
                         <span class="bi bi-speedometer2"
-                            aria-hidden="true">
+                              aria-hidden="true">
                         </span>
+
                         Dashboard
+
                     </NavLink>
                 </div>
+
                 <div class="nav-item px-3">
                     <NavLink class="nav-link"
-                            href="admin/reports">
+                             href="admin/reports">
+
                         <span class="bi bi-file-earmark-text"
-                            aria-hidden="true">
+                              aria-hidden="true">
                         </span>
+
                         Reportes
+
                     </NavLink>
                 </div>
+
                 <div class="nav-item px-3">
                     <NavLink class="nav-link"
-                            href="receipts">
+                             href="receipts">
 
                         <span class="bi bi-receipt"
-                            aria-hidden="true">
+                              aria-hidden="true">
                         </span>
 
                         Recibos
 
                     </NavLink>
                 </div>
+
                 <div class="nav-item px-3">
                     <NavLink class="nav-link"
                              href="admin"
                              Match="NavLinkMatch.All">
+
                         <span class="bi bi-grid-fill-nav-menu"
                               aria-hidden="true">
                         </span>
+
                         Administración
+
                     </NavLink>
                 </div>
-                <div class="nav-item px-3">
 
+                <div class="nav-item px-3">
                     <NavLink class="nav-link"
-                            href="admin/investors">
+                             href="admin/investors">
 
                         <span class="bi bi-people-fill"
-                            aria-hidden="true">
+                              aria-hidden="true">
                         </span>
 
                         Inversionistas
 
                     </NavLink>
-
                 </div>
-                <div class="nav-item px-3">
 
+                <div class="nav-item px-3">
                     <NavLink class="nav-link"
-                            href="admin/clients">
+                             href="admin/clients">
 
                         <span class="bi bi-person-fill"
-                            aria-hidden="true">
+                              aria-hidden="true">
                         </span>
 
                         Clientes
 
                     </NavLink>
-
                 </div>
-                <div class="nav-item px-3">
 
+                <div class="nav-item px-3">
                     <NavLink class="nav-link"
-                            href="admin/collection-routes">
+                             href="loans">
+
+                        <span class="bi bi-cash-stack"
+                              aria-hidden="true">
+                        </span>
+
+                        Préstamos
+
+                    </NavLink>
+                </div>
+
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link"
+                             href="admin/collection-routes">
 
                         <span class="bi bi-signpost-split"
-                            aria-hidden="true">
+                              aria-hidden="true">
                         </span>
 
                         Rutas
 
                     </NavLink>
-
                 </div>
+
             </Authorized>
         </AuthorizeView>
 
         <AuthorizeView Roles="@WebRoles.Collector">
             <Authorized>
+
                 <div class="nav-item px-3">
                     <NavLink class="nav-link"
                              href="collector">
+
                         <span class="bi bi-list-nested-nav-menu"
                               aria-hidden="true">
                         </span>
+
                         Cobranza
+
                     </NavLink>
                 </div>
+
                 <div class="nav-item px-3">
                     <NavLink class="nav-link"
-                            href="receipts">
+                             href="receipts">
 
                         <span class="bi bi-receipt"
-                            aria-hidden="true">
+                              aria-hidden="true">
                         </span>
 
                         Recibos
 
                     </NavLink>
                 </div>
+
             </Authorized>
         </AuthorizeView>
 
         <AuthorizeView>
             <Authorized>
+
                 <div class="nav-item px-3 mt-3">
                     <form method="post"
                           action="/auth/logout">
@@ -165,8 +196,10 @@
                                 class="nav-link border-0 bg-transparent w-100 text-start">
                             Cerrar sesión
                         </button>
+
                     </form>
                 </div>
+
             </Authorized>
         </AuthorizeView>
 

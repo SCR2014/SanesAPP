@@ -39,10 +39,15 @@ public class LoanRepository : ILoanRepository
     {
         return await _dbContext.Loans
             .AsNoTracking()
+            .Include(x => x.Investor)
+            .Include(x => x.Client)
             .Include(x => x.Guarantee)
-            .Where(x => x.TenantId == tenantId)
-            .OrderByDescending(x => x.CreatedAt)
-            .ToListAsync(cancellationToken);
+            .Where(x =>
+                x.TenantId == tenantId)
+            .OrderByDescending(x =>
+                x.CreatedAt)
+            .ToListAsync(
+                cancellationToken);
     }
 
     public async Task<Loan?> GetByIdAsync(
@@ -52,6 +57,8 @@ public class LoanRepository : ILoanRepository
     {
         return await _dbContext.Loans
             .AsNoTracking()
+            .Include(x => x.Investor)
+            .Include(x => x.Client)
             .Include(x => x.Guarantee)
             .FirstOrDefaultAsync(
                 x =>
@@ -66,6 +73,8 @@ public class LoanRepository : ILoanRepository
         CancellationToken cancellationToken = default)
     {
         return await _dbContext.Loans
+            .Include(x => x.Investor)
+            .Include(x => x.Client)
             .Include(x => x.Guarantee)
             .FirstOrDefaultAsync(
                 x =>

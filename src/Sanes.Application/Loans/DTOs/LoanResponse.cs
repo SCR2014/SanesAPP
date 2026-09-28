@@ -12,6 +12,12 @@ public class LoanResponse
 
     public Guid ClientId { get; set; }
 
+    public string InvestorName { get; set; }
+        = string.Empty;
+
+    public string ClientName { get; set; }
+        = string.Empty;
+
     public decimal PrincipalAmount { get; set; }
 
     public decimal InstallmentAmount { get; set; }
