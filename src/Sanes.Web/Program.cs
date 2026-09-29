@@ -18,6 +18,7 @@ using Sanes.Web.FieldCollections;
 using Sanes.Web.PaymentReceipts;
 using Sanes.Web.Printing;
 using Sanes.Web.Loans;
+using Sanes.Web.Payments;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -193,6 +194,9 @@ builder.Services.AddAuthorization();
 builder.Services
     .AddCascadingAuthenticationState();
 
+builder.Services.AddScoped<
+    IPaymentsWebService,
+    PaymentsWebService>();
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.

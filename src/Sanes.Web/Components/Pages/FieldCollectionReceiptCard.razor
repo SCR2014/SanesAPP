@@ -204,8 +204,7 @@
                 </div>
 
                 <span>
-                    @Receipt.PaymentDate.ToString(
-                        "dd/MM/yyyy HH:mm")
+                    @(Receipt.PaymentDate.ToLocalTime().ToString("dd/MM/yyyy HH:mm"))
                 </span>
 
             </div>

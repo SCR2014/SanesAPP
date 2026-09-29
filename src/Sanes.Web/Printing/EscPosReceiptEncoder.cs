@@ -80,7 +80,7 @@ public sealed class EscPosReceiptEncoder
 
         WriteWrapped(
             stream,
-            $"Fecha: {receipt.PaymentDate:dd/MM/yyyy HH:mm}");
+            $"Fecha: {receipt.PaymentDate.ToLocalTime():dd/MM/yyyy HH:mm}");
 
         WriteWrapped(
             stream,

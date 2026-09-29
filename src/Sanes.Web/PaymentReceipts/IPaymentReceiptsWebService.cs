@@ -8,6 +8,10 @@ public interface IPaymentReceiptsWebService
         PaymentReceiptListRequest request,
         CancellationToken cancellationToken = default);
 
+    Task<PaymentReceiptResponse?> GetByPaymentAsync(
+        Guid paymentId,
+        CancellationToken cancellationToken = default);
+
     Task<PaymentReceiptResponse?> GetByIdAsync(
         Guid receiptId,
         CancellationToken cancellationToken = default);

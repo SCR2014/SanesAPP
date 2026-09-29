@@ -1,0 +1,1449 @@
+@page "/payments"
+
+@attribute [Authorize(
+    Roles = WebRoles.Administrator)]
+
+@rendermode InteractiveServer
+
+@using Sanes.Application.Loans.DTOs
+@using Sanes.Application.Payments.DTOs
+@using Sanes.Application.Tenants.DTOs
+@using Sanes.Domain.Enums
+@using Sanes.Web.Loans
+@using Sanes.Web.Payments
+@using Sanes.Web.PaymentReceipts
+
+@inject ILoansWebService LoansService
+@inject IPaymentsWebService PaymentsService
+@inject IPaymentReceiptsWebService ReceiptsService
+
+<PageTitle>Pagos - Sanes</PageTitle>
+
+<div class="d-flex flex-wrap
+            justify-content-between
+            align-items-start
+            gap-3
+            mb-4">
+
+    <div>
+        <h1 class="mb-1">
+            Pagos
+        </h1>
+
+        <p class="text-muted mb-0">
+            Registro y consulta administrativa
+            de pagos por préstamo.
+        </p>
+    </div>
+
+    <button type="button"
+            class="btn btn-outline-secondary"
+            disabled="@_isLoading"
+            @onclick="ReloadAsync">
+
+        <span class="bi bi-arrow-clockwise me-1"
+              aria-hidden="true">
+        </span>
+
+        Actualizar
+
+    </button>
+
+</div>
+
+@if (!string.IsNullOrWhiteSpace(
+    _pageMessage))
+{
+    <div class="alert alert-danger">
+        @_pageMessage
+    </div>
+}
+
+@if (!string.IsNullOrWhiteSpace(
+    _successMessage))
+{
+    <div class="alert alert-success">
+        @_successMessage
+    </div>
+}
+
+@if (_selectedReceipt is not null)
+{
+    <FieldCollectionReceiptCard
+        Heading="Pago registrado correctamente"
+        Receipt="_selectedReceipt"
+        Closed="CloseReceiptAsync" />
+}
+
+<div class="card mb-4">
+
+    <div class="card-header">
+        <strong>
+            Buscar préstamo
+        </strong>
+    </div>
+
+    <div class="card-body">
+
+        <div class="row g-3 align-items-end">
+
+            <div class="col-12 col-lg-7">
+
+                <label class="form-label">
+                    Cliente o inversionista
+                </label>
+
+                <input type="text"
+                       class="form-control"
+                       maxlength="150"
+                       placeholder="Buscar por cliente o inversionista"
+                       @bind="_search"
+                       @bind:event="oninput" />
+
+            </div>
+
+            <div class="col-12 col-lg-3">
+
+                <label class="form-label">
+                    Estado
+                </label>
+
+                <select class="form-select"
+                        @bind="_statusFilter">
+
+                    <option value="active">
+                        Activos
+                    </option>
+
+                    <option value="paid">
+                        Pagados
+                    </option>
+
+                    <option value="cancelled">
+                        Cancelados
+                    </option>
+
+                    <option value="all">
+                        Todos
+                    </option>
+
+                </select>
+
+            </div>
+
+            <div class="col-12 col-lg-2">
+
+                <button type="button"
+                        class="btn btn-outline-secondary w-100"
+                        @onclick="ClearFilters">
+
+                    Limpiar
+
+                </button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+@if (_isLoading)
+{
+    <div class="text-center py-5">
+
+        <div class="spinner-border"
+             role="status">
+        </div>
+
+        <div class="text-muted mt-2">
+            Cargando préstamos...
+        </div>
+
+    </div>
+}
+else if (!_loans.Any())
+{
+    <div class="alert alert-info">
+        No hay préstamos disponibles.
+    </div>
+}
+else
+{
+    <div class="card mb-4">
+
+        <div class="card-header d-flex
+                    justify-content-between
+                    align-items-center">
+
+            <strong>
+                Préstamos
+            </strong>
+
+            <span class="badge text-bg-secondary">
+                @FilteredLoans.Count()
+            </span>
+
+        </div>
+
+        <div class="table-responsive">
+
+            <table class="table table-hover
+                          align-middle mb-0">
+
+                <thead>
+                    <tr>
+                        <th>
+                            Cliente
+                        </th>
+
+                        <th>
+                            Inversionista
+                        </th>
+
+                        <th>
+                            Estado
+                        </th>
+
+                        <th class="text-end">
+                            Monto total
+                        </th>
+
+                        <th>
+                            Próximo pago
+                        </th>
+
+                        <th class="text-end">
+                            Acción
+                        </th>
+                    </tr>
+                </thead>
+
+                <tbody>
+
+                    @foreach (var loan
+                        in FilteredLoans)
+                    {
+                        <tr class="@SelectedRowClass(
+                            loan.Id)">
+
+                            <td>
+                                <strong>
+                                    @loan.ClientName
+                                </strong>
+                            </td>
+
+                            <td>
+                                @loan.InvestorName
+                            </td>
+
+                            <td>
+                                <span class="@StatusBadgeClass(
+                                    loan.Status)">
+
+                                    @StatusText(
+                                        loan.Status)
+
+                                </span>
+                            </td>
+
+                            <td class="text-end">
+                                @Money(
+                                    loan.TotalAmount)
+                            </td>
+
+                            <td>
+                                @FormatDate(
+                                    loan.NextPaymentDate)
+                            </td>
+
+                            <td class="text-end">
+
+                                <button type="button"
+                                        class="btn btn-sm
+                                               btn-outline-primary"
+                                        disabled="@_isLoanLoading"
+                                        @onclick="() =>
+                                            SelectLoanAsync(
+                                                loan.Id)">
+
+                                    Seleccionar
+
+                                </button>
+
+                            </td>
+
+                        </tr>
+                    }
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+        @if (!FilteredLoans.Any())
+        {
+            <div class="card-body text-muted">
+                No hay préstamos que coincidan
+                con los filtros seleccionados.
+            </div>
+        }
+
+    </div>
+}
+
+@if (_isLoanLoading)
+{
+    <div class="text-center py-4">
+
+        <div class="spinner-border
+                    spinner-border-sm"
+             role="status">
+        </div>
+
+        <span class="ms-2">
+            Cargando información del préstamo...
+        </span>
+
+    </div>
+}
+else if (_selectedLoan is not null &&
+         _summary is not null)
+{
+    <div class="card mb-4">
+
+        <div class="card-header">
+
+            <div class="d-flex flex-wrap
+                        justify-content-between
+                        align-items-start
+                        gap-2">
+
+                <div>
+
+                    <strong>
+                        @_selectedLoan.ClientName
+                    </strong>
+
+                    <div class="small text-muted">
+                        Inversionista:
+                        @_selectedLoan.InvestorName
+                    </div>
+
+                </div>
+
+                <div class="d-flex
+                            align-items-center
+                            gap-2">
+
+                    <span class="@StatusBadgeClass(
+                        _selectedLoan.Status)">
+
+                        @StatusText(
+                            _selectedLoan.Status)
+
+                    </span>
+
+                    <button type="button"
+                            class="btn-close"
+                            aria-label="Cerrar"
+                            @onclick="ClearSelectedLoan">
+                    </button>
+
+                </div>
+
+            </div>
+
+        </div>
+
+        <div class="card-body">
+
+            <h2 class="h6 mb-3">
+                Resumen financiero
+            </h2>
+
+            <div class="row g-3">
+
+                <div class="col-12
+                            col-md-6
+                            col-xl-3">
+
+                    <div class="border rounded p-3 h-100">
+
+                        <div class="small text-muted">
+                            Saldo contractual
+                        </div>
+
+                        <div class="fs-5 fw-semibold">
+                            @Money(
+                                _summary.Balance)
+                        </div>
+
+                    </div>
+
+                </div>
+
+                <div class="col-12
+                            col-md-6
+                            col-xl-3">
+
+                    <div class="border rounded p-3 h-100">
+
+                        <div class="small text-muted">
+                            Mora pendiente
+                        </div>
+
+                        <div class="fs-5 fw-semibold">
+                            @Money(
+                                _summary.LateFeeBalance)
+                        </div>
+
+                    </div>
+
+                </div>
+
+                <div class="col-12
+                            col-md-6
+                            col-xl-3">
+
+                    <div class="border rounded p-3 h-100">
+
+                        <div class="small text-muted">
+                            Total pendiente
+                        </div>
+
+                        <div class="fs-5 fw-semibold">
+                            @Money(
+                                _summary.TotalOutstanding)
+                        </div>
+
+                    </div>
+
+                </div>
+
+                <div class="col-12
+                            col-md-6
+                            col-xl-3">
+
+                    <div class="border rounded p-3 h-100">
+
+                        <div class="small text-muted">
+                            Próxima cuota pendiente
+                        </div>
+
+                        <div class="fs-5 fw-semibold">
+                            @Money(
+                                _summary.NextInstallmentAmountDue)
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+            <div class="row g-3 mt-1">
+
+                <div class="col-12
+                            col-md-6
+                            col-lg-3">
+
+                    <div class="small text-muted">
+                        Cuotas completadas
+                    </div>
+
+                    <strong>
+                        @_summary.CompletedInstallments
+                        /
+                        @_summary.TotalInstallments
+                    </strong>
+
+                </div>
+
+                <div class="col-12
+                            col-md-6
+                            col-lg-3">
+
+                    <div class="small text-muted">
+                        Monto pagado
+                    </div>
+
+                    <strong>
+                        @Money(
+                            _summary.AmountPaid)
+                    </strong>
+
+                </div>
+
+                <div class="col-12
+                            col-md-6
+                            col-lg-3">
+
+                    <div class="small text-muted">
+                        Próxima fecha
+                    </div>
+
+                    <strong>
+                        @FormatDate(
+                            _summary.NextPaymentDate)
+                    </strong>
+
+                </div>
+
+                <div class="col-12
+                            col-md-6
+                            col-lg-3">
+
+                    <div class="small text-muted">
+                        Atraso
+                    </div>
+
+                    <strong>
+                        @if (_summary.IsOverdue)
+                        {
+                            <span>
+                                @_summary.DaysOverdue
+                                día(s)
+                            </span>
+                        }
+                        else
+                        {
+                            <span>
+                                Al día
+                            </span>
+                        }
+                    </strong>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <div class="row g-4">
+
+        <div class="col-12 col-xl-5">
+
+            <div class="card h-100">
+
+                <div class="card-header">
+                    <strong>
+                        Registrar pago
+                    </strong>
+                </div>
+
+                <div class="card-body">
+
+                    @if (_selectedLoan.Status !=
+                        LoanStatus.Active)
+                    {
+                        <div class="alert alert-info mb-0">
+
+                            Este préstamo está
+                            <strong>
+                                @StatusText(
+                                    _selectedLoan.Status)
+                            </strong>.
+
+                            No se pueden registrar
+                            nuevos pagos.
+
+                        </div>
+                    }
+                    else if (_summary.TotalOutstanding <= 0)
+                    {
+                        <div class="alert alert-info mb-0">
+                            Este préstamo no tiene saldo
+                            pendiente.
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="row g-2 mb-3">
+
+                            <div class="col-12">
+
+                                <button type="button"
+                                        class="btn
+                                               btn-outline-primary
+                                               w-100"
+                                        disabled="@_isSubmitting"
+                                        @onclick="UseNextInstallmentAmount">
+
+                                    Usar próxima cuota:
+                                    @Money(
+                                        _summary
+                                            .NextInstallmentAmountDue)
+
+                                </button>
+
+                            </div>
+
+                            <div class="col-12">
+
+                                <button type="button"
+                                        class="btn
+                                               btn-outline-secondary
+                                               w-100"
+                                        disabled="@_isSubmitting"
+                                        @onclick="UseTotalOutstanding">
+
+                                    Usar total pendiente:
+                                    @Money(
+                                        _summary
+                                            .TotalOutstanding)
+
+                                </button>
+
+                            </div>
+
+                        </div>
+
+                        <EditForm Model="_paymentForm"
+                                  OnValidSubmit="SubmitPaymentAsync">
+
+                            <DataAnnotationsValidator />
+
+                            <ValidationSummary />
+
+                            <div class="mb-3">
+
+                                <label class="form-label">
+                                    Tipo de pago
+                                </label>
+
+                                <InputSelect class="form-select"
+                                             @bind-Value="_paymentForm.PaymentType"
+                                             disabled="@_isSubmitting">
+
+                                    <option value="@PaymentType.Regular">
+                                        Pago regular
+                                    </option>
+
+                                    <option value="@PaymentType.Partial">
+                                        Pago parcial
+                                    </option>
+
+                                    <option value="@PaymentType.FullSettlement">
+                                        Pago total
+                                    </option>
+
+                                </InputSelect>
+
+                            </div>
+
+                            <div class="mb-3">
+
+                                <label class="form-label">
+                                    Monto recibido
+                                </label>
+
+                                <InputNumber class="form-control"
+                                             @bind-Value="_paymentForm.Amount"
+                                             disabled="@_isSubmitting" />
+
+                                <ValidationMessage
+                                    For="() => _paymentForm.Amount" />
+
+                            </div>
+
+
+
+                            <div class="mb-3">
+
+                                <label class="form-label">
+                                    Notas
+                                </label>
+
+                                <InputTextArea class="form-control"
+                                               rows="3"
+                                               @bind-Value="_paymentForm.Notes"
+                                               disabled="@_isSubmitting" />
+
+                                <ValidationMessage
+                                    For="() => _paymentForm.Notes" />
+
+                            </div>
+
+                            <div class="alert alert-info small">
+
+                                <strong>
+                                    Pago regular:
+                                </strong>
+
+                                debe cumplir las reglas
+                                contractuales de una cuota.
+
+                                <br />
+
+                                <strong>
+                                    Pago parcial:
+                                </strong>
+
+                                aplica un monto menor al
+                                requerido para completar una
+                                cuota contractual.
+
+                                <br />
+
+                                <strong>
+                                    Pago total:
+                                </strong>
+
+                                debe coincidir exactamente
+                                con el total pendiente,
+                                incluyendo mora.
+
+                                <br />
+
+                                <span class="text-muted">
+                                    Las validaciones financieras
+                                    son realizadas por Sanes.Api.
+                                </span>
+
+                            </div>
+
+                            <div class="d-grid">
+
+                                <button type="submit"
+                                        class="btn btn-primary"
+                                        disabled="@_isSubmitting">
+
+                                    @if (_isSubmitting)
+                                    {
+                                        <span class="spinner-border
+                                                     spinner-border-sm
+                                                     me-2">
+                                        </span>
+
+                                        <span>
+                                            Registrando...
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span>
+                                            Registrar pago
+                                        </span>
+                                    }
+
+                                </button>
+
+                            </div>
+
+                        </EditForm>
+                    }
+
+                </div>
+
+            </div>
+
+        </div>
+
+        <div class="col-12 col-xl-7">
+
+            <div class="card h-100">
+
+                <div class="card-header d-flex
+                            justify-content-between
+                            align-items-center">
+
+                    <strong>
+                        Historial de pagos
+                    </strong>
+
+                    <span class="badge text-bg-secondary">
+                        @_payments.Count
+                    </span>
+
+                </div>
+
+                @if (_payments.Count == 0)
+                {
+                    <div class="card-body text-muted">
+                        Este préstamo todavía no tiene
+                        pagos registrados.
+                    </div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+
+                        <table class="table
+                                      table-hover
+                                      align-middle
+                                      mb-0">
+
+                            <thead>
+                                <tr>
+                                    <th>
+                                        Fecha
+                                    </th>
+
+                                    <th>
+                                        Tipo
+                                    </th>
+
+                                    <th class="text-end">
+                                        Monto
+                                    </th>
+
+                                    <th>
+                                        Notas
+                                    </th>
+
+                                    <th class="text-end">
+                                        Recibo
+                                    </th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+
+                                @foreach (var payment
+                                    in OrderedPayments)
+                                {
+                                    <tr>
+
+                                        <td>
+                                            @FormatDateTime(
+                                                payment.PaymentDate)
+                                        </td>
+
+                                        <td>
+                                            @PaymentTypeText(
+                                                payment.PaymentType)
+                                        </td>
+
+                                        <td class="text-end">
+                                            @Money(
+                                                payment.Amount)
+                                        </td>
+
+                                        <td>
+                                            @DisplayValue(
+                                                payment.Notes)
+                                        </td>
+
+                                        <td class="text-end">
+
+                                            <button type="button"
+                                                    class="btn
+                                                           btn-sm
+                                                           btn-outline-primary"
+                                                    disabled="@_isReceiptLoading"
+                                                    @onclick="() =>
+                                                        ViewReceiptAsync(
+                                                            payment.Id)">
+
+                                                Ver
+
+                                            </button>
+
+                                        </td>
+
+                                    </tr>
+                                }
+
+                            </tbody>
+
+                        </table>
+
+                    </div>
+                }
+
+            </div>
+
+        </div>
+
+    </div>
+}
+
+@code {
+    private List<LoanResponse> _loans =
+        [];
+
+    private List<PaymentResponse> _payments =
+        [];
+
+    private TenantDto? _tenant;
+
+    private LoanResponse? _selectedLoan;
+
+    private LoanFinancialSummaryResponse? _summary;
+
+    private PaymentReceiptResponse? _selectedReceipt;
+
+    private PaymentFormModel _paymentForm =
+        new();
+
+    private string _search =
+        string.Empty;
+
+    private string _statusFilter =
+        "active";
+
+    private string? _pageMessage;
+
+    private string? _successMessage;
+
+    private bool _isLoading;
+
+    private bool _isLoanLoading;
+
+    private bool _isSubmitting;
+
+    private bool _isReceiptLoading;
+
+    private IEnumerable<LoanResponse>
+        FilteredLoans
+    {
+        get
+        {
+            IEnumerable<LoanResponse> result =
+                _loans;
+
+            result =
+                _statusFilter switch
+                {
+                    "active" =>
+                        result.Where(
+                            x =>
+                                x.Status ==
+                                LoanStatus.Active),
+
+                    "paid" =>
+                        result.Where(
+                            x =>
+                                x.Status ==
+                                LoanStatus.Paid),
+
+                    "cancelled" =>
+                        result.Where(
+                            x =>
+                                x.Status ==
+                                LoanStatus.Cancelled),
+
+                    _ =>
+                        result
+                };
+
+            if (!string.IsNullOrWhiteSpace(
+                _search))
+            {
+                var search =
+                    _search.Trim();
+
+                result =
+                    result.Where(
+                        x =>
+                            x.ClientName.Contains(
+                                search,
+                                StringComparison
+                                    .OrdinalIgnoreCase) ||
+                            x.InvestorName.Contains(
+                                search,
+                                StringComparison
+                                    .OrdinalIgnoreCase));
+            }
+
+            return result
+                .OrderBy(
+                    x => x.ClientName)
+                .ThenByDescending(
+                    x => x.CreatedAt);
+        }
+    }
+
+    private IEnumerable<PaymentResponse>
+        OrderedPayments =>
+            _payments
+                .OrderByDescending(
+                    x => x.PaymentDate)
+                .ThenByDescending(
+                    x => x.CreatedAt);
+
+    protected override async Task
+        OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _isLoading = true;
+        _pageMessage = null;
+
+        try
+        {
+            _tenant =
+                await LoansService
+                    .GetTenantAsync();
+
+            _loans =
+                await LoansService
+                    .GetAllAsync();
+        }
+        catch (ArgumentException ex)
+        {
+            _pageMessage =
+                ex.Message;
+        }
+        catch (Exception)
+        {
+            _pageMessage =
+                "No fue posible cargar los préstamos.";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task ReloadAsync()
+    {
+        var selectedLoanId =
+            _selectedLoan?.Id;
+
+        _successMessage = null;
+        _pageMessage = null;
+
+        await LoadAsync();
+
+        if (selectedLoanId.HasValue)
+        {
+            await SelectLoanAsync(
+                selectedLoanId.Value);
+        }
+    }
+
+    private async Task SelectLoanAsync(
+        Guid loanId)
+    {
+        _isLoanLoading = true;
+        _pageMessage = null;
+        _successMessage = null;
+        _selectedReceipt = null;
+
+        try
+        {
+            var loan =
+                await LoansService
+                    .GetByIdAsync(
+                        loanId);
+
+            if (loan is null)
+            {
+                _pageMessage =
+                    "El préstamo seleccionado no fue encontrado.";
+
+                ClearSelectedLoan();
+                return;
+            }
+
+            var summary =
+                await LoansService
+                    .GetFinancialSummaryAsync(
+                        loanId);
+
+            if (summary is null)
+            {
+                _pageMessage =
+                    "No fue posible obtener el resumen financiero del préstamo.";
+
+                ClearSelectedLoan();
+                return;
+            }
+
+            var payments =
+                await PaymentsService
+                    .GetByLoanAsync(
+                        loanId);
+
+            _selectedLoan =
+                loan;
+
+            _summary =
+                summary;
+
+            _payments =
+                payments;
+
+            if (loan.Status ==
+                    LoanStatus.Active &&
+                summary.TotalOutstanding > 0)
+            {
+                _paymentForm =
+                    PaymentFormModel
+                        .ForLoan(
+                            loan.Id,
+                            summary);
+            }
+            else
+            {
+                _paymentForm =
+                    new PaymentFormModel
+                    {
+                        LoanId =
+                            loan.Id
+                    };
+            }
+        }
+        catch (ArgumentException ex)
+        {
+            _pageMessage =
+                ex.Message;
+        }
+        catch (Exception)
+        {
+            _pageMessage =
+                "No fue posible cargar la información del préstamo.";
+        }
+        finally
+        {
+            _isLoanLoading = false;
+        }
+    }
+
+    private async Task SubmitPaymentAsync()
+    {
+        if (_selectedLoan is null ||
+            _summary is null)
+        {
+            return;
+        }
+
+        if (_selectedLoan.Status !=
+            LoanStatus.Active)
+        {
+            _pageMessage =
+                "Solo se pueden registrar pagos en préstamos activos.";
+
+            return;
+        }
+
+        _isSubmitting = true;
+        _pageMessage = null;
+        _successMessage = null;
+        _selectedReceipt = null;
+
+        try
+        {
+            var payment =
+                await PaymentsService
+                    .CreateAsync(
+                        _paymentForm
+                            .ToRequest());
+
+            var receipt =
+                await ReceiptsService
+                    .GetByPaymentAsync(
+                        payment.Id);
+
+            await RefreshSelectedLoanAsync(
+                payment.LoanId);
+
+            if (receipt is null)
+            {
+                _successMessage =
+                    "El pago fue registrado correctamente.";
+
+                _pageMessage =
+                    "El pago fue registrado, pero no fue posible recuperar el recibo.";
+
+                return;
+            }
+
+            _selectedReceipt =
+                receipt;
+
+            _successMessage =
+                $"Pago registrado correctamente. Recibo {receipt.ReceiptNumber}.";
+        }
+        catch (ArgumentException ex)
+        {
+            _pageMessage =
+                ex.Message;
+        }
+        catch (Exception)
+        {
+            _pageMessage =
+                "No fue posible registrar el pago.";
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+
+    private async Task RefreshSelectedLoanAsync(
+        Guid loanId)
+    {
+        _loans =
+            await LoansService
+                .GetAllAsync();
+
+        var loan =
+            await LoansService
+                .GetByIdAsync(
+                    loanId);
+
+        var summary =
+            await LoansService
+                .GetFinancialSummaryAsync(
+                    loanId);
+
+        var payments =
+            await PaymentsService
+                .GetByLoanAsync(
+                    loanId);
+
+        _selectedLoan =
+            loan;
+
+        _summary =
+            summary;
+
+        _payments =
+            payments;
+
+        if (loan is not null &&
+            summary is not null &&
+            loan.Status ==
+                LoanStatus.Active &&
+            summary.TotalOutstanding > 0)
+        {
+            _paymentForm =
+                PaymentFormModel
+                    .ForLoan(
+                        loan.Id,
+                        summary);
+        }
+        else
+        {
+            _paymentForm =
+                new PaymentFormModel
+                {
+                    LoanId =
+                        loanId
+                };
+        }
+    }
+
+    private void UseNextInstallmentAmount()
+    {
+        if (_summary is null)
+        {
+            return;
+        }
+
+        _paymentForm.Amount =
+            _summary
+                .NextInstallmentAmountDue;
+
+        _paymentForm.PaymentType =
+            PaymentType.Regular;
+
+        _pageMessage = null;
+    }
+
+    private void UseTotalOutstanding()
+    {
+        if (_summary is null)
+        {
+            return;
+        }
+
+        _paymentForm.Amount =
+            _summary.TotalOutstanding;
+
+        _paymentForm.PaymentType =
+            PaymentType.FullSettlement;
+
+        _pageMessage = null;
+    }
+
+    private async Task ViewReceiptAsync(
+        Guid paymentId)
+    {
+        _isReceiptLoading = true;
+        _pageMessage = null;
+
+        try
+        {
+            var receipt =
+                await ReceiptsService
+                    .GetByPaymentAsync(
+                        paymentId);
+
+            if (receipt is null)
+            {
+                _pageMessage =
+                    "No fue posible encontrar el recibo de este pago.";
+
+                return;
+            }
+
+            _selectedReceipt =
+                receipt;
+        }
+        catch (ArgumentException ex)
+        {
+            _pageMessage =
+                ex.Message;
+        }
+        catch (Exception)
+        {
+            _pageMessage =
+                "No fue posible cargar el recibo.";
+        }
+        finally
+        {
+            _isReceiptLoading = false;
+        }
+    }
+
+    private Task CloseReceiptAsync()
+    {
+        _selectedReceipt = null;
+
+        return Task.CompletedTask;
+    }
+
+    private void ClearFilters()
+    {
+        _search =
+            string.Empty;
+
+        _statusFilter =
+            "active";
+    }
+
+    private void ClearSelectedLoan()
+    {
+        _selectedLoan = null;
+        _summary = null;
+        _payments = [];
+        _selectedReceipt = null;
+        _paymentForm = new();
+    }
+
+    private string SelectedRowClass(
+        Guid loanId)
+    {
+        return _selectedLoan?.Id ==
+            loanId
+                ? "table-primary"
+                : string.Empty;
+    }
+
+    private string Money(
+        decimal amount)
+    {
+        var symbol =
+            _tenant?.CurrencySymbol;
+
+        if (string.IsNullOrWhiteSpace(
+            symbol))
+        {
+            symbol =
+                _tenant?.CurrencyCode;
+        }
+
+        if (string.IsNullOrWhiteSpace(
+            symbol))
+        {
+            return amount.ToString(
+                "N2");
+        }
+
+        return
+            $"{symbol} {amount:N2}";
+    }
+
+    private static string FormatDate(
+        DateTime value)
+    {
+        return value.ToString(
+            "dd/MM/yyyy");
+    }
+
+    private static string FormatDateTime(
+        DateTime value)
+    {
+        return value
+            .ToLocalTime()
+            .ToString(
+                "dd/MM/yyyy HH:mm");
+    }
+
+    private static string DisplayValue(
+        string? value)
+    {
+        return string.IsNullOrWhiteSpace(
+            value)
+                ? "-"
+                : value;
+    }
+
+    private static string StatusText(
+        LoanStatus status)
+    {
+        return status switch
+        {
+            LoanStatus.Active =>
+                "Activo",
+
+            LoanStatus.Paid =>
+                "Pagado",
+
+            LoanStatus.Cancelled =>
+                "Cancelado",
+
+            _ =>
+                status.ToString()
+        };
+    }
+
+    private static string StatusBadgeClass(
+        LoanStatus status)
+    {
+        return status switch
+        {
+            LoanStatus.Active =>
+                "badge text-bg-success",
+
+            LoanStatus.Paid =>
+                "badge text-bg-primary",
+
+            LoanStatus.Cancelled =>
+                "badge text-bg-secondary",
+
+            _ =>
+                "badge text-bg-secondary"
+        };
+    }
+
+    private static string PaymentTypeText(
+        PaymentType paymentType)
+    {
+        return paymentType switch
+        {
+            PaymentType.Regular =>
+                "Pago regular",
+
+            PaymentType.Partial =>
+                "Pago parcial",
+
+            PaymentType.FullSettlement =>
+                "Pago total",
+
+            _ =>
+                paymentType.ToString()
+        };
+    }
+}
