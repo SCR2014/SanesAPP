@@ -20,9 +20,10 @@ public interface IAppUserRepository
         string username,
         CancellationToken cancellationToken = default);
 
-    Task<List<AppUser>> GetActiveByTenantAsync(
+    Task<List<AppUser>> GetByTenantAsync(
         Guid tenantId,
         AppUserRole? role = null,
+        bool includeInactive = false,
         CancellationToken cancellationToken = default);
 
     Task<int> CountActiveAdministratorsAsync(

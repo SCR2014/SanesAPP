@@ -370,6 +370,190 @@ public class AppUsersTests :
             HttpStatusCode.BadRequest,
             response.StatusCode);
     }
+    [Fact]
+    public async Task GetAll_IncludeInactive_ReturnsActiveAndInactiveUsers()
+    {
+        var context =
+            await CreateContextAsync();
+
+        var activeUser =
+            await CreateAppUserAndGetAsync(
+                context.Client,
+                "Cobrador Activo Include",
+                Unique("includeactive"),
+                AppUserRole.Collector);
+
+        var inactiveUser =
+            await CreateAppUserAndGetAsync(
+                context.Client,
+                "Cobrador Inactivo Include",
+                Unique("includeinactive"),
+                AppUserRole.Collector);
+
+        var deleteResponse =
+            await context.Client.DeleteAsync(
+                $"/api/app-users/{inactiveUser.Id}");
+
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            deleteResponse.StatusCode);
+
+        var response =
+            await context.Client.GetAsync(
+                "/api/app-users?includeInactive=true");
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            response.StatusCode);
+
+        var users =
+            await response.Content
+                .ReadFromJsonAsync<
+                    List<AppUserResponse>>();
+
+        Assert.NotNull(users);
+
+        var returnedActive =
+            Assert.Single(
+                users,
+                x => x.Id == activeUser.Id);
+
+        Assert.True(
+            returnedActive.IsActive);
+
+        var returnedInactive =
+            Assert.Single(
+                users,
+                x => x.Id == inactiveUser.Id);
+
+        Assert.False(
+            returnedInactive.IsActive);
+    }
+
+    [Fact]
+    public async Task GetAll_CollectorRoleAndIncludeInactive_ReturnsCollectorsIncludingInactive()
+    {
+        var context =
+            await CreateContextAsync();
+
+        var activeCollector =
+            await CreateAppUserAndGetAsync(
+                context.Client,
+                "Cobrador Activo Filtro",
+                Unique("filteractive"),
+                AppUserRole.Collector);
+
+        var inactiveCollector =
+            await CreateAppUserAndGetAsync(
+                context.Client,
+                "Cobrador Inactivo Filtro",
+                Unique("filterinactive"),
+                AppUserRole.Collector);
+
+        await CreateAppUserAndGetAsync(
+            context.Client,
+            "Administrador Filtro Include",
+            Unique("filteradmin"),
+            AppUserRole.Administrator);
+
+        var deleteResponse =
+            await context.Client.DeleteAsync(
+                $"/api/app-users/{inactiveCollector.Id}");
+
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            deleteResponse.StatusCode);
+
+        var response =
+            await context.Client.GetAsync(
+                $"/api/app-users" +
+                $"?role={(int)AppUserRole.Collector}" +
+                "&includeInactive=true");
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            response.StatusCode);
+
+        var users =
+            await response.Content
+                .ReadFromJsonAsync<
+                    List<AppUserResponse>>();
+
+        Assert.NotNull(users);
+
+        Assert.Contains(
+            users,
+            x => x.Id == activeCollector.Id);
+
+        var returnedInactive =
+            Assert.Single(
+                users,
+                x => x.Id == inactiveCollector.Id);
+
+        Assert.False(
+            returnedInactive.IsActive);
+
+        Assert.All(
+            users,
+            x => Assert.Equal(
+                AppUserRole.Collector,
+                x.Role));
+    }
+
+    [Fact]
+    public async Task GetAll_IncludeInactive_DoesNotLeakUsersFromDifferentTenant()
+    {
+        var tenant1 =
+            await CreateContextAsync();
+
+        var tenant2 =
+            await CreateContextAsync();
+
+        var tenant1User =
+            await CreateAppUserAndGetAsync(
+                tenant1.Client,
+                "Usuario Tenant Uno Include",
+                Unique("tenant1include"),
+                AppUserRole.Collector);
+
+        var tenant2User =
+            await CreateAppUserAndGetAsync(
+                tenant2.Client,
+                "Usuario Tenant Dos Include",
+                Unique("tenant2include"),
+                AppUserRole.Collector);
+
+        var deleteResponse =
+            await tenant2.Client.DeleteAsync(
+                $"/api/app-users/{tenant2User.Id}");
+
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            deleteResponse.StatusCode);
+
+        var response =
+            await tenant1.Client.GetAsync(
+                "/api/app-users?includeInactive=true");
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            response.StatusCode);
+
+        var users =
+            await response.Content
+                .ReadFromJsonAsync<
+                    List<AppUserResponse>>();
+
+        Assert.NotNull(users);
+
+        Assert.Contains(
+            users,
+            x => x.Id == tenant1User.Id);
+
+        Assert.DoesNotContain(
+            users,
+            x => x.Id == tenant2User.Id);
+    }
 
     [Fact]
     public async Task GetById_ExistingUser_ReturnsUser()

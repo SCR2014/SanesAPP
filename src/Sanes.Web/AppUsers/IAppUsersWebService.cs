@@ -1,62 +1,52 @@
 using Sanes.Application.AppUsers.DTOs;
 using Sanes.Domain.Enums;
 
-namespace Sanes.Application.AppUsers.Services;
+namespace Sanes.Web.AppUsers;
 
-public interface IAppUserService
+public interface IAppUsersWebService
 {
-    Task<AppUserResponse> CreateAsync(
-        Guid tenantId,
-        CreateAppUserRequest request,
-        CancellationToken cancellationToken = default);
-
     Task<List<AppUserResponse>> GetAllAsync(
-        Guid tenantId,
         AppUserRole? role = null,
         bool includeInactive = false,
         CancellationToken cancellationToken = default);
 
     Task<AppUserResponse?> GetByIdAsync(
-        Guid id,
-        Guid tenantId,
+        Guid appUserId,
+        CancellationToken cancellationToken = default);
+
+    Task<AppUserResponse> CreateAsync(
+        CreateAppUserRequest request,
         CancellationToken cancellationToken = default);
 
     Task<AppUserResponse?> UpdateAsync(
-        Guid id,
-        Guid tenantId,
+        Guid appUserId,
         UpdateAppUserRequest request,
         CancellationToken cancellationToken = default);
 
     Task<bool> DeleteAsync(
-        Guid id,
-        Guid tenantId,
+        Guid appUserId,
         CancellationToken cancellationToken = default);
 
     Task<AppUserResponse?> ReactivateAsync(
-        Guid id,
-        Guid tenantId,
+        Guid appUserId,
         CancellationToken cancellationToken = default);
 
     Task<List<AppUserCollectionRouteResponse>?> GetCollectionRoutesAsync(
         Guid appUserId,
-        Guid tenantId,
         CancellationToken cancellationToken = default);
 
     Task<bool> AssignCollectionRouteAsync(
         Guid appUserId,
         Guid collectionRouteId,
-        Guid tenantId,
         CancellationToken cancellationToken = default);
 
     Task<bool> UnassignCollectionRouteAsync(
         Guid appUserId,
         Guid collectionRouteId,
-        Guid tenantId,
         CancellationToken cancellationToken = default);
 
     Task<bool> SetPasswordAsync(
-        Guid id,
-        Guid tenantId,
+        Guid appUserId,
         string password,
         CancellationToken cancellationToken = default);
 }
