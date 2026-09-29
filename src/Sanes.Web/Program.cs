@@ -20,6 +20,7 @@ using Sanes.Web.Printing;
 using Sanes.Web.Loans;
 using Sanes.Web.Payments;
 using Sanes.Web.EarlySettlements;
+using Sanes.Web.LateFees;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -129,6 +130,10 @@ builder.Services.AddScoped<
 builder.Services.AddScoped<
     IEarlySettlementsWebService,
     EarlySettlementsWebService>();
+
+builder.Services.AddScoped<
+    ILateFeeManagementWebService,
+    LateFeeManagementWebService>();
 
 // Web authentication
 builder.Services

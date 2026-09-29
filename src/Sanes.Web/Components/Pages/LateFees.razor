@@ -1,0 +1,2021 @@
+@page "/late-fees"
+
+@attribute [Authorize(
+    Roles = WebRoles.Administrator)]
+
+@rendermode InteractiveServer
+
+@using Sanes.Application.LateFees.DTOs
+@using Sanes.Application.Loans.DTOs
+@using Sanes.Application.Tenants.DTOs
+@using Sanes.Domain.Enums
+@using Sanes.Web.LateFees
+@using Sanes.Web.Loans
+
+@inject ILoansWebService LoansService
+@inject ILateFeeManagementWebService LateFeesService
+
+<PageTitle>Gestión de mora - Sanes</PageTitle>
+
+<div class="d-flex flex-wrap
+            justify-content-between
+            align-items-start
+            gap-3
+            mb-4">
+
+    <div>
+        <h1 class="mb-1">
+            Gestión avanzada de mora
+        </h1>
+
+        <p class="text-muted mb-0">
+            Consulta cargos de mora, historial y
+            ajustes administrativos.
+        </p>
+    </div>
+
+    <button type="button"
+            class="btn btn-outline-secondary"
+            disabled="@_isLoading"
+            @onclick="ReloadAsync">
+
+        <span class="bi bi-arrow-clockwise me-1"
+              aria-hidden="true">
+        </span>
+
+        Actualizar
+
+    </button>
+
+</div>
+
+@if (!string.IsNullOrWhiteSpace(
+    _pageMessage))
+{
+    <div class="alert alert-danger">
+        @_pageMessage
+    </div>
+}
+
+@if (!string.IsNullOrWhiteSpace(
+    _warningMessage))
+{
+    <div class="alert alert-warning">
+        @_warningMessage
+    </div>
+}
+
+@if (!string.IsNullOrWhiteSpace(
+    _successMessage))
+{
+    <div class="alert alert-success">
+        @_successMessage
+    </div>
+}
+
+<div class="card mb-4">
+
+    <div class="card-header">
+        <strong>
+            Buscar préstamo
+        </strong>
+    </div>
+
+    <div class="card-body">
+
+        <div class="row g-3 align-items-end">
+
+            <div class="col-12 col-lg-7">
+
+                <label class="form-label">
+                    Cliente o inversionista
+                </label>
+
+                <input type="text"
+                       class="form-control"
+                       maxlength="150"
+                       placeholder="Buscar por cliente o inversionista"
+                       @bind="_search"
+                       @bind:event="oninput" />
+
+            </div>
+
+            <div class="col-12 col-lg-3">
+
+                <label class="form-label">
+                    Estado
+                </label>
+
+                <select class="form-select"
+                        @bind="_statusFilter">
+
+                    <option value="active">
+                        Activos
+                    </option>
+
+                    <option value="paid">
+                        Pagados
+                    </option>
+
+                    <option value="cancelled">
+                        Cancelados
+                    </option>
+
+                    <option value="all">
+                        Todos
+                    </option>
+
+                </select>
+
+            </div>
+
+            <div class="col-12 col-lg-2">
+
+                <button type="button"
+                        class="btn btn-outline-secondary w-100"
+                        @onclick="ClearFilters">
+
+                    Limpiar
+
+                </button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+@if (_isLoading)
+{
+    <div class="text-center py-5">
+
+        <div class="spinner-border"
+             role="status">
+        </div>
+
+        <div class="text-muted mt-2">
+            Cargando préstamos...
+        </div>
+
+    </div>
+}
+else if (!_loans.Any())
+{
+    <div class="alert alert-info">
+        No hay préstamos disponibles.
+    </div>
+}
+else
+{
+    <div class="card mb-4">
+
+        <div class="card-header d-flex
+                    justify-content-between
+                    align-items-center">
+
+            <strong>
+                Préstamos
+            </strong>
+
+            <span class="badge text-bg-secondary">
+                @FilteredLoans.Count()
+            </span>
+
+        </div>
+
+        <div class="table-responsive">
+
+            <table class="table table-hover
+                          align-middle mb-0">
+
+                <thead>
+                    <tr>
+                        <th>
+                            Cliente
+                        </th>
+
+                        <th>
+                            Inversionista
+                        </th>
+
+                        <th>
+                            Estado
+                        </th>
+
+                        <th class="text-end">
+                            Monto total
+                        </th>
+
+                        <th>
+                            Próximo pago
+                        </th>
+
+                        <th class="text-end">
+                            Acción
+                        </th>
+                    </tr>
+                </thead>
+
+                <tbody>
+
+                    @foreach (var loan
+                        in FilteredLoans)
+                    {
+                        <tr class="@SelectedLoanRowClass(
+                            loan.Id)">
+
+                            <td>
+                                <strong>
+                                    @loan.ClientName
+                                </strong>
+                            </td>
+
+                            <td>
+                                @loan.InvestorName
+                            </td>
+
+                            <td>
+                                <span class="@StatusBadgeClass(
+                                    loan.Status)">
+
+                                    @StatusText(
+                                        loan.Status)
+
+                                </span>
+                            </td>
+
+                            <td class="text-end">
+                                @Money(
+                                    loan.TotalAmount)
+                            </td>
+
+                            <td>
+                                @FormatDate(
+                                    loan.NextPaymentDate)
+                            </td>
+
+                            <td class="text-end">
+
+                                <button type="button"
+                                        class="btn btn-sm
+                                               btn-outline-primary"
+                                        disabled="@_isLoanLoading"
+                                        @onclick="() =>
+                                            SelectLoanAsync(
+                                                loan.Id)">
+
+                                    Seleccionar
+
+                                </button>
+
+                            </td>
+
+                        </tr>
+                    }
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+        @if (!FilteredLoans.Any())
+        {
+            <div class="card-body text-muted">
+                No hay préstamos que coincidan
+                con los filtros seleccionados.
+            </div>
+        }
+
+    </div>
+}
+
+@if (_isLoanLoading)
+{
+    <div class="text-center py-4">
+
+        <div class="spinner-border
+                    spinner-border-sm"
+             role="status">
+        </div>
+
+        <span class="ms-2">
+            Cargando información de mora...
+        </span>
+
+    </div>
+}
+else if (_selectedLoan is not null &&
+         _summary is not null &&
+         _lateFees is not null)
+{
+    <div class="card mb-4">
+
+        <div class="card-header">
+
+            <div class="d-flex flex-wrap
+                        justify-content-between
+                        align-items-start
+                        gap-2">
+
+                <div>
+
+                    <strong>
+                        @_selectedLoan.ClientName
+                    </strong>
+
+                    <div class="small text-muted">
+                        Inversionista:
+                        @_selectedLoan.InvestorName
+                    </div>
+
+                </div>
+
+                <div class="d-flex
+                            align-items-center
+                            gap-2">
+
+                    <span class="@StatusBadgeClass(
+                        _selectedLoan.Status)">
+
+                        @StatusText(
+                            _selectedLoan.Status)
+
+                    </span>
+
+                    <button type="button"
+                            class="btn-close"
+                            aria-label="Cerrar"
+                            @onclick="ClearSelectedLoan">
+                    </button>
+
+                </div>
+
+            </div>
+
+        </div>
+
+        <div class="card-body">
+
+            <h2 class="h6 mb-3">
+                Resumen financiero actual
+            </h2>
+
+            <div class="row g-3 mb-4">
+
+                <div class="col-12
+                            col-md-6
+                            col-xl-4">
+
+                    <div class="border rounded p-3 h-100">
+
+                        <div class="small text-muted">
+                            Saldo contractual
+                        </div>
+
+                        <div class="fs-5 fw-semibold">
+                            @Money(
+                                _summary.Balance)
+                        </div>
+
+                    </div>
+
+                </div>
+
+                <div class="col-12
+                            col-md-6
+                            col-xl-4">
+
+                    <div class="border rounded p-3 h-100">
+
+                        <div class="small text-muted">
+                            Mora pendiente
+                        </div>
+
+                        <div class="fs-5 fw-semibold">
+                            @Money(
+                                _lateFees.LateFeeBalance)
+                        </div>
+
+                    </div>
+
+                </div>
+
+                <div class="col-12
+                            col-md-6
+                            col-xl-4">
+
+                    <div class="border rounded p-3 h-100">
+
+                        <div class="small text-muted">
+                            Total pendiente
+                        </div>
+
+                        <div class="fs-5 fw-semibold">
+                            @Money(
+                                _summary.TotalOutstanding)
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+            <h2 class="h6 mb-3">
+                Política de mora del préstamo
+            </h2>
+
+            <div class="row g-3">
+
+                <div class="col-12
+                            col-md-6
+                            col-xl-3">
+
+                    <div class="border rounded p-3 h-100">
+
+                        <div class="small text-muted">
+                            Mora habilitada
+                        </div>
+
+                        <div class="fw-semibold">
+                            @(_selectedLoan.LateFeeEnabled
+                                ? "Sí"
+                                : "No")
+                        </div>
+
+                    </div>
+
+                </div>
+
+                <div class="col-12
+                            col-md-6
+                            col-xl-3">
+
+                    <div class="border rounded p-3 h-100">
+
+                        <div class="small text-muted">
+                            Tipo de cálculo
+                        </div>
+
+                        <div class="fw-semibold">
+                            @CalculationTypeText(
+                                _selectedLoan
+                                    .LateFeeCalculationType)
+                        </div>
+
+                    </div>
+
+                </div>
+
+                <div class="col-12
+                            col-md-6
+                            col-xl-3">
+
+                    <div class="border rounded p-3 h-100">
+
+                        <div class="small text-muted">
+                            Monto configurado
+                        </div>
+
+                        <div class="fw-semibold">
+                            @Money(
+                                _selectedLoan.LateFeeAmount)
+                        </div>
+
+                    </div>
+
+                </div>
+
+                <div class="col-12
+                            col-md-6
+                            col-xl-3">
+
+                    <div class="border rounded p-3 h-100">
+
+                        <div class="small text-muted">
+                            Días de gracia
+                        </div>
+
+                        <div class="fw-semibold">
+                            @_selectedLoan.LateFeeGraceDays
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+            @if (_selectedLoan.LateFeeCalculationType ==
+                 LateFeeCalculationType.DailyPercentage)
+            {
+                <div class="alert alert-warning mt-4 mb-0">
+
+                    Este préstamo posee una configuración de
+                    porcentaje diario. El backend actual solo
+                    admite operaciones nuevas de mora fija por
+                    cuota.
+
+                </div>
+            }
+
+        </div>
+
+    </div>
+
+    <div class="card mb-4">
+
+        <div class="card-header">
+            <strong>
+                Resumen de cargos de mora
+            </strong>
+        </div>
+
+        <div class="card-body">
+
+            <div class="row g-3">
+
+                <div class="col-12
+                            col-md-6
+                            col-xl-3">
+
+                    <div class="border rounded p-3 h-100">
+
+                        <div class="small text-muted">
+                            Mora original
+                        </div>
+
+                        <div class="fs-5 fw-semibold">
+                            @Money(
+                                _lateFees.TotalOriginalCharges)
+                        </div>
+
+                    </div>
+
+                </div>
+
+                <div class="col-12
+                            col-md-6
+                            col-xl-3">
+
+                    <div class="border rounded p-3 h-100">
+
+                        <div class="small text-muted">
+                            Mora ajustada
+                        </div>
+
+                        <div class="fs-5 fw-semibold">
+                            @Money(
+                                _lateFees.TotalAdjustedCharges)
+                        </div>
+
+                    </div>
+
+                </div>
+
+                <div class="col-12
+                            col-md-6
+                            col-xl-3">
+
+                    <div class="border rounded p-3 h-100">
+
+                        <div class="small text-muted">
+                            Pagado a mora
+                        </div>
+
+                        <div class="fs-5 fw-semibold">
+                            @Money(
+                                _lateFees.TotalPaidToLateFees)
+                        </div>
+
+                    </div>
+
+                </div>
+
+                <div class="col-12
+                            col-md-6
+                            col-xl-3">
+
+                    <div class="border
+                                border-warning
+                                rounded
+                                p-3
+                                h-100">
+
+                        <div class="small text-muted">
+                            Mora pendiente
+                        </div>
+
+                        <div class="fs-5
+                                    fw-semibold
+                                    text-warning-emphasis">
+                            @Money(
+                                _lateFees.LateFeeBalance)
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    @if (!_lateFees.Charges.Any())
+    {
+        <div class="alert alert-info">
+            Este préstamo no tiene cargos de mora registrados.
+        </div>
+    }
+    else
+    {
+        <div class="card mb-4">
+
+            <div class="card-header
+                        d-flex
+                        justify-content-between
+                        align-items-center">
+
+                <strong>
+                    Cargos por cuota
+                </strong>
+
+                <span class="badge text-bg-secondary">
+                    @_lateFees.Charges.Count
+                </span>
+
+            </div>
+
+            <div class="table-responsive">
+
+                <table class="table table-hover
+                              align-middle mb-0">
+
+                    <thead>
+                        <tr>
+                            <th>
+                                Cuota
+                            </th>
+
+                            <th>
+                                Vencimiento
+                            </th>
+
+                            <th>
+                                Mora efectiva
+                            </th>
+
+                            <th class="text-end">
+                                Original
+                            </th>
+
+                            <th class="text-end">
+                                Ajustado
+                            </th>
+
+                            <th class="text-end">
+                                Pagado
+                            </th>
+
+                            <th class="text-end">
+                                Pendiente
+                            </th>
+
+                            <th class="text-end">
+                                Acción
+                            </th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+
+                        @foreach (var charge
+                            in _lateFees.Charges
+                                .OrderByDescending(
+                                    x =>
+                                        x.EffectiveDate)
+                                .ThenByDescending(
+                                    x =>
+                                        x.InstallmentNumber))
+                        {
+                            <tr class="@SelectedChargeRowClass(
+                                charge.Id)">
+
+                                <td>
+                                    <strong>
+                                        #@charge.InstallmentNumber
+                                    </strong>
+                                </td>
+
+                                <td>
+                                    @FormatDate(
+                                        charge.InstallmentDueDate)
+                                </td>
+
+                                <td>
+                                    @FormatDate(
+                                        charge.EffectiveDate)
+                                </td>
+
+                                <td class="text-end">
+                                    @Money(
+                                        charge.OriginalAmount)
+                                </td>
+
+                                <td class="text-end">
+                                    @Money(
+                                        charge.AdjustedAmount)
+                                </td>
+
+                                <td class="text-end">
+                                    @Money(
+                                        charge.PaidAmount)
+                                </td>
+
+                                <td class="text-end">
+
+                                    @if (charge.OutstandingAmount > 0)
+                                    {
+                                        <span class="fw-semibold
+                                                     text-warning-emphasis">
+                                            @Money(
+                                                charge.OutstandingAmount)
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-success">
+                                            @Money(0m)
+                                        </span>
+                                    }
+
+                                </td>
+
+                                <td class="text-end">
+
+                                    <button type="button"
+                                            class="btn btn-sm
+                                                   btn-outline-primary"
+                                            disabled="@_isSubmitting"
+                                            @onclick="() =>
+                                                SelectCharge(
+                                                    charge.Id)">
+
+                                        Gestionar
+
+                                    </button>
+
+                                </td>
+
+                            </tr>
+                        }
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </div>
+    }
+
+    @if (_selectedCharge is not null)
+    {
+        <div class="card mb-4">
+
+            <div class="card-header">
+
+                <div class="d-flex flex-wrap
+                            justify-content-between
+                            align-items-start
+                            gap-2">
+
+                    <div>
+
+                        <strong>
+                            Cargo de mora — Cuota
+                            #@_selectedCharge.InstallmentNumber
+                        </strong>
+
+                        <div class="small text-muted">
+                            Fecha efectiva:
+                            @FormatDate(
+                                _selectedCharge.EffectiveDate)
+                        </div>
+
+                    </div>
+
+                    <button type="button"
+                            class="btn-close"
+                            aria-label="Cerrar"
+                            @onclick="ClearSelectedCharge">
+                    </button>
+
+                </div>
+
+            </div>
+
+            <div class="card-body">
+
+                <div class="row g-3 mb-4">
+
+                    <div class="col-12
+                                col-md-6
+                                col-xl-3">
+
+                        <div class="border rounded p-3 h-100">
+
+                            <div class="small text-muted">
+                                Original
+                            </div>
+
+                            <div class="fw-semibold">
+                                @Money(
+                                    _selectedCharge
+                                        .OriginalAmount)
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <div class="col-12
+                                col-md-6
+                                col-xl-3">
+
+                        <div class="border rounded p-3 h-100">
+
+                            <div class="small text-muted">
+                                Aumentos
+                            </div>
+
+                            <div class="fw-semibold">
+                                @Money(
+                                    _selectedCharge
+                                        .IncreaseAmount)
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <div class="col-12
+                                col-md-6
+                                col-xl-3">
+
+                        <div class="border rounded p-3 h-100">
+
+                            <div class="small text-muted">
+                                Disminuciones
+                            </div>
+
+                            <div class="fw-semibold">
+                                @Money(
+                                    _selectedCharge
+                                        .DecreaseAmount)
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <div class="col-12
+                                col-md-6
+                                col-xl-3">
+
+                        <div class="border rounded p-3 h-100">
+
+                            <div class="small text-muted">
+                                Perdonado
+                            </div>
+
+                            <div class="fw-semibold">
+                                @Money(
+                                    _selectedCharge
+                                        .WaivedAmount)
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <div class="col-12
+                                col-md-6
+                                col-xl-4">
+
+                        <div class="border rounded p-3 h-100">
+
+                            <div class="small text-muted">
+                                Monto ajustado
+                            </div>
+
+                            <div class="fs-5 fw-semibold">
+                                @Money(
+                                    _selectedCharge
+                                        .AdjustedAmount)
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <div class="col-12
+                                col-md-6
+                                col-xl-4">
+
+                        <div class="border rounded p-3 h-100">
+
+                            <div class="small text-muted">
+                                Pagado
+                            </div>
+
+                            <div class="fs-5 fw-semibold">
+                                @Money(
+                                    _selectedCharge
+                                        .PaidAmount)
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <div class="col-12
+                                col-md-6
+                                col-xl-4">
+
+                        <div class="border
+                                    border-warning
+                                    rounded
+                                    p-3
+                                    h-100">
+
+                            <div class="small text-muted">
+                                Saldo pendiente
+                            </div>
+
+                            <div class="fs-5
+                                        fw-semibold
+                                        text-warning-emphasis">
+                                @Money(
+                                    _selectedCharge
+                                        .OutstandingAmount)
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+                <h2 class="h6 mb-3">
+                    Historial de ajustes
+                </h2>
+
+                @if (!_selectedCharge.Adjustments.Any())
+                {
+                    <div class="alert alert-light border">
+                        Este cargo no tiene ajustes administrativos.
+                    </div>
+                }
+                else
+                {
+                    <div class="table-responsive mb-4">
+
+                        <table class="table
+                                      table-sm
+                                      align-middle">
+
+                            <thead>
+                                <tr>
+                                    <th>
+                                        Fecha
+                                    </th>
+
+                                    <th>
+                                        Tipo
+                                    </th>
+
+                                    <th class="text-end">
+                                        Monto
+                                    </th>
+
+                                    <th>
+                                        Motivo
+                                    </th>
+
+                                    <th>
+                                        Usuario
+                                    </th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+
+                                @foreach (var adjustment
+                                    in _selectedCharge
+                                        .Adjustments
+                                        .OrderByDescending(
+                                            x =>
+                                                x.CreatedAt))
+                                {
+                                    <tr>
+
+                                        <td>
+                                            @FormatDateTime(
+                                                adjustment.CreatedAt)
+                                        </td>
+
+                                        <td>
+                                            <span class="@AdjustmentBadgeClass(
+                                                adjustment.AdjustmentType)">
+
+                                                @AdjustmentTypeText(
+                                                    adjustment.AdjustmentType)
+
+                                            </span>
+                                        </td>
+
+                                        <td class="text-end">
+                                            @Money(
+                                                adjustment.Amount)
+                                        </td>
+
+                                        <td>
+                                            @adjustment.Reason
+                                        </td>
+
+                                        <td>
+                                            <span class="small
+                                                         font-monospace">
+                                                @ShortId(
+                                                    adjustment.AppUserId)
+                                            </span>
+                                        </td>
+
+                                    </tr>
+                                }
+
+                            </tbody>
+
+                        </table>
+
+                    </div>
+                }
+
+                <hr class="my-4" />
+
+                <h2 class="h6 mb-3">
+                    Registrar ajuste administrativo
+                </h2>
+
+                <p class="text-muted">
+                    Los ajustes quedan registrados en el historial
+                    y no modifican ni eliminan los movimientos
+                    anteriores.
+                </p>
+
+                <EditForm Model="_form"
+                          OnValidSubmit="SubmitAdjustmentAsync">
+
+                    <DataAnnotationsValidator />
+
+                    <div class="row g-3">
+
+                        <div class="col-12 col-lg-5">
+
+                            <label class="form-label">
+                                Tipo de ajuste
+                            </label>
+
+                            <InputSelect class="form-select"
+                                         @bind-Value="_form.AdjustmentType"
+                                         @bind-Value:after="AdjustmentTypeChanged">
+
+                                <option value="@LateFeeAdjustmentType.Waiver">
+                                    Perdonar mora
+                                </option>
+
+                                <option value="@LateFeeAdjustmentType.Decrease">
+                                    Corregir / reducir mora
+                                </option>
+
+                                <option value="@LateFeeAdjustmentType.Increase">
+                                    Aumentar mora
+                                </option>
+
+                            </InputSelect>
+
+                        </div>
+
+                        <div class="col-12 col-lg-5">
+
+                            <label class="form-label">
+                                Monto
+                            </label>
+
+                            <InputNumber class="form-control"
+                                         min="0.01"
+                                         step="0.01"
+                                         @bind-Value="_form.Amount" />
+
+                            <ValidationMessage
+                                For="@(() =>
+                                    _form.Amount)" />
+
+                        </div>
+
+                        <div class="col-12 col-lg-2">
+
+                            <label class="form-label d-block">
+                                &nbsp;
+                            </label>
+
+                            @if (_form.AdjustmentType ==
+                                 LateFeeAdjustmentType.Waiver &&
+                                 _selectedCharge.OutstandingAmount > 0)
+                            {
+                                <button type="button"
+                                        class="btn
+                                               btn-outline-secondary
+                                               w-100"
+                                        @onclick="SetFullWaiver">
+
+                                    Perdonar todo
+
+                                </button>
+                            }
+
+                        </div>
+
+                    </div>
+
+                    @if (_form.AdjustmentType ==
+                         LateFeeAdjustmentType.Waiver)
+                    {
+                        <div class="alert alert-info mt-3">
+
+                            <strong>Perdonar mora</strong>
+                            registra una condonación administrativa.
+                            Puede ser parcial o por el saldo completo
+                            todavía pendiente de este cargo.
+
+                        </div>
+                    }
+                    else if (_form.AdjustmentType ==
+                              LateFeeAdjustmentType.Decrease)
+                    {
+                        <div class="alert alert-info mt-3">
+
+                            <strong>Corregir / reducir mora</strong>
+                            reduce el valor del cargo por una corrección
+                            administrativa, sin clasificarlo como
+                            condonación al cliente.
+
+                        </div>
+                    }
+                    else if (_form.AdjustmentType ==
+                              LateFeeAdjustmentType.Increase)
+                    {
+                        <div class="alert alert-warning mt-3">
+
+                            <strong>Aumentar mora</strong>
+                            incrementará la deuda de este cargo.
+                            Si el préstamo estaba pagado, el backend
+                            puede volver a colocarlo como activo al
+                            existir deuda pendiente.
+
+                        </div>
+                    }
+
+                    @if ((_form.AdjustmentType ==
+                          LateFeeAdjustmentType.Waiver ||
+                          _form.AdjustmentType ==
+                          LateFeeAdjustmentType.Decrease) &&
+                         _selectedCharge.OutstandingAmount <= 0)
+                    {
+                        <div class="alert alert-secondary mt-3">
+
+                            Este cargo no tiene saldo pendiente.
+                            No puede disminuirse ni perdonarse más.
+
+                        </div>
+                    }
+
+                    <div class="mt-3">
+
+                        <label class="form-label">
+                            Motivo
+                        </label>
+
+                        <InputTextArea
+                            class="form-control"
+                            rows="3"
+                            maxlength="500"
+                            placeholder="Describe la razón administrativa del ajuste."
+                            @bind-Value="_form.Reason" />
+
+                        <ValidationMessage
+                            For="@(() =>
+                                _form.Reason)" />
+
+                        <div class="form-text">
+                            Máximo 500 caracteres.
+                        </div>
+
+                    </div>
+
+                    <div class="form-check mt-4 mb-3">
+
+                        <input class="form-check-input"
+                               type="checkbox"
+                               id="confirmLateFeeAdjustment"
+                               @bind="_confirmationAccepted" />
+
+                        <label class="form-check-label"
+                               for="confirmLateFeeAdjustment">
+
+                            Confirmo que revisé el cargo y
+                            autorizo este ajuste de mora.
+
+                        </label>
+
+                    </div>
+
+                    <button type="submit"
+                            class="btn btn-primary"
+                            disabled="@AdjustmentSubmitDisabled">
+
+                        @if (_isSubmitting)
+                        {
+                            <span class="spinner-border
+                                         spinner-border-sm
+                                         me-1"
+                                  role="status">
+                            </span>
+
+                            <span>
+                                Registrando...
+                            </span>
+                        }
+                        else
+                        {
+                            <span class="bi bi-check-circle me-1"
+                                  aria-hidden="true">
+                            </span>
+
+                            <span>
+                                Registrar ajuste
+                            </span>
+                        }
+
+                    </button>
+
+                </EditForm>
+
+            </div>
+
+        </div>
+    }
+}
+
+@code
+{
+    private List<LoanResponse> _loans = [];
+
+    private TenantDto? _tenant;
+
+    private LoanResponse? _selectedLoan;
+
+    private LoanFinancialSummaryResponse? _summary;
+
+    private LateFeeLoanResponse? _lateFees;
+
+    private LateFeeChargeResponse? _selectedCharge;
+
+    private LateFeeAdjustmentFormModel _form =
+        new();
+
+    private string _search =
+        string.Empty;
+
+    private string _statusFilter =
+        "active";
+
+    private string? _pageMessage;
+
+    private string? _warningMessage;
+
+    private string? _successMessage;
+
+    private bool _isLoading;
+
+    private bool _isLoanLoading;
+
+    private bool _isSubmitting;
+
+    private bool _confirmationAccepted;
+
+    private IEnumerable<LoanResponse>
+        FilteredLoans
+    {
+        get
+        {
+            IEnumerable<LoanResponse> result =
+                _loans;
+
+            result =
+                _statusFilter switch
+                {
+                    "active" =>
+                        result.Where(
+                            x =>
+                                x.Status ==
+                                LoanStatus.Active),
+
+                    "paid" =>
+                        result.Where(
+                            x =>
+                                x.Status ==
+                                LoanStatus.Paid),
+
+                    "cancelled" =>
+                        result.Where(
+                            x =>
+                                x.Status ==
+                                LoanStatus.Cancelled),
+
+                    _ =>
+                        result
+                };
+
+            if (!string.IsNullOrWhiteSpace(
+                _search))
+            {
+                var search =
+                    _search.Trim();
+
+                result =
+                    result.Where(
+                        x =>
+                            x.ClientName.Contains(
+                                search,
+                                StringComparison
+                                    .OrdinalIgnoreCase) ||
+                            x.InvestorName.Contains(
+                                search,
+                                StringComparison
+                                    .OrdinalIgnoreCase));
+            }
+
+            return result
+                .OrderBy(
+                    x => x.ClientName)
+                .ThenByDescending(
+                    x => x.CreatedAt);
+        }
+    }
+
+    private bool AdjustmentSubmitDisabled
+    {
+        get
+        {
+            if (_isSubmitting ||
+                !_confirmationAccepted ||
+                _selectedCharge is null)
+            {
+                return true;
+            }
+
+            if ((_form.AdjustmentType ==
+                 LateFeeAdjustmentType.Waiver ||
+                 _form.AdjustmentType ==
+                 LateFeeAdjustmentType.Decrease) &&
+                _selectedCharge.OutstandingAmount <= 0)
+            {
+                return true;
+            }
+
+            return false;
+        }
+    }
+
+    protected override async Task
+        OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _isLoading =
+            true;
+
+        _pageMessage =
+            null;
+
+        try
+        {
+            _tenant =
+                await LoansService
+                    .GetTenantAsync();
+
+            _loans =
+                await LoansService
+                    .GetAllAsync();
+        }
+        catch (ArgumentException ex)
+        {
+            _pageMessage =
+                ex.Message;
+        }
+        catch (Exception)
+        {
+            _pageMessage =
+                "No fue posible cargar los préstamos.";
+        }
+        finally
+        {
+            _isLoading =
+                false;
+        }
+    }
+
+    private async Task ReloadAsync()
+    {
+        var selectedLoanId =
+            _selectedLoan?.Id;
+
+        ClearMessages();
+
+        await LoadAsync();
+
+        if (selectedLoanId.HasValue)
+        {
+            await SelectLoanAsync(
+                selectedLoanId.Value);
+        }
+    }
+
+    private async Task SelectLoanAsync(
+        Guid loanId)
+    {
+        _isLoanLoading =
+            true;
+
+        ClearMessages();
+
+        _selectedCharge =
+            null;
+
+        _confirmationAccepted =
+            false;
+
+        try
+        {
+            var loan =
+                await LoansService
+                    .GetByIdAsync(
+                        loanId);
+
+            if (loan is null)
+            {
+                _pageMessage =
+                    "El préstamo seleccionado no fue encontrado.";
+
+                ClearSelectedLoan();
+
+                return;
+            }
+
+            /*
+             * Primero consultamos Late Fees porque este endpoint
+             * materializa las moras que deban existir hasta hoy.
+             */
+            var lateFees =
+                await LateFeesService
+                    .GetByLoanAsync(
+                        loanId);
+
+            if (lateFees is null)
+            {
+                _pageMessage =
+                    "El préstamo seleccionado no fue encontrado.";
+
+                ClearSelectedLoan();
+
+                return;
+            }
+
+            /*
+             * Después obtenemos el resumen financiero para que
+             * refleje cualquier mora recién materializada.
+             */
+            var summary =
+                await LoansService
+                    .GetFinancialSummaryAsync(
+                        loanId);
+
+            if (summary is null)
+            {
+                _pageMessage =
+                    "No fue posible obtener el resumen financiero del préstamo.";
+
+                ClearSelectedLoan();
+
+                return;
+            }
+
+            _selectedLoan =
+                loan;
+
+            _lateFees =
+                lateFees;
+
+            _summary =
+                summary;
+
+            _form =
+                new LateFeeAdjustmentFormModel();
+        }
+        catch (ArgumentException ex)
+        {
+            _pageMessage =
+                ex.Message;
+        }
+        catch (Exception)
+        {
+            _pageMessage =
+                "No fue posible cargar la información de mora del préstamo.";
+        }
+        finally
+        {
+            _isLoanLoading =
+                false;
+        }
+    }
+
+    private void SelectCharge(
+        Guid chargeId)
+    {
+        if (_lateFees is null)
+        {
+            return;
+        }
+
+        var charge =
+            _lateFees.Charges
+                .FirstOrDefault(
+                    x =>
+                        x.Id ==
+                        chargeId);
+
+        if (charge is null)
+        {
+            _pageMessage =
+                "El cargo de mora seleccionado no fue encontrado.";
+
+            return;
+        }
+
+        _selectedCharge =
+            charge;
+
+        _form =
+            LateFeeAdjustmentFormModel
+                .ForCharge(
+                    charge.Id,
+                    charge.OutstandingAmount);
+
+        _confirmationAccepted =
+            false;
+
+        ClearMessages();
+    }
+
+    private async Task SubmitAdjustmentAsync()
+    {
+        if (_selectedLoan is null ||
+            _selectedCharge is null)
+        {
+            return;
+        }
+
+        if (!_confirmationAccepted)
+        {
+            _pageMessage =
+                "Debes confirmar que revisaste el ajuste.";
+
+            return;
+        }
+
+        _isSubmitting =
+            true;
+
+        _pageMessage =
+            null;
+
+        _warningMessage =
+            null;
+
+        _successMessage =
+            null;
+
+        var chargeId =
+            _selectedCharge.Id;
+
+        try
+        {
+            var adjustedCharge =
+                await LateFeesService
+                    .AddAdjustmentAsync(
+                        chargeId,
+                        _form.ToRequest());
+
+            if (adjustedCharge is null)
+            {
+                _pageMessage =
+                    "El cargo de mora no fue encontrado.";
+
+                return;
+            }
+
+            var adjustmentType =
+                _form.AdjustmentType;
+
+            var adjustmentAmount =
+                _form.Amount;
+
+            await RefreshSelectedLoanAsync(
+                _selectedLoan.Id,
+                chargeId);
+
+            _confirmationAccepted =
+                false;
+
+            _successMessage =
+                adjustmentType switch
+                {
+                    LateFeeAdjustmentType.Waiver =>
+                        $"Se perdonaron {Money(adjustmentAmount)} de mora correctamente.",
+
+                    LateFeeAdjustmentType.Decrease =>
+                        $"La mora fue disminuida en {Money(adjustmentAmount)} correctamente.",
+
+                    LateFeeAdjustmentType.Increase =>
+                        $"La mora fue aumentada en {Money(adjustmentAmount)} correctamente.",
+
+                    _ =>
+                        "El ajuste de mora fue registrado correctamente."
+                };
+
+            if (_selectedCharge is not null)
+            {
+                _form =
+                    LateFeeAdjustmentFormModel
+                        .ForCharge(
+                            _selectedCharge.Id,
+                            _selectedCharge
+                                .OutstandingAmount);
+            }
+        }
+        catch (ArgumentException ex)
+        {
+            _pageMessage =
+                ex.Message;
+
+            _confirmationAccepted =
+                false;
+        }
+        catch (Exception)
+        {
+            _pageMessage =
+                "No fue posible registrar el ajuste de mora.";
+
+            _confirmationAccepted =
+                false;
+        }
+        finally
+        {
+            _isSubmitting =
+                false;
+        }
+    }
+
+    private async Task RefreshSelectedLoanAsync(
+        Guid loanId,
+        Guid? selectedChargeId = null)
+    {
+        _loans =
+            await LoansService
+                .GetAllAsync();
+
+        var loan =
+            await LoansService
+                .GetByIdAsync(
+                    loanId);
+
+        var lateFees =
+            await LateFeesService
+                .GetByLoanAsync(
+                    loanId);
+
+        var summary =
+            await LoansService
+                .GetFinancialSummaryAsync(
+                    loanId);
+
+        _selectedLoan =
+            loan;
+
+        _lateFees =
+            lateFees;
+
+        _summary =
+            summary;
+
+        if (selectedChargeId.HasValue &&
+            lateFees is not null)
+        {
+            _selectedCharge =
+                lateFees.Charges
+                    .FirstOrDefault(
+                        x =>
+                            x.Id ==
+                            selectedChargeId.Value);
+        }
+        else
+        {
+            _selectedCharge =
+                null;
+        }
+    }
+
+    private void AdjustmentTypeChanged()
+    {
+        if (_selectedCharge is null)
+        {
+            return;
+        }
+
+        if (_form.AdjustmentType ==
+            LateFeeAdjustmentType.Waiver ||
+            _form.AdjustmentType ==
+            LateFeeAdjustmentType.Decrease)
+        {
+            _form.Amount =
+                _selectedCharge
+                    .OutstandingAmount;
+        }
+        else
+        {
+            _form.Amount =
+                0.01m;
+        }
+
+        _confirmationAccepted =
+            false;
+
+        ClearMessages();
+    }
+
+    private void SetFullWaiver()
+    {
+        if (_selectedCharge is null)
+        {
+            return;
+        }
+
+        _form.Amount =
+            _selectedCharge
+                .OutstandingAmount;
+
+        _confirmationAccepted =
+            false;
+    }
+
+    private void ClearFilters()
+    {
+        _search =
+            string.Empty;
+
+        _statusFilter =
+            "active";
+    }
+
+    private void ClearSelectedCharge()
+    {
+        _selectedCharge =
+            null;
+
+        _form =
+            new LateFeeAdjustmentFormModel();
+
+        _confirmationAccepted =
+            false;
+
+        ClearMessages();
+    }
+
+    private void ClearSelectedLoan()
+    {
+        _selectedLoan =
+            null;
+
+        _summary =
+            null;
+
+        _lateFees =
+            null;
+
+        _selectedCharge =
+            null;
+
+        _form =
+            new LateFeeAdjustmentFormModel();
+
+        _confirmationAccepted =
+            false;
+
+        ClearMessages();
+    }
+
+    private void ClearMessages()
+    {
+        _pageMessage =
+            null;
+
+        _warningMessage =
+            null;
+
+        _successMessage =
+            null;
+    }
+
+    private string SelectedLoanRowClass(
+        Guid loanId)
+    {
+        return _selectedLoan?.Id ==
+            loanId
+                ? "table-primary"
+                : string.Empty;
+    }
+
+    private string SelectedChargeRowClass(
+        Guid chargeId)
+    {
+        return _selectedCharge?.Id ==
+            chargeId
+                ? "table-primary"
+                : string.Empty;
+    }
+
+    private string Money(
+        decimal amount)
+    {
+        var symbol =
+            _tenant?.CurrencySymbol;
+
+        if (string.IsNullOrWhiteSpace(
+            symbol))
+        {
+            symbol =
+                _tenant?.CurrencyCode;
+        }
+
+        if (string.IsNullOrWhiteSpace(
+            symbol))
+        {
+            return amount.ToString(
+                "N2");
+        }
+
+        return
+            $"{symbol} {amount:N2}";
+    }
+
+    private static string FormatDate(
+        DateTime value)
+    {
+        return value.ToString(
+            "dd/MM/yyyy");
+    }
+
+    private static string FormatDateTime(
+        DateTime value)
+    {
+        return value
+            .ToLocalTime()
+            .ToString(
+                "dd/MM/yyyy HH:mm");
+    }
+
+    private static string ShortId(
+        Guid id)
+    {
+        var value =
+            id.ToString();
+
+        return value.Length <= 8
+            ? value
+            : value[..8];
+    }
+
+    private static string CalculationTypeText(
+        LateFeeCalculationType calculationType)
+    {
+        return calculationType switch
+        {
+            LateFeeCalculationType
+                .FixedAmountPerInstallment =>
+                "Monto fijo por cuota",
+
+            LateFeeCalculationType
+                .DailyPercentage =>
+                "Porcentaje diario",
+
+            _ =>
+                calculationType.ToString()
+        };
+    }
+
+    private static string AdjustmentTypeText(
+        LateFeeAdjustmentType adjustmentType)
+    {
+        return adjustmentType switch
+        {
+            LateFeeAdjustmentType.Waiver =>
+                "Perdón",
+
+            LateFeeAdjustmentType.Decrease =>
+                "Disminución",
+
+            LateFeeAdjustmentType.Increase =>
+                "Aumento",
+
+            _ =>
+                adjustmentType.ToString()
+        };
+    }
+
+    private static string AdjustmentBadgeClass(
+        LateFeeAdjustmentType adjustmentType)
+    {
+        return adjustmentType switch
+        {
+            LateFeeAdjustmentType.Waiver =>
+                "badge text-bg-success",
+
+            LateFeeAdjustmentType.Decrease =>
+                "badge text-bg-info",
+
+            LateFeeAdjustmentType.Increase =>
+                "badge text-bg-warning",
+
+            _ =>
+                "badge text-bg-secondary"
+        };
+    }
+
+    private static string StatusText(
+        LoanStatus status)
+    {
+        return status switch
+        {
+            LoanStatus.Active =>
+                "Activo",
+
+            LoanStatus.Paid =>
+                "Pagado",
+
+            LoanStatus.Cancelled =>
+                "Cancelado",
+
+            _ =>
+                status.ToString()
+        };
+    }
+
+    private static string StatusBadgeClass(
+        LoanStatus status)
+    {
+        return status switch
+        {
+            LoanStatus.Active =>
+                "badge text-bg-success",
+
+            LoanStatus.Paid =>
+                "badge text-bg-primary",
+
+            LoanStatus.Cancelled =>
+                "badge text-bg-secondary",
+
+            _ =>
+                "badge text-bg-secondary"
+        };
+    }
+}
