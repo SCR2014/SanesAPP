@@ -21,6 +21,7 @@ using Sanes.Web.Loans;
 using Sanes.Web.Payments;
 using Sanes.Web.EarlySettlements;
 using Sanes.Web.LateFees;
+using Sanes.Web.LoanGuarantees;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -134,6 +135,10 @@ builder.Services.AddScoped<
 builder.Services.AddScoped<
     ILateFeeManagementWebService,
     LateFeeManagementWebService>();
+
+builder.Services.AddScoped<
+    ILoanGuaranteesWebService,
+    LoanGuaranteesWebService>();
 
 // Web authentication
 builder.Services

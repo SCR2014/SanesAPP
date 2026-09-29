@@ -1,0 +1,2064 @@
+@page "/loan-guarantees"
+
+@attribute [Authorize(
+    Roles = WebRoles.Administrator)]
+
+@rendermode InteractiveServer
+
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.JSInterop
+@using Sanes.Application.Loans.DTOs
+@using Sanes.Application.Tenants.DTOs
+@using Sanes.Domain.Enums
+@using Sanes.Web.LoanGuarantees
+@using Sanes.Web.Loans
+
+@inject ILoansWebService LoansService
+@inject ILoanGuaranteesWebService GuaranteesService
+@inject IJSRuntime JS
+
+<PageTitle>Garantías y documentos - Sanes</PageTitle>
+
+<div class="d-flex flex-wrap
+            justify-content-between
+            align-items-start
+            gap-3
+            mb-4">
+
+    <div>
+        <h1 class="mb-1">
+            Garantías y documentos
+        </h1>
+
+        <p class="text-muted mb-0">
+            Administra las garantías asociadas a los préstamos
+            y sus documentos de respaldo.
+        </p>
+    </div>
+
+    <button type="button"
+            class="btn btn-outline-secondary"
+            disabled="@_isLoading"
+            @onclick="ReloadAsync">
+
+        <span class="bi bi-arrow-clockwise me-1"
+              aria-hidden="true">
+        </span>
+
+        Actualizar
+    </button>
+
+</div>
+
+@if (!string.IsNullOrWhiteSpace(
+    _pageMessage))
+{
+    <div class="alert alert-danger">
+        @_pageMessage
+    </div>
+}
+
+@if (!string.IsNullOrWhiteSpace(
+    _successMessage))
+{
+    <div class="alert alert-success">
+        @_successMessage
+    </div>
+}
+
+@if (!string.IsNullOrWhiteSpace(
+    _warningMessage))
+{
+    <div class="alert alert-warning">
+        @_warningMessage
+    </div>
+}
+
+<div class="card mb-4">
+
+    <div class="card-header">
+        <strong>
+            Buscar préstamo
+        </strong>
+    </div>
+
+    <div class="card-body">
+
+        <div class="row g-3 align-items-end">
+
+            <div class="col-12 col-lg-7">
+
+                <label class="form-label">
+                    Cliente o inversionista
+                </label>
+
+                <input type="text"
+                       class="form-control"
+                       maxlength="150"
+                       placeholder="Buscar por cliente o inversionista"
+                       @bind="_search"
+                       @bind:event="oninput" />
+
+            </div>
+
+            <div class="col-12 col-lg-3">
+
+                <label class="form-label">
+                    Estado
+                </label>
+
+                <select class="form-select"
+                        @bind="_statusFilter">
+
+                    <option value="all">
+                        Todos
+                    </option>
+
+                    <option value="active">
+                        Activos
+                    </option>
+
+                    <option value="paid">
+                        Pagados
+                    </option>
+
+                    <option value="cancelled">
+                        Cancelados
+                    </option>
+
+                </select>
+
+            </div>
+
+            <div class="col-12 col-lg-2">
+
+                <button type="button"
+                        class="btn btn-outline-secondary w-100"
+                        @onclick="ClearFilters">
+
+                    Limpiar
+                </button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+@if (_isLoading)
+{
+    <div class="text-center py-5">
+
+        <div class="spinner-border"
+             role="status">
+        </div>
+
+        <div class="text-muted mt-2">
+            Cargando préstamos...
+        </div>
+
+    </div>
+}
+else if (!_loans.Any())
+{
+    <div class="alert alert-info">
+        No hay préstamos disponibles.
+    </div>
+}
+else
+{
+    <div class="card mb-4">
+
+        <div class="card-header d-flex
+                    justify-content-between
+                    align-items-center">
+
+            <strong>
+                Préstamos
+            </strong>
+
+            <span class="badge text-bg-secondary">
+                @FilteredLoans.Count()
+            </span>
+
+        </div>
+
+        <div class="table-responsive">
+
+            <table class="table table-hover
+                          align-middle mb-0">
+
+                <thead>
+                    <tr>
+                        <th>
+                            Cliente
+                        </th>
+
+                        <th>
+                            Inversionista
+                        </th>
+
+                        <th>
+                            Estado
+                        </th>
+
+                        <th>
+                            Garantía
+                        </th>
+
+                        <th class="text-end">
+                            Principal
+                        </th>
+
+                        <th class="text-end">
+                            Acción
+                        </th>
+                    </tr>
+                </thead>
+
+                <tbody>
+
+                    @foreach (var loan in FilteredLoans)
+                    {
+                        <tr class="@SelectedLoanRowClass(
+                            loan.Id)">
+
+                            <td>
+                                <strong>
+                                    @loan.ClientName
+                                </strong>
+                            </td>
+
+                            <td>
+                                @loan.InvestorName
+                            </td>
+
+                            <td>
+                                <span class="@StatusBadgeClass(
+                                    loan.Status)">
+
+                                    @StatusText(
+                                        loan.Status)
+
+                                </span>
+                            </td>
+
+                            <td>
+                                @if (loan.Guarantee is not null)
+                                {
+                                    <span class="badge text-bg-success">
+                                        Registrada
+                                    </span>
+                                }
+                                else if (loan.GuaranteeRequired)
+                                {
+                                    <span class="badge text-bg-danger">
+                                        Requerida
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="badge text-bg-secondary">
+                                        No registrada
+                                    </span>
+                                }
+                            </td>
+
+                            <td class="text-end">
+                                @Money(
+                                    loan.PrincipalAmount)
+                            </td>
+
+                            <td class="text-end">
+
+                                <button type="button"
+                                        class="btn btn-sm
+                                               btn-outline-primary"
+                                        disabled="@_isLoanLoading"
+                                        @onclick="() =>
+                                            SelectLoanAsync(
+                                                loan.Id)">
+
+                                    Seleccionar
+                                </button>
+
+                            </td>
+
+                        </tr>
+                    }
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+        @if (!FilteredLoans.Any())
+        {
+            <div class="card-body text-muted">
+                No hay préstamos que coincidan
+                con los filtros seleccionados.
+            </div>
+        }
+
+    </div>
+}
+
+@if (_isLoanLoading)
+{
+    <div class="text-center py-4">
+
+        <div class="spinner-border spinner-border-sm"
+             role="status">
+        </div>
+
+        <span class="ms-2">
+            Cargando garantía...
+        </span>
+
+    </div>
+}
+else if (_selectedLoan is not null)
+{
+    <div class="card mb-4">
+
+        <div class="card-header">
+
+            <div class="d-flex flex-wrap
+                        justify-content-between
+                        align-items-start
+                        gap-2">
+
+                <div>
+
+                    <strong>
+                        @_selectedLoan.ClientName
+                    </strong>
+
+                    <div class="small text-muted">
+                        Inversionista:
+                        @_selectedLoan.InvestorName
+                    </div>
+
+                </div>
+
+                <div class="d-flex align-items-center gap-2">
+
+                    <span class="@StatusBadgeClass(
+                        _selectedLoan.Status)">
+
+                        @StatusText(
+                            _selectedLoan.Status)
+
+                    </span>
+
+                    <button type="button"
+                            class="btn-close"
+                            aria-label="Cerrar"
+                            @onclick="ClearSelectedLoan">
+                    </button>
+
+                </div>
+
+            </div>
+
+        </div>
+
+        <div class="card-body">
+
+            <h2 class="h6 mb-3">
+                Política de garantía del préstamo
+            </h2>
+
+            <div class="row g-3">
+
+                <div class="col-12 col-md-4">
+
+                    <div class="border rounded p-3 h-100">
+
+                        <div class="small text-muted">
+                            Garantía requerida
+                        </div>
+
+                        <div class="fs-5 fw-semibold">
+
+                            @if (_selectedLoan.GuaranteeRequired)
+                            {
+                                <span class="text-danger">
+                                    Sí
+                                </span>
+                            }
+                            else
+                            {
+                                <span>
+                                    No
+                                </span>
+                            }
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+                <div class="col-12 col-md-4">
+
+                    <div class="border rounded p-3 h-100">
+
+                        <div class="small text-muted">
+                            Umbral al crear el préstamo
+                        </div>
+
+                        <div class="fs-5 fw-semibold">
+
+                            @if (_selectedLoan
+                                .GuaranteeThresholdAtCreation
+                                .HasValue)
+                            {
+                                @Money(
+                                    _selectedLoan
+                                        .GuaranteeThresholdAtCreation
+                                        .Value)
+                            }
+                            else
+                            {
+                                <span class="text-muted">
+                                    No configurado
+                                </span>
+                            }
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+                <div class="col-12 col-md-4">
+
+                    <div class="border rounded p-3 h-100">
+
+                        <div class="small text-muted">
+                            Principal
+                        </div>
+
+                        <div class="fs-5 fw-semibold">
+                            @Money(
+                                _selectedLoan.PrincipalAmount)
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+            @if (_selectedLoan.GuaranteeRequired &&
+                 _guarantee is null)
+            {
+                <div class="alert alert-danger mt-4 mb-0">
+
+                    Este préstamo requiere garantía,
+                    pero actualmente no tiene una garantía
+                    registrada.
+
+                </div>
+            }
+            else if (!_selectedLoan.GuaranteeRequired &&
+                     _guarantee is not null)
+            {
+                <div class="alert alert-info mt-4 mb-0">
+
+                    La garantía está registrada de forma
+                    voluntaria. El préstamo no la requiere
+                    actualmente según su política congelada.
+
+                </div>
+            }
+
+        </div>
+
+    </div>
+
+    <div class="card mb-4">
+
+        <div class="card-header d-flex
+                    justify-content-between
+                    align-items-center">
+
+            <strong>
+                Garantía
+            </strong>
+
+            @if (_guarantee is not null)
+            {
+                <span class="badge text-bg-success">
+                    Registrada
+                </span>
+            }
+            else
+            {
+                <span class="badge text-bg-secondary">
+                    No registrada
+                </span>
+            }
+
+        </div>
+
+        <div class="card-body">
+
+            @if (_guarantee is not null)
+            {
+                <div class="row g-3 mb-4">
+
+                    <div class="col-12 col-md-4">
+
+                        <div class="border rounded p-3 h-100">
+
+                            <div class="small text-muted">
+                                Tipo
+                            </div>
+
+                            <div class="fw-semibold">
+                                @GuaranteeTypeText(
+                                    _guarantee.Type)
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <div class="col-12 col-md-4">
+
+                        <div class="border rounded p-3 h-100">
+
+                            <div class="small text-muted">
+                                Referencia
+                            </div>
+
+                            <div class="fw-semibold">
+                                @_guarantee.Reference
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <div class="col-12 col-md-4">
+
+                        <div class="border rounded p-3 h-100">
+
+                            <div class="small text-muted">
+                                Última actualización
+                            </div>
+
+                            <div class="fw-semibold">
+                                @FormatDateTime(
+                                    _guarantee.UpdatedAt)
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(
+                        _guarantee.Description))
+                    {
+                        <div class="col-12">
+
+                            <div class="border rounded p-3">
+
+                                <div class="small text-muted">
+                                    Descripción
+                                </div>
+
+                                <div>
+                                    @_guarantee.Description
+                                </div>
+
+                            </div>
+
+                        </div>
+                    }
+
+                </div>
+            }
+
+            @if (_selectedLoan.Status ==
+                 LoanStatus.Active)
+            {
+                <h2 class="h6 mb-3">
+                    @(_guarantee is null
+                        ? "Registrar garantía"
+                        : "Editar garantía")
+                </h2>
+
+                <EditForm Model="_guaranteeForm"
+                          OnValidSubmit="SaveGuaranteeAsync">
+
+                    <DataAnnotationsValidator />
+
+                    <div class="row g-3">
+
+                        <div class="col-12 col-lg-4">
+
+                            <label class="form-label">
+                                Tipo
+                            </label>
+
+                            <InputSelect class="form-select"
+                                         @bind-Value="_guaranteeForm.Type">
+
+                                <option value="@LoanGuaranteeType.IdentificationDocument">
+                                    Documento de identificación
+                                </option>
+
+                                <option value="@LoanGuaranteeType.Guarantor">
+                                    Garante
+                                </option>
+
+                                <option value="@LoanGuaranteeType.Collateral">
+                                    Bien en garantía / colateral
+                                </option>
+
+                                <option value="@LoanGuaranteeType.Other">
+                                    Otro
+                                </option>
+
+                            </InputSelect>
+
+                            <ValidationMessage
+                                For="@(() =>
+                                    _guaranteeForm.Type)" />
+
+                        </div>
+
+                        <div class="col-12 col-lg-8">
+
+                            <label class="form-label">
+                                Referencia
+                            </label>
+
+                            <InputText class="form-control"
+                                       maxlength="150"
+                                       placeholder="Cédula, placa, matrícula, referencia del bien..."
+                                       @bind-Value="_guaranteeForm.Reference" />
+
+                            <ValidationMessage
+                                For="@(() =>
+                                    _guaranteeForm.Reference)" />
+
+                        </div>
+
+                        <div class="col-12">
+
+                            <label class="form-label">
+                                Descripción
+                            </label>
+
+                            <InputTextArea class="form-control"
+                                           rows="3"
+                                           maxlength="1000"
+                                           placeholder="Información adicional de la garantía."
+                                           @bind-Value="_guaranteeForm.Description" />
+
+                            <ValidationMessage
+                                For="@(() =>
+                                    _guaranteeForm.Description)" />
+
+                            <div class="form-text">
+                                Máximo 1000 caracteres.
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <button type="submit"
+                            class="btn btn-primary mt-3"
+                            disabled="@_isSavingGuarantee">
+
+                        @if (_isSavingGuarantee)
+                        {
+                            <span class="spinner-border
+                                         spinner-border-sm
+                                         me-1"
+                                  role="status">
+                            </span>
+
+                            <span>
+                                Guardando...
+                            </span>
+                        }
+                        else
+                        {
+                            <span class="bi bi-save me-1"
+                                  aria-hidden="true">
+                            </span>
+
+                            <span>
+                                @(_guarantee is null
+                                    ? "Registrar garantía"
+                                    : "Guardar cambios")
+                            </span>
+                        }
+
+                    </button>
+
+                </EditForm>
+            }
+            else
+            {
+                <div class="alert alert-secondary mb-0">
+
+                    La garantía puede consultarse,
+                    pero solo puede crearse o modificarse
+                    mientras el préstamo esté activo.
+
+                </div>
+            }
+
+        </div>
+
+    </div>
+
+    @if (_guarantee is not null)
+    {
+        <div class="card mb-4">
+
+            <div class="card-header d-flex
+                        flex-wrap
+                        justify-content-between
+                        align-items-center
+                        gap-2">
+
+                <strong>
+                    Documentos de respaldo
+                </strong>
+
+                <span class="badge text-bg-secondary">
+                    @_attachments.Count / 10
+                </span>
+
+            </div>
+
+            <div class="card-body">
+
+                @if (_attachments.Count == 0)
+                {
+                    <div class="alert alert-light border">
+                        Esta garantía no tiene documentos
+                        registrados.
+                    </div>
+                }
+                else
+                {
+                    <div class="table-responsive mb-4">
+
+                        <table class="table table-hover
+                                      align-middle mb-0">
+
+                            <thead>
+                                <tr>
+                                    <th>
+                                        Documento
+                                    </th>
+
+                                    <th>
+                                        Tipo
+                                    </th>
+
+                                    <th>
+                                        Tamaño
+                                    </th>
+
+                                    <th>
+                                        Descripción
+                                    </th>
+
+                                    <th>
+                                        Fecha
+                                    </th>
+
+                                    <th class="text-end">
+                                        Acciones
+                                    </th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+
+                                @foreach (var attachment
+                                    in _attachments
+                                        .OrderByDescending(
+                                            x => x.CreatedAt))
+                                {
+                                    <tr>
+
+                                        <td>
+                                            <div class="d-flex
+                                                        align-items-center
+                                                        gap-2">
+
+                                                <span class="@FileIconClass(
+                                                    attachment.ContentType)"
+                                                      aria-hidden="true">
+                                                </span>
+
+                                                <div>
+
+                                                    <strong>
+                                                        @attachment.OriginalFileName
+                                                    </strong>
+
+                                                    <div class="small
+                                                                text-muted">
+
+                                                        Usuario:
+                                                        @ShortId(
+                                                            attachment
+                                                                .UploadedByAppUserId)
+
+                                                    </div>
+
+                                                </div>
+
+                                            </div>
+                                        </td>
+
+                                        <td>
+                                            @FileTypeText(
+                                                attachment.ContentType)
+                                        </td>
+
+                                        <td>
+                                            @FormatFileSize(
+                                                attachment.FileSize)
+                                        </td>
+
+                                        <td>
+                                            @if (string.IsNullOrWhiteSpace(
+                                                attachment.Description))
+                                            {
+                                                <span class="text-muted">
+                                                    —
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                @attachment.Description
+                                            }
+                                        </td>
+
+                                        <td>
+                                            @FormatDateTime(
+                                                attachment.CreatedAt)
+                                        </td>
+
+                                        <td class="text-end">
+
+                                            <div class="d-flex
+                                                        justify-content-end
+                                                        gap-2">
+
+                                                <button type="button"
+                                                        class="btn btn-sm
+                                                               btn-outline-primary"
+                                                        disabled="@(_downloadingAttachmentId ==
+                                                                    attachment.Id)"
+                                                        @onclick="() =>
+                                                            DownloadAttachmentAsync(
+                                                                attachment)">
+
+                                                    @if (_downloadingAttachmentId ==
+                                                         attachment.Id)
+                                                    {
+                                                        <span class="spinner-border
+                                                                     spinner-border-sm"
+                                                              role="status">
+                                                        </span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="bi
+                                                                     bi-download"
+                                                              aria-hidden="true">
+                                                        </span>
+                                                    }
+
+                                                    <span class="ms-1">
+                                                        Descargar
+                                                    </span>
+
+                                                </button>
+
+                                                <button type="button"
+                                                        class="btn btn-sm
+                                                               btn-outline-danger"
+                                                        disabled="@_isDeletingAttachment"
+                                                        @onclick="() =>
+                                                            AskDeleteAttachment(
+                                                                attachment)">
+
+                                                    <span class="bi bi-trash"
+                                                          aria-hidden="true">
+                                                    </span>
+
+                                                    <span class="ms-1">
+                                                        Eliminar
+                                                    </span>
+
+                                                </button>
+
+                                            </div>
+
+                                        </td>
+
+                                    </tr>
+                                }
+
+                            </tbody>
+
+                        </table>
+
+                    </div>
+                }
+
+                @if (_attachmentPendingDelete is not null)
+                {
+                    <div class="alert alert-danger">
+
+                        <strong>
+                            Confirmar eliminación
+                        </strong>
+
+                        <p class="mb-2 mt-2">
+                            ¿Deseas eliminar el documento
+                            <strong>
+                                @_attachmentPendingDelete
+                                    .OriginalFileName
+                            </strong>?
+                        </p>
+
+                        <p class="small mb-3">
+                            El documento dejará de estar disponible
+                            en la aplicación. El backend conserva
+                            el archivo físico para fines de auditoría.
+                        </p>
+
+                        <div class="d-flex gap-2">
+
+                            <button type="button"
+                                    class="btn btn-danger"
+                                    disabled="@_isDeletingAttachment"
+                                    @onclick="ConfirmDeleteAttachmentAsync">
+
+                                @if (_isDeletingAttachment)
+                                {
+                                    <span class="spinner-border
+                                                 spinner-border-sm
+                                                 me-1"
+                                          role="status">
+                                    </span>
+                                }
+
+                                Confirmar eliminación
+                            </button>
+
+                            <button type="button"
+                                    class="btn btn-outline-secondary"
+                                    disabled="@_isDeletingAttachment"
+                                    @onclick="CancelDeleteAttachment">
+
+                                Cancelar
+                            </button>
+
+                        </div>
+
+                    </div>
+                }
+
+                <hr class="my-4" />
+
+                <h2 class="h6 mb-3">
+                    Subir documento
+                </h2>
+
+                @if (_selectedLoan.Status !=
+                     LoanStatus.Active)
+                {
+                    <div class="alert alert-secondary mb-0">
+
+                        Solo se pueden cargar documentos
+                        mientras el préstamo esté activo.
+
+                    </div>
+                }
+                else if (_attachments.Count >=
+                         MaximumAttachments)
+                {
+                    <div class="alert alert-warning mb-0">
+
+                        Esta garantía alcanzó el máximo de
+                        10 documentos activos.
+
+                    </div>
+                }
+                else
+                {
+                    <EditForm Model="_uploadForm"
+                              OnValidSubmit="UploadAttachmentAsync">
+
+                        <DataAnnotationsValidator />
+
+                        <div class="row g-3">
+
+                            <div class="col-12 col-lg-6">
+
+                                <label class="form-label">
+                                    Archivo
+                                </label>
+
+                                <InputFile @key="_fileInputKey"
+                                           class="form-control"
+                                           accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+                                           OnChange="HandleFileSelected" />
+
+                                <div class="form-text">
+                                    PDF, JPG/JPEG o PNG.
+                                    Máximo 10 MB.
+                                </div>
+
+                            </div>
+
+                            <div class="col-12 col-lg-6">
+
+                                <label class="form-label">
+                                    Descripción
+                                </label>
+
+                                <InputText class="form-control"
+                                           maxlength="1000"
+                                           placeholder="Ej.: Matrícula del vehículo, cédula del garante..."
+                                           @bind-Value="_uploadForm.Description" />
+
+                                <ValidationMessage
+                                    For="@(() =>
+                                        _uploadForm.Description)" />
+
+                            </div>
+
+                        </div>
+
+                        @if (_selectedFile is not null)
+                        {
+                            <div class="alert alert-light border mt-3">
+
+                                <div>
+                                    <strong>
+                                        Archivo seleccionado:
+                                    </strong>
+
+                                    @_selectedFile.Name
+                                </div>
+
+                                <div class="small text-muted">
+                                    @FormatFileSize(
+                                        _selectedFile.Size)
+                                    ·
+                                    @(_selectedFile.ContentType)
+                                </div>
+
+                            </div>
+                        }
+
+                        <button type="submit"
+                                class="btn btn-primary mt-3"
+                                disabled="@(_isUploadingAttachment ||
+                                            _selectedFile is null)">
+
+                            @if (_isUploadingAttachment)
+                            {
+                                <span class="spinner-border
+                                             spinner-border-sm
+                                             me-1"
+                                      role="status">
+                                </span>
+
+                                <span>
+                                    Subiendo...
+                                </span>
+                            }
+                            else
+                            {
+                                <span class="bi bi-upload me-1"
+                                      aria-hidden="true">
+                                </span>
+
+                                <span>
+                                    Subir documento
+                                </span>
+                            }
+
+                        </button>
+
+                    </EditForm>
+                }
+
+            </div>
+
+        </div>
+    }
+}
+
+@code
+{
+    private const long MaximumFileSize =
+        10L * 1024L * 1024L;
+
+    private const int MaximumAttachments =
+        10;
+
+    private List<LoanResponse> _loans =
+        [];
+
+    private List<LoanGuaranteeAttachmentResponse>
+        _attachments =
+        [];
+
+    private TenantDto? _tenant;
+
+    private LoanResponse? _selectedLoan;
+
+    private LoanGuaranteeResponse? _guarantee;
+
+    private LoanGuaranteeAttachmentResponse?
+        _attachmentPendingDelete;
+
+    private LoanGuaranteeFormModel _guaranteeForm =
+        new();
+
+    private LoanGuaranteeUploadFormModel _uploadForm =
+        new();
+
+    private IBrowserFile? _selectedFile;
+
+    private Guid? _downloadingAttachmentId;
+
+    private string _search =
+        string.Empty;
+
+    private string _statusFilter =
+        "all";
+
+    private string? _pageMessage;
+
+    private string? _successMessage;
+
+    private string? _warningMessage;
+
+    private bool _isLoading;
+
+    private bool _isLoanLoading;
+
+    private bool _isSavingGuarantee;
+
+    private bool _isUploadingAttachment;
+
+    private bool _isDeletingAttachment;
+
+    private int _fileInputKey;
+
+    private IEnumerable<LoanResponse>
+        FilteredLoans
+    {
+        get
+        {
+            IEnumerable<LoanResponse> result =
+                _loans;
+
+            result =
+                _statusFilter switch
+                {
+                    "active" =>
+                        result.Where(
+                            x =>
+                                x.Status ==
+                                LoanStatus.Active),
+
+                    "paid" =>
+                        result.Where(
+                            x =>
+                                x.Status ==
+                                LoanStatus.Paid),
+
+                    "cancelled" =>
+                        result.Where(
+                            x =>
+                                x.Status ==
+                                LoanStatus.Cancelled),
+
+                    _ =>
+                        result
+                };
+
+            if (!string.IsNullOrWhiteSpace(
+                _search))
+            {
+                var search =
+                    _search.Trim();
+
+                result =
+                    result.Where(
+                        x =>
+                            x.ClientName.Contains(
+                                search,
+                                StringComparison
+                                    .OrdinalIgnoreCase) ||
+                            x.InvestorName.Contains(
+                                search,
+                                StringComparison
+                                    .OrdinalIgnoreCase));
+            }
+
+            return result
+                .OrderBy(
+                    x => x.ClientName)
+                .ThenByDescending(
+                    x => x.CreatedAt);
+        }
+    }
+
+    protected override async Task
+        OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _isLoading =
+            true;
+
+        _pageMessage =
+            null;
+
+        try
+        {
+            _tenant =
+                await LoansService
+                    .GetTenantAsync();
+
+            _loans =
+                await LoansService
+                    .GetAllAsync();
+        }
+        catch (ArgumentException ex)
+        {
+            _pageMessage =
+                ex.Message;
+        }
+        catch (Exception)
+        {
+            _pageMessage =
+                "No fue posible cargar los préstamos.";
+        }
+        finally
+        {
+            _isLoading =
+                false;
+        }
+    }
+
+    private async Task ReloadAsync()
+    {
+        var selectedLoanId =
+            _selectedLoan?.Id;
+
+        ClearMessages();
+
+        await LoadAsync();
+
+        if (selectedLoanId.HasValue)
+        {
+            await SelectLoanAsync(
+                selectedLoanId.Value);
+        }
+    }
+
+    private async Task SelectLoanAsync(
+        Guid loanId)
+    {
+        _isLoanLoading =
+            true;
+
+        ClearMessages();
+
+        ClearDocumentState();
+
+        try
+        {
+            var loan =
+                await LoansService
+                    .GetByIdAsync(
+                        loanId);
+
+            if (loan is null)
+            {
+                _pageMessage =
+                    "El préstamo seleccionado no fue encontrado.";
+
+                ClearSelectedLoan();
+
+                return;
+            }
+
+            var guarantee =
+                await GuaranteesService
+                    .GetGuaranteeAsync(
+                        loanId);
+
+            List<LoanGuaranteeAttachmentResponse>
+                attachments =
+                [];
+
+            if (guarantee is not null)
+            {
+                attachments =
+                    await GuaranteesService
+                        .GetAttachmentsAsync(
+                            loanId)
+                    ??
+                    [];
+            }
+
+            _selectedLoan =
+                loan;
+
+            _guarantee =
+                guarantee;
+
+            _attachments =
+                attachments;
+
+            _guaranteeForm =
+                guarantee is null
+                    ? new LoanGuaranteeFormModel()
+                    : LoanGuaranteeFormModel
+                        .FromResponse(
+                            guarantee);
+        }
+        catch (ArgumentException ex)
+        {
+            _pageMessage =
+                ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            _pageMessage =
+                "No fue posible consultar la garantía del préstamo.";
+        }
+        catch (Exception)
+        {
+            _pageMessage =
+                "Ocurrió un error al cargar la garantía.";
+        }
+        finally
+        {
+            _isLoanLoading =
+                false;
+        }
+    }
+
+    private async Task SaveGuaranteeAsync()
+    {
+        if (_selectedLoan is null)
+        {
+            return;
+        }
+
+        if (_selectedLoan.Status !=
+            LoanStatus.Active)
+        {
+            _pageMessage =
+                "Solo se pueden modificar garantías de préstamos activos.";
+
+            return;
+        }
+
+        _isSavingGuarantee =
+            true;
+
+        ClearMessages();
+
+        try
+        {
+            LoanGuaranteeResponse? result;
+
+            if (_guarantee is null)
+            {
+                result =
+                    await GuaranteesService
+                        .CreateGuaranteeAsync(
+                            _selectedLoan.Id,
+                            _guaranteeForm
+                                .ToCreateRequest());
+            }
+            else
+            {
+                result =
+                    await GuaranteesService
+                        .UpdateGuaranteeAsync(
+                            _selectedLoan.Id,
+                            _guaranteeForm
+                                .ToUpdateRequest());
+            }
+
+            if (result is null)
+            {
+                _pageMessage =
+                    "El préstamo seleccionado no fue encontrado.";
+
+                return;
+            }
+
+            var wasCreated =
+                _guarantee is null;
+
+            await RefreshSelectedLoanAsync(
+                _selectedLoan.Id);
+
+            _successMessage =
+                wasCreated
+                    ? "La garantía fue registrada correctamente."
+                    : "La garantía fue actualizada correctamente.";
+        }
+        catch (ArgumentException ex)
+        {
+            _pageMessage =
+                ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            _pageMessage =
+                "No fue posible guardar la garantía.";
+        }
+        catch (Exception)
+        {
+            _pageMessage =
+                "Ocurrió un error al guardar la garantía.";
+        }
+        finally
+        {
+            _isSavingGuarantee =
+                false;
+        }
+    }
+
+    private void HandleFileSelected(
+        InputFileChangeEventArgs args)
+    {
+        ClearMessages();
+
+        var file =
+            args.File;
+
+        if (file.Size <= 0)
+        {
+            _selectedFile =
+                null;
+
+            _pageMessage =
+                "El archivo seleccionado está vacío.";
+
+            return;
+        }
+
+        if (file.Size >
+            MaximumFileSize)
+        {
+            _selectedFile =
+                null;
+
+            _pageMessage =
+                "El archivo no puede superar 10 MB.";
+
+            return;
+        }
+
+        var extension =
+            Path.GetExtension(
+                    file.Name)
+                .ToLowerInvariant();
+
+        if (extension is not
+            (".pdf" or
+             ".jpg" or
+             ".jpeg" or
+             ".png"))
+        {
+            _selectedFile =
+                null;
+
+            _pageMessage =
+                "Solo se permiten archivos PDF, JPG, JPEG o PNG.";
+
+            return;
+        }
+
+        _selectedFile =
+            file;
+    }
+
+    private async Task UploadAttachmentAsync()
+    {
+        if (_selectedLoan is null ||
+            _guarantee is null)
+        {
+            return;
+        }
+
+        if (_selectedFile is null)
+        {
+            _pageMessage =
+                "Debes seleccionar un archivo.";
+
+            return;
+        }
+
+        if (_selectedLoan.Status !=
+            LoanStatus.Active)
+        {
+            _pageMessage =
+                "Solo se pueden subir documentos mientras el préstamo esté activo.";
+
+            return;
+        }
+
+        if (_attachments.Count >=
+            MaximumAttachments)
+        {
+            _pageMessage =
+                "La garantía ya tiene 10 documentos activos.";
+
+            return;
+        }
+
+        _isUploadingAttachment =
+            true;
+
+        ClearMessages();
+
+        try
+        {
+            await using var stream =
+                _selectedFile.OpenReadStream(
+                    MaximumFileSize);
+
+            var result =
+                await GuaranteesService
+                    .UploadAttachmentAsync(
+                        _selectedLoan.Id,
+                        stream,
+                        _selectedFile.Name,
+                        _selectedFile.ContentType,
+                        _selectedFile.Size,
+                        _uploadForm
+                            .GetNormalizedDescription());
+
+            if (result is null)
+            {
+                _pageMessage =
+                    "No fue posible encontrar la garantía del préstamo.";
+
+                return;
+            }
+
+            await RefreshAttachmentsAsync();
+
+            _selectedFile =
+                null;
+
+            _uploadForm =
+                new LoanGuaranteeUploadFormModel();
+
+            _fileInputKey++;
+
+            _successMessage =
+                "El documento fue cargado correctamente.";
+        }
+        catch (ArgumentException ex)
+        {
+            _pageMessage =
+                ex.Message;
+        }
+        catch (IOException)
+        {
+            _pageMessage =
+                "No fue posible leer el archivo seleccionado.";
+        }
+        catch (HttpRequestException)
+        {
+            _pageMessage =
+                "No fue posible cargar el documento.";
+        }
+        catch (Exception)
+        {
+            _pageMessage =
+                "Ocurrió un error durante la carga del documento.";
+        }
+        finally
+        {
+            _isUploadingAttachment =
+                false;
+        }
+    }
+
+    private async Task DownloadAttachmentAsync(
+        LoanGuaranteeAttachmentResponse attachment)
+    {
+        if (_selectedLoan is null)
+        {
+            return;
+        }
+
+        _downloadingAttachmentId =
+            attachment.Id;
+
+        ClearMessages();
+
+        try
+        {
+            var download =
+                await GuaranteesService
+                    .DownloadAttachmentAsync(
+                        _selectedLoan.Id,
+                        attachment.Id);
+
+            if (download is null)
+            {
+                _pageMessage =
+                    "El documento no fue encontrado.";
+
+                return;
+            }
+
+            await using var stream =
+                new MemoryStream(
+                    download.Content);
+
+            using var streamReference =
+                new DotNetStreamReference(
+                    stream);
+
+            await JS.InvokeVoidAsync(
+                "SanesDownloads.downloadFileFromStream",
+                download.FileName,
+                download.ContentType,
+                streamReference);
+        }
+        catch (ArgumentException ex)
+        {
+            _pageMessage =
+                ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            _pageMessage =
+                "No fue posible descargar el documento.";
+        }
+        catch (Exception)
+        {
+            _pageMessage =
+                "Ocurrió un error durante la descarga.";
+        }
+        finally
+        {
+            _downloadingAttachmentId =
+                null;
+        }
+    }
+
+    private void AskDeleteAttachment(
+        LoanGuaranteeAttachmentResponse attachment)
+    {
+        ClearMessages();
+
+        _attachmentPendingDelete =
+            attachment;
+    }
+
+    private void CancelDeleteAttachment()
+    {
+        _attachmentPendingDelete =
+            null;
+    }
+
+    private async Task ConfirmDeleteAttachmentAsync()
+    {
+        if (_selectedLoan is null ||
+            _attachmentPendingDelete is null)
+        {
+            return;
+        }
+
+        _isDeletingAttachment =
+            true;
+
+        ClearMessages();
+
+        try
+        {
+            var deleted =
+                await GuaranteesService
+                    .DeleteAttachmentAsync(
+                        _selectedLoan.Id,
+                        _attachmentPendingDelete.Id);
+
+            if (!deleted)
+            {
+                _pageMessage =
+                    "El documento no fue encontrado.";
+
+                return;
+            }
+
+            _attachmentPendingDelete =
+                null;
+
+            await RefreshAttachmentsAsync();
+
+            _successMessage =
+                "El documento fue eliminado correctamente.";
+        }
+        catch (ArgumentException ex)
+        {
+            _pageMessage =
+                ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            _pageMessage =
+                "No fue posible eliminar el documento.";
+        }
+        catch (Exception)
+        {
+            _pageMessage =
+                "Ocurrió un error al eliminar el documento.";
+        }
+        finally
+        {
+            _isDeletingAttachment =
+                false;
+        }
+    }
+
+    private async Task RefreshSelectedLoanAsync(
+        Guid loanId)
+    {
+        _loans =
+            await LoansService
+                .GetAllAsync();
+
+        var loan =
+            await LoansService
+                .GetByIdAsync(
+                    loanId);
+
+        var guarantee =
+            await GuaranteesService
+                .GetGuaranteeAsync(
+                    loanId);
+
+        List<LoanGuaranteeAttachmentResponse>
+            attachments =
+            [];
+
+        if (guarantee is not null)
+        {
+            attachments =
+                await GuaranteesService
+                    .GetAttachmentsAsync(
+                        loanId)
+                ??
+                [];
+        }
+
+        _selectedLoan =
+            loan;
+
+        _guarantee =
+            guarantee;
+
+        _attachments =
+            attachments;
+
+        _guaranteeForm =
+            guarantee is null
+                ? new LoanGuaranteeFormModel()
+                : LoanGuaranteeFormModel
+                    .FromResponse(
+                        guarantee);
+
+        ClearDocumentState(
+            clearAttachments: false);
+    }
+
+    private async Task RefreshAttachmentsAsync()
+    {
+        if (_selectedLoan is null ||
+            _guarantee is null)
+        {
+            _attachments =
+                [];
+
+            return;
+        }
+
+        _attachments =
+            await GuaranteesService
+                .GetAttachmentsAsync(
+                    _selectedLoan.Id)
+            ??
+            [];
+    }
+
+    private void ClearFilters()
+    {
+        _search =
+            string.Empty;
+
+        _statusFilter =
+            "all";
+    }
+
+    private void ClearSelectedLoan()
+    {
+        _selectedLoan =
+            null;
+
+        _guarantee =
+            null;
+
+        _attachments =
+            [];
+
+        _guaranteeForm =
+            new LoanGuaranteeFormModel();
+
+        ClearDocumentState();
+
+        ClearMessages();
+    }
+
+    private void ClearDocumentState(
+        bool clearAttachments = true)
+    {
+        if (clearAttachments)
+        {
+            _attachments =
+                [];
+        }
+
+        _selectedFile =
+            null;
+
+        _uploadForm =
+            new LoanGuaranteeUploadFormModel();
+
+        _attachmentPendingDelete =
+            null;
+
+        _downloadingAttachmentId =
+            null;
+
+        _fileInputKey++;
+    }
+
+    private void ClearMessages()
+    {
+        _pageMessage =
+            null;
+
+        _successMessage =
+            null;
+
+        _warningMessage =
+            null;
+    }
+
+    private string SelectedLoanRowClass(
+        Guid loanId)
+    {
+        return _selectedLoan?.Id ==
+            loanId
+                ? "table-primary"
+                : string.Empty;
+    }
+
+    private string Money(
+        decimal amount)
+    {
+        var symbol =
+            _tenant?.CurrencySymbol;
+
+        if (string.IsNullOrWhiteSpace(
+            symbol))
+        {
+            symbol =
+                _tenant?.CurrencyCode;
+        }
+
+        if (string.IsNullOrWhiteSpace(
+            symbol))
+        {
+            return amount.ToString(
+                "N2");
+        }
+
+        return
+            $"{symbol} {amount:N2}";
+    }
+
+    private static string GuaranteeTypeText(
+        LoanGuaranteeType type)
+    {
+        return type switch
+        {
+            LoanGuaranteeType
+                .IdentificationDocument =>
+                "Documento de identificación",
+
+            LoanGuaranteeType
+                .Guarantor =>
+                "Garante",
+
+            LoanGuaranteeType
+                .Collateral =>
+                "Bien en garantía / colateral",
+
+            LoanGuaranteeType
+                .Other =>
+                "Otro",
+
+            _ =>
+                type.ToString()
+        };
+    }
+
+    private static string FileTypeText(
+        string contentType)
+    {
+        return contentType
+            .ToLowerInvariant() switch
+        {
+            "application/pdf" =>
+                "PDF",
+
+            "image/jpeg" =>
+                "JPEG",
+
+            "image/png" =>
+                "PNG",
+
+            _ =>
+                contentType
+        };
+    }
+
+    private static string FileIconClass(
+        string contentType)
+    {
+        return contentType
+            .ToLowerInvariant() switch
+        {
+            "application/pdf" =>
+                "bi bi-file-earmark-pdf",
+
+            "image/jpeg" or
+            "image/png" =>
+                "bi bi-file-earmark-image",
+
+            _ =>
+                "bi bi-file-earmark"
+        };
+    }
+
+    private static string FormatFileSize(
+        long bytes)
+    {
+        if (bytes < 1024)
+        {
+            return $"{bytes} B";
+        }
+
+        if (bytes <
+            1024L * 1024L)
+        {
+            return
+                $"{bytes / 1024d:N1} KB";
+        }
+
+        return
+            $"{bytes / (1024d * 1024d):N2} MB";
+    }
+
+    private static string FormatDateTime(
+        DateTime value)
+    {
+        return value
+            .ToLocalTime()
+            .ToString(
+                "dd/MM/yyyy HH:mm");
+    }
+
+    private static string ShortId(
+        Guid id)
+    {
+        var value =
+            id.ToString();
+
+        return value.Length <= 8
+            ? value
+            : value[..8];
+    }
+
+    private static string StatusText(
+        LoanStatus status)
+    {
+        return status switch
+        {
+            LoanStatus.Active =>
+                "Activo",
+
+            LoanStatus.Paid =>
+                "Pagado",
+
+            LoanStatus.Cancelled =>
+                "Cancelado",
+
+            _ =>
+                status.ToString()
+        };
+    }
+
+    private static string StatusBadgeClass(
+        LoanStatus status)
+    {
+        return status switch
+        {
+            LoanStatus.Active =>
+                "badge text-bg-success",
+
+            LoanStatus.Paid =>
+                "badge text-bg-primary",
+
+            LoanStatus.Cancelled =>
+                "badge text-bg-secondary",
+
+            _ =>
+                "badge text-bg-secondary"
+        };
+    }
+}
