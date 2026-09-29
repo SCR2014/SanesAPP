@@ -56,21 +56,30 @@ public class AppUserRepository : IAppUserRepository
                 cancellationToken);
     }
 
-    public async Task<List<AppUser>> GetActiveByTenantAsync(
+    public async Task<List<AppUser>> GetByTenantAsync(
         Guid tenantId,
         AppUserRole? role = null,
+        bool includeInactive = false,
         CancellationToken cancellationToken = default)
     {
-        var query = _dbContext.AppUsers
-            .AsNoTracking()
-            .Where(x =>
-                x.TenantId == tenantId &&
-                x.IsActive);
+        var query =
+            _dbContext.AppUsers
+                .AsNoTracking()
+                .Where(x =>
+                    x.TenantId == tenantId);
+
+        if (!includeInactive)
+        {
+            query =
+                query.Where(x =>
+                    x.IsActive);
+        }
 
         if (role.HasValue)
         {
-            query = query.Where(x =>
-                x.Role == role.Value);
+            query =
+                query.Where(x =>
+                    x.Role == role.Value);
         }
 
         return await query

@@ -57,6 +57,7 @@ public class AppUsersController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<List<AppUserResponse>>> GetAll(
         [FromQuery] AppUserRole? role,
+        [FromQuery] bool includeInactive,
         CancellationToken cancellationToken)
     {
         try
@@ -65,6 +66,7 @@ public class AppUsersController : ControllerBase
                 await _appUserService.GetAllAsync(
                     _currentUserService.TenantId,
                     role,
+                    includeInactive,
                     cancellationToken);
 
             return Ok(appUsers);

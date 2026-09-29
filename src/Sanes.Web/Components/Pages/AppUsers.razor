@@ -1,0 +1,1819 @@
+@page "/admin/app-users"
+
+@attribute [Authorize(Roles = WebRoles.Administrator)]
+@rendermode InteractiveServer
+
+@inject IAppUsersWebService AppUsersService
+@inject ICollectionRoutesWebService RoutesService
+
+<PageTitle>Usuarios y cobradores - Sanes</PageTitle>
+
+<div class="d-flex flex-wrap
+            justify-content-between
+            align-items-start
+            gap-3
+            mb-4">
+
+    <div>
+        <h1 class="mb-1">
+            Usuarios y cobradores
+        </h1>
+
+        <p class="text-muted mb-0">
+            Administra los usuarios del tenant,
+            sus roles y las rutas asignadas
+            a los cobradores.
+        </p>
+    </div>
+
+    <div class="d-flex gap-2">
+
+        <button type="button"
+                class="btn btn-outline-secondary"
+                disabled="@_isLoading"
+                @onclick="ReloadPageAsync">
+
+            <span class="bi bi-arrow-clockwise me-1"
+                  aria-hidden="true">
+            </span>
+
+            Actualizar
+        </button>
+
+        <button type="button"
+                class="btn btn-primary"
+                disabled="@_isSaving"
+                @onclick="OpenCreate">
+
+            <span class="bi bi-person-plus me-1"
+                  aria-hidden="true">
+            </span>
+
+            Nuevo usuario
+        </button>
+
+    </div>
+
+</div>
+
+@if (!string.IsNullOrWhiteSpace(
+    _pageMessage))
+{
+    <div class="alert
+                @(_pageMessageIsError
+                    ? "alert-danger"
+                    : "alert-success")">
+
+        @_pageMessage
+
+    </div>
+}
+
+<div class="card mb-4">
+
+    <div class="card-body">
+
+        <div class="row g-3 align-items-end">
+
+            <div class="col-12 col-lg-5">
+
+                <label class="form-label">
+                    Buscar
+                </label>
+
+                <input type="text"
+                       class="form-control"
+                       placeholder="Nombre, usuario, correo o teléfono"
+                       @bind="_search"
+                       @bind:event="oninput" />
+
+            </div>
+
+            <div class="col-12 col-md-6 col-lg-4">
+
+                <label class="form-label">
+                    Rol
+                </label>
+
+                <select class="form-select"
+                        @bind="_roleFilter">
+
+                    <option value="all">
+                        Todos los roles
+                    </option>
+
+                    <option value="administrator">
+                        Administradores
+                    </option>
+
+                    <option value="collector">
+                        Cobradores
+                    </option>
+
+                </select>
+
+            </div>
+
+            <div class="col-12 col-md-6 col-lg-3">
+
+                <div class="form-check mb-2">
+
+                    <input class="form-check-input"
+                           type="checkbox"
+                           id="showInactiveAppUsers"
+                           @bind="_showInactive" />
+
+                    <label class="form-check-label"
+                           for="showInactiveAppUsers">
+
+                        Mostrar inactivos
+
+                    </label>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+@if (_isLoading)
+{
+    <div class="py-5 text-center">
+
+        <div class="spinner-border"
+             role="status">
+        </div>
+
+        <p class="text-muted mt-3">
+            Cargando usuarios...
+        </p>
+
+    </div>
+}
+else if (_users.Count == 0)
+{
+    <div class="alert alert-info">
+        No existen usuarios registrados.
+    </div>
+}
+else
+{
+    var filteredUsers =
+        FilteredUsers.ToList();
+
+    if (filteredUsers.Count == 0)
+    {
+        <div class="alert alert-info">
+            No existen usuarios que coincidan
+            con los filtros seleccionados.
+        </div>
+    }
+    else
+    {
+        <div class="card mb-4">
+
+            <div class="card-header
+                        d-flex
+                        justify-content-between
+                        align-items-center">
+
+                <strong>
+                    Usuarios
+                </strong>
+
+                <span class="badge text-bg-secondary">
+                    @filteredUsers.Count
+                </span>
+
+            </div>
+
+            <div class="table-responsive">
+
+                <table class="table
+                              table-hover
+                              align-middle
+                              mb-0">
+
+                    <thead>
+                        <tr>
+                            <th>Usuario</th>
+                            <th>Rol</th>
+                            <th>Contacto</th>
+                            <th>Estado</th>
+
+                            <th class="text-end">
+                                Acciones
+                            </th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+
+                        @foreach (var user in filteredUsers)
+                        {
+                            <tr>
+
+                                <td>
+
+                                    <strong>
+                                        @user.Name
+                                    </strong>
+
+                                    <div class="small text-muted">
+                                        @user.Username
+                                    </div>
+
+                                </td>
+
+                                <td>
+
+                                    @if (user.Role ==
+                                         AppUserRole.Administrator)
+                                    {
+                                        <span class="badge text-bg-primary">
+                                            Administrador
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge text-bg-info">
+                                            Cobrador
+                                        </span>
+                                    }
+
+                                </td>
+
+                                <td>
+
+                                    <div>
+                                        @DisplayValue(
+                                            user.Email)
+                                    </div>
+
+                                    @if (!string.IsNullOrWhiteSpace(
+                                        user.Phone))
+                                    {
+                                        <div class="small text-muted">
+                                            @user.Phone
+                                        </div>
+                                    }
+
+                                </td>
+
+                                <td>
+
+                                    @if (user.IsActive)
+                                    {
+                                        <span class="badge text-bg-success">
+                                            Activo
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge text-bg-secondary">
+                                            Inactivo
+                                        </span>
+                                    }
+
+                                </td>
+
+                                <td class="text-end">
+
+                                    @if (user.IsActive)
+                                    {
+                                        @if (user.Role ==
+                                             AppUserRole.Collector)
+                                        {
+                                            <button type="button"
+                                                    class="btn
+                                                           btn-sm
+                                                           btn-outline-secondary
+                                                           me-2"
+                                                    disabled="@_isSaving"
+                                                    @onclick="() =>
+                                                        OpenRoutesAsync(
+                                                            user)">
+
+                                                Rutas
+
+                                            </button>
+                                        }
+
+                                        <button type="button"
+                                                class="btn
+                                                       btn-sm
+                                                       btn-outline-secondary
+                                                       me-2"
+                                                disabled="@_isSaving"
+                                                @onclick="() =>
+                                                    OpenPassword(
+                                                        user)">
+
+                                            Contraseña
+
+                                        </button>
+
+                                        <button type="button"
+                                                class="btn
+                                                       btn-sm
+                                                       btn-outline-primary
+                                                       me-2"
+                                                disabled="@_isSaving"
+                                                @onclick="() =>
+                                                    OpenEdit(
+                                                        user)">
+
+                                            Editar
+
+                                        </button>
+
+                                        <button type="button"
+                                                class="btn
+                                                       btn-sm
+                                                       btn-outline-danger"
+                                                disabled="@_isSaving"
+                                                @onclick="() =>
+                                                    RequestDelete(
+                                                        user)">
+
+                                            Desactivar
+
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <button type="button"
+                                                class="btn
+                                                       btn-sm
+                                                       btn-outline-success"
+                                                disabled="@_isSaving"
+                                                @onclick="() =>
+                                                    ReactivateAsync(
+                                                        user)">
+
+                                            Reactivar
+
+                                        </button>
+                                    }
+
+                                </td>
+
+                            </tr>
+                        }
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </div>
+    }
+}
+
+@if (_pendingDeleteUser is not null)
+{
+    <div class="alert alert-warning mb-4">
+
+        <h2 class="h5">
+            Confirmar desactivación
+        </h2>
+
+        <p>
+            ¿Deseas desactivar al usuario
+            <strong>
+                @_pendingDeleteUser.Name
+            </strong>
+            (<span>
+                @_pendingDeleteUser.Username
+            </span>)?
+        </p>
+
+        @if (_pendingDeleteUser.Role ==
+             AppUserRole.Administrator)
+        {
+            <p class="mb-3">
+                El sistema impedirá la operación si este
+                es el último administrador activo.
+            </p>
+        }
+
+        <button type="button"
+                class="btn btn-danger me-2"
+                disabled="@_isSaving"
+                @onclick="ConfirmDeleteAsync">
+
+            Confirmar
+
+        </button>
+
+        <button type="button"
+                class="btn btn-outline-secondary"
+                disabled="@_isSaving"
+                @onclick="CancelDelete">
+
+            Cancelar
+
+        </button>
+
+    </div>
+}
+
+@if (_showUserForm)
+{
+    <div class="card mb-4">
+
+        <div class="card-header
+                    d-flex
+                    justify-content-between
+                    align-items-center">
+
+            <strong>
+                @(_editingUser is null
+                    ? "Nuevo usuario"
+                    : "Editar usuario")
+            </strong>
+
+            <button type="button"
+                    class="btn-close"
+                    aria-label="Cerrar"
+                    disabled="@_isSaving"
+                    @onclick="CloseUserForm">
+            </button>
+
+        </div>
+
+        <div class="card-body">
+
+            <EditForm Model="_userForm"
+                      OnValidSubmit="SaveUserAsync">
+
+                <DataAnnotationsValidator />
+
+                <ValidationSummary />
+
+                <div class="row g-3">
+
+                    <div class="col-12 col-lg-6">
+
+                        <label class="form-label">
+                            Nombre
+                        </label>
+
+                        <InputText class="form-control"
+                                   maxlength="150"
+                                   @bind-Value="_userForm.Name" />
+
+                        <ValidationMessage
+                            For="@(() =>
+                                _userForm.Name)" />
+
+                    </div>
+
+                    <div class="col-12 col-lg-6">
+
+                        <label class="form-label">
+                            Nombre de usuario
+                        </label>
+
+                        <InputText class="form-control"
+                                   maxlength="100"
+                                   autocomplete="off"
+                                   @bind-Value="_userForm.Username" />
+
+                        <ValidationMessage
+                            For="@(() =>
+                                _userForm.Username)" />
+
+                    </div>
+
+                    <div class="col-12 col-lg-6">
+
+                        <label class="form-label">
+                            Correo electrónico
+                        </label>
+
+                        <InputText class="form-control"
+                                   maxlength="150"
+                                   type="email"
+                                   @bind-Value="_userForm.Email" />
+
+                        <ValidationMessage
+                            For="@(() =>
+                                _userForm.Email)" />
+
+                    </div>
+
+                    <div class="col-12 col-lg-6">
+
+                        <label class="form-label">
+                            Teléfono
+                        </label>
+
+                        <InputText class="form-control"
+                                   @bind-Value="_userForm.Phone" />
+
+                    </div>
+
+                    <div class="col-12 col-lg-6">
+
+                        <label class="form-label">
+                            Rol
+                        </label>
+
+                        <InputSelect class="form-select"
+                                     @bind-Value="_userForm.Role">
+
+                            <option value="@AppUserRole.Administrator">
+                                Administrador
+                            </option>
+
+                            <option value="@AppUserRole.Collector">
+                                Cobrador
+                            </option>
+
+                        </InputSelect>
+
+                        <ValidationMessage
+                            For="@(() =>
+                                _userForm.Role)" />
+
+                    </div>
+
+                    @if (_editingUser is null)
+                    {
+                        <div class="col-12 col-lg-6">
+
+                            <label class="form-label">
+                                Contraseña
+                            </label>
+
+                            <InputText class="form-control"
+                                       type="password"
+                                       autocomplete="new-password"
+                                       maxlength="100"
+                                       @bind-Value="_newUserPassword" />
+
+                            <div class="form-text">
+                                Mínimo 8 caracteres.
+                            </div>
+
+                        </div>
+
+                        <div class="col-12 col-lg-6">
+
+                            <label class="form-label">
+                                Confirmar contraseña
+                            </label>
+
+                            <InputText class="form-control"
+                                       type="password"
+                                       autocomplete="new-password"
+                                       maxlength="100"
+                                       @bind-Value="_newUserConfirmPassword" />
+
+                        </div>
+                    }
+
+                </div>
+
+                @if (_editingUser is not null &&
+                     _editingUser.Role ==
+                        AppUserRole.Collector &&
+                     _userForm.Role !=
+                        AppUserRole.Collector)
+                {
+                    <div class="alert alert-warning mt-3 mb-0">
+
+                        Si este cobrador tiene rutas asignadas,
+                        debes desasignarlas antes de cambiar
+                        su rol a Administrador.
+
+                    </div>
+                }
+
+                <div class="d-flex gap-2 mt-4">
+
+                    <button type="submit"
+                            class="btn btn-primary"
+                            disabled="@_isSaving">
+
+                        @if (_isSaving)
+                        {
+                            <span class="spinner-border
+                                         spinner-border-sm
+                                         me-1"
+                                  role="status">
+                            </span>
+                        }
+
+                        @(_editingUser is null
+                            ? "Crear usuario"
+                            : "Guardar cambios")
+
+                    </button>
+
+                    <button type="button"
+                            class="btn btn-outline-secondary"
+                            disabled="@_isSaving"
+                            @onclick="CloseUserForm">
+
+                        Cancelar
+
+                    </button>
+
+                </div>
+
+            </EditForm>
+
+        </div>
+
+    </div>
+}
+
+@if (_passwordUser is not null)
+{
+    <div class="card mb-4">
+
+        <div class="card-header
+                    d-flex
+                    justify-content-between
+                    align-items-center">
+
+            <div>
+
+                <strong>
+                    Cambiar contraseña
+                </strong>
+
+                <div class="small text-muted">
+                    @_passwordUser.Name
+                    ·
+                    @_passwordUser.Username
+                </div>
+
+            </div>
+
+            <button type="button"
+                    class="btn-close"
+                    aria-label="Cerrar"
+                    disabled="@_isSaving"
+                    @onclick="ClosePassword">
+            </button>
+
+        </div>
+
+        <div class="card-body">
+
+            <EditForm Model="_passwordForm"
+                      OnValidSubmit="SavePasswordAsync">
+
+                <DataAnnotationsValidator />
+
+                <ValidationSummary />
+
+                <div class="row g-3">
+
+                    <div class="col-12 col-lg-6">
+
+                        <label class="form-label">
+                            Nueva contraseña
+                        </label>
+
+                        <InputText class="form-control"
+                                   type="password"
+                                   autocomplete="new-password"
+                                   maxlength="100"
+                                   @bind-Value="_passwordForm.Password" />
+
+                        <ValidationMessage
+                            For="@(() =>
+                                _passwordForm.Password)" />
+
+                    </div>
+
+                    <div class="col-12 col-lg-6">
+
+                        <label class="form-label">
+                            Confirmar contraseña
+                        </label>
+
+                        <InputText class="form-control"
+                                   type="password"
+                                   autocomplete="new-password"
+                                   maxlength="100"
+                                   @bind-Value="_passwordForm.ConfirmPassword" />
+
+                        <ValidationMessage
+                            For="@(() =>
+                                _passwordForm.ConfirmPassword)" />
+
+                    </div>
+
+                </div>
+
+                <div class="d-flex gap-2 mt-4">
+
+                    <button type="submit"
+                            class="btn btn-primary"
+                            disabled="@_isSaving">
+
+                        @if (_isSaving)
+                        {
+                            <span class="spinner-border
+                                         spinner-border-sm
+                                         me-1"
+                                  role="status">
+                            </span>
+                        }
+
+                        Cambiar contraseña
+
+                    </button>
+
+                    <button type="button"
+                            class="btn btn-outline-secondary"
+                            disabled="@_isSaving"
+                            @onclick="ClosePassword">
+
+                        Cancelar
+
+                    </button>
+
+                </div>
+
+            </EditForm>
+
+        </div>
+
+    </div>
+}
+
+@if (_selectedCollector is not null)
+{
+    <div class="card mb-4">
+
+        <div class="card-header
+                    d-flex
+                    flex-wrap
+                    justify-content-between
+                    align-items-center
+                    gap-2">
+
+            <div>
+
+                <strong>
+                    Rutas de @_selectedCollector.Name
+                </strong>
+
+                <div class="small text-muted">
+                    @_selectedCollector.Username
+                    · Cobrador
+                </div>
+
+            </div>
+
+            <button type="button"
+                    class="btn-close"
+                    aria-label="Cerrar"
+                    disabled="@(_isSaving ||
+                                _isLoadingRoutes)"
+                    @onclick="CloseRoutes">
+            </button>
+
+        </div>
+
+        <div class="card-body">
+
+            @if (_isLoadingRoutes)
+            {
+                <div class="py-4 text-center">
+
+                    <div class="spinner-border"
+                         role="status">
+                    </div>
+
+                    <p class="text-muted mt-3 mb-0">
+                        Cargando rutas asignadas...
+                    </p>
+
+                </div>
+            }
+            else
+            {
+                <div class="row g-3 mb-4">
+
+                    <div class="col-12 col-lg-8">
+
+                        <label class="form-label">
+                            Asignar nueva ruta
+                        </label>
+
+                        <select class="form-select"
+                                @bind="_routeToAssignId">
+
+                            <option value="">
+                                Selecciona una ruta
+                            </option>
+
+                            @foreach (
+                                var route in AvailableRoutes)
+                            {
+                                <option value="@route.Id">
+                                    @route.Name
+                                </option>
+                            }
+
+                        </select>
+
+                    </div>
+
+                    <div class="col-12 col-lg-4
+                                d-flex
+                                align-items-end">
+
+                        <button type="button"
+                                class="btn btn-primary w-100"
+                                disabled="@(!_routeToAssignId.HasValue ||
+                                            _isSaving)"
+                                @onclick="AssignRouteAsync">
+
+                            Asignar ruta
+
+                        </button>
+
+                    </div>
+
+                </div>
+
+                @if (!AvailableRoutes.Any())
+                {
+                    <div class="alert alert-light border">
+
+                        No existen rutas activas disponibles
+                        para asignar a este cobrador.
+
+                    </div>
+                }
+
+                <h2 class="h6">
+                    Rutas asignadas
+                </h2>
+
+                @if (_assignedRoutes.Count == 0)
+                {
+                    <div class="alert alert-info mb-0">
+
+                        Este cobrador no tiene rutas
+                        de cobranza asignadas.
+
+                    </div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+
+                        <table class="table
+                                      table-sm
+                                      table-hover
+                                      align-middle
+                                      mb-0">
+
+                            <thead>
+                                <tr>
+                                    <th>Ruta</th>
+                                    <th>Asignada</th>
+
+                                    <th class="text-end">
+                                        Acción
+                                    </th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+
+                                @foreach (
+                                    var assignment
+                                    in _assignedRoutes
+                                        .OrderBy(
+                                            x =>
+                                                x.CollectionRouteName))
+                                {
+                                    <tr>
+
+                                        <td>
+                                            <strong>
+                                                @assignment.CollectionRouteName
+                                            </strong>
+                                        </td>
+
+                                        <td>
+                                            @FormatDateTime(
+                                                assignment.AssignedAt)
+                                        </td>
+
+                                        <td class="text-end">
+
+                                            <button type="button"
+                                                    class="btn
+                                                           btn-sm
+                                                           btn-outline-danger"
+                                                    disabled="@_isSaving"
+                                                    @onclick="() =>
+                                                        UnassignRouteAsync(
+                                                            assignment)">
+
+                                                Desasignar
+
+                                            </button>
+
+                                        </td>
+
+                                    </tr>
+                                }
+
+                            </tbody>
+
+                        </table>
+
+                    </div>
+                }
+            }
+
+        </div>
+
+    </div>
+}
+
+@code
+{
+    private List<AppUserResponse> _users =
+        [];
+
+    private List<CollectionRouteResponse> _routes =
+        [];
+
+    private List<AppUserCollectionRouteResponse>
+        _assignedRoutes =
+        [];
+
+    private AppUserResponse? _editingUser;
+
+    private AppUserResponse? _passwordUser;
+
+    private AppUserResponse? _pendingDeleteUser;
+
+    private AppUserResponse? _selectedCollector;
+
+    private AppUserFormModel _userForm =
+        new();
+
+    private AppUserPasswordFormModel _passwordForm =
+        new();
+
+    private string _newUserPassword =
+        string.Empty;
+
+    private string _newUserConfirmPassword =
+        string.Empty;
+
+    private string _search =
+        string.Empty;
+
+    private string _roleFilter =
+        "all";
+
+    private bool _showInactive;
+
+    private bool _showUserForm;
+
+    private bool _isLoading =
+        true;
+
+    private bool _isLoadingRoutes;
+
+    private bool _isSaving;
+
+    private Guid? _routeToAssignId;
+
+    private string? _pageMessage;
+
+    private bool _pageMessageIsError;
+
+    private IEnumerable<AppUserResponse>
+        FilteredUsers
+    {
+        get
+        {
+            IEnumerable<AppUserResponse> query =
+                _users;
+
+            if (!_showInactive)
+            {
+                query =
+                    query.Where(
+                        x => x.IsActive);
+            }
+
+            query =
+                _roleFilter switch
+                {
+                    "administrator" =>
+                        query.Where(
+                            x =>
+                                x.Role ==
+                                AppUserRole.Administrator),
+
+                    "collector" =>
+                        query.Where(
+                            x =>
+                                x.Role ==
+                                AppUserRole.Collector),
+
+                    _ =>
+                        query
+                };
+
+            if (!string.IsNullOrWhiteSpace(
+                _search))
+            {
+                var search =
+                    _search.Trim();
+
+                query =
+                    query.Where(
+                        x =>
+                            Contains(
+                                x.Name,
+                                search) ||
+                            Contains(
+                                x.Username,
+                                search) ||
+                            Contains(
+                                x.Email,
+                                search) ||
+                            Contains(
+                                x.Phone,
+                                search));
+            }
+
+            return query
+                .OrderByDescending(
+                    x => x.IsActive)
+                .ThenBy(
+                    x => x.Name)
+                .ThenBy(
+                    x => x.Username);
+        }
+    }
+
+    private IEnumerable<CollectionRouteResponse>
+        AvailableRoutes
+    {
+        get
+        {
+            var assignedIds =
+                _assignedRoutes
+                    .Select(
+                        x =>
+                            x.CollectionRouteId)
+                    .ToHashSet();
+
+            return _routes
+                .Where(
+                    x =>
+                        x.IsActive &&
+                        !assignedIds.Contains(
+                            x.Id))
+                .OrderBy(
+                    x => x.Name);
+        }
+    }
+
+    protected override async Task
+        OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _isLoading =
+            true;
+
+        ClearMessage();
+
+        try
+        {
+            _users =
+                await AppUsersService
+                    .GetAllAsync(
+                        includeInactive: true);
+
+            _routes =
+                await RoutesService
+                    .GetAllAsync();
+        }
+        catch (ArgumentException ex)
+        {
+            SetError(
+                ex.Message);
+        }
+        catch (HttpRequestException)
+        {
+            SetError(
+                "No fue posible cargar los usuarios.");
+        }
+        catch (InvalidOperationException ex)
+        {
+            SetError(
+                ex.Message);
+        }
+        catch (Exception)
+        {
+            SetError(
+                "Ocurrió un error inesperado al cargar los usuarios.");
+        }
+        finally
+        {
+            _isLoading =
+                false;
+        }
+    }
+
+    private async Task ReloadPageAsync()
+    {
+        CloseAllPanels();
+
+        await LoadAsync();
+    }
+
+    private async Task ReloadUsersAsync()
+    {
+        _users =
+            await AppUsersService
+                .GetAllAsync(
+                    includeInactive: true);
+    }
+
+    private void OpenCreate()
+    {
+        ClearMessage();
+        CloseAllPanels();
+
+        _userForm =
+            new AppUserFormModel
+            {
+                Role =
+                    AppUserRole.Collector
+            };
+
+        _newUserPassword =
+            string.Empty;
+
+        _newUserConfirmPassword =
+            string.Empty;
+
+        _showUserForm =
+            true;
+    }
+
+    private void OpenEdit(
+        AppUserResponse user)
+    {
+        ClearMessage();
+        CloseAllPanels();
+
+        _editingUser =
+            user;
+
+        _userForm =
+            AppUserFormModel
+                .FromResponse(
+                    user);
+
+        _showUserForm =
+            true;
+    }
+
+    private void CloseUserForm()
+    {
+        _showUserForm =
+            false;
+
+        _editingUser =
+            null;
+
+        _userForm =
+            new AppUserFormModel();
+
+        _newUserPassword =
+            string.Empty;
+
+        _newUserConfirmPassword =
+            string.Empty;
+    }
+
+    private async Task SaveUserAsync()
+    {
+        ClearMessage();
+
+        if (_editingUser is null)
+        {
+            if (string.IsNullOrWhiteSpace(
+                _newUserPassword))
+            {
+                SetError(
+                    "La contraseña es requerida.");
+
+                return;
+            }
+
+            if (_newUserPassword.Length < 8)
+            {
+                SetError(
+                    "La contraseña debe tener al menos 8 caracteres.");
+
+                return;
+            }
+
+            if (_newUserPassword.Length > 100)
+            {
+                SetError(
+                    "La contraseña no puede exceder 100 caracteres.");
+
+                return;
+            }
+
+            if (!string.Equals(
+                _newUserPassword,
+                _newUserConfirmPassword,
+                StringComparison.Ordinal))
+            {
+                SetError(
+                    "Las contraseñas no coinciden.");
+
+                return;
+            }
+        }
+
+        _isSaving =
+            true;
+
+        try
+        {
+            if (_editingUser is null)
+            {
+                await AppUsersService
+                    .CreateAsync(
+                        _userForm
+                            .ToCreateRequest(
+                                _newUserPassword));
+
+                SetSuccess(
+                    "Usuario creado correctamente.");
+            }
+            else
+            {
+                var updated =
+                    await AppUsersService
+                        .UpdateAsync(
+                            _editingUser.Id,
+                            _userForm
+                                .ToUpdateRequest());
+
+                if (updated is null)
+                {
+                    SetError(
+                        "El usuario ya no existe o se encuentra inactivo.");
+
+                    return;
+                }
+
+                SetSuccess(
+                    "Usuario actualizado correctamente.");
+            }
+
+            CloseUserForm();
+
+            await ReloadUsersAsync();
+        }
+        catch (ArgumentException ex)
+        {
+            SetError(
+                ex.Message);
+        }
+        catch (InvalidOperationException ex)
+        {
+            SetError(
+                ex.Message);
+        }
+        catch (HttpRequestException)
+        {
+            SetError(
+                "No fue posible guardar el usuario.");
+        }
+        catch (Exception)
+        {
+            SetError(
+                "Ocurrió un error inesperado al guardar el usuario.");
+        }
+        finally
+        {
+            _isSaving =
+                false;
+        }
+    }
+
+    private void RequestDelete(
+        AppUserResponse user)
+    {
+        ClearMessage();
+        CloseAllPanels();
+
+        _pendingDeleteUser =
+            user;
+    }
+
+    private void CancelDelete()
+    {
+        _pendingDeleteUser =
+            null;
+    }
+
+    private async Task ConfirmDeleteAsync()
+    {
+        if (_pendingDeleteUser is null)
+        {
+            return;
+        }
+
+        ClearMessage();
+
+        _isSaving =
+            true;
+
+        try
+        {
+            var deleted =
+                await AppUsersService
+                    .DeleteAsync(
+                        _pendingDeleteUser.Id);
+
+            if (!deleted)
+            {
+                SetError(
+                    "El usuario no fue encontrado.");
+
+                return;
+            }
+
+            _pendingDeleteUser =
+                null;
+
+            SetSuccess(
+                "Usuario desactivado correctamente.");
+
+            await ReloadUsersAsync();
+        }
+        catch (InvalidOperationException ex)
+        {
+            SetError(
+                ex.Message);
+        }
+        catch (HttpRequestException)
+        {
+            SetError(
+                "No fue posible desactivar el usuario.");
+        }
+        catch (Exception)
+        {
+            SetError(
+                "Ocurrió un error inesperado al desactivar el usuario.");
+        }
+        finally
+        {
+            _isSaving =
+                false;
+        }
+    }
+
+    private async Task ReactivateAsync(
+        AppUserResponse user)
+    {
+        ClearMessage();
+        CloseAllPanels();
+
+        _isSaving =
+            true;
+
+        try
+        {
+            var reactivated =
+                await AppUsersService
+                    .ReactivateAsync(
+                        user.Id);
+
+            if (reactivated is null)
+            {
+                SetError(
+                    "El usuario no fue encontrado.");
+
+                return;
+            }
+
+            SetSuccess(
+                "Usuario reactivado correctamente.");
+
+            await ReloadUsersAsync();
+        }
+        catch (HttpRequestException)
+        {
+            SetError(
+                "No fue posible reactivar el usuario.");
+        }
+        catch (Exception)
+        {
+            SetError(
+                "Ocurrió un error inesperado al reactivar el usuario.");
+        }
+        finally
+        {
+            _isSaving =
+                false;
+        }
+    }
+
+    private void OpenPassword(
+        AppUserResponse user)
+    {
+        ClearMessage();
+        CloseAllPanels();
+
+        _passwordUser =
+            user;
+
+        _passwordForm =
+            new AppUserPasswordFormModel();
+    }
+
+    private void ClosePassword()
+    {
+        _passwordUser =
+            null;
+
+        _passwordForm =
+            new AppUserPasswordFormModel();
+    }
+
+    private async Task SavePasswordAsync()
+    {
+        if (_passwordUser is null)
+        {
+            return;
+        }
+
+        ClearMessage();
+
+        _isSaving =
+            true;
+
+        try
+        {
+            var updated =
+                await AppUsersService
+                    .SetPasswordAsync(
+                        _passwordUser.Id,
+                        _passwordForm.Password);
+
+            if (!updated)
+            {
+                SetError(
+                    "El usuario no fue encontrado.");
+
+                return;
+            }
+
+            ClosePassword();
+
+            SetSuccess(
+                "Contraseña actualizada correctamente.");
+        }
+        catch (ArgumentException ex)
+        {
+            SetError(
+                ex.Message);
+        }
+        catch (InvalidOperationException ex)
+        {
+            SetError(
+                ex.Message);
+        }
+        catch (HttpRequestException)
+        {
+            SetError(
+                "No fue posible cambiar la contraseña.");
+        }
+        catch (Exception)
+        {
+            SetError(
+                "Ocurrió un error inesperado al cambiar la contraseña.");
+        }
+        finally
+        {
+            _isSaving =
+                false;
+        }
+    }
+
+    private async Task OpenRoutesAsync(
+        AppUserResponse user)
+    {
+        if (!user.IsActive ||
+            user.Role !=
+                AppUserRole.Collector)
+        {
+            return;
+        }
+
+        ClearMessage();
+        CloseAllPanels();
+
+        _selectedCollector =
+            user;
+
+        _routeToAssignId =
+            null;
+
+        await ReloadAssignedRoutesAsync();
+    }
+
+    private async Task ReloadAssignedRoutesAsync()
+    {
+        if (_selectedCollector is null)
+        {
+            return;
+        }
+
+        _isLoadingRoutes =
+            true;
+
+        try
+        {
+            var assignments =
+                await AppUsersService
+                    .GetCollectionRoutesAsync(
+                        _selectedCollector.Id);
+
+            if (assignments is null)
+            {
+                SetError(
+                    "El cobrador no fue encontrado.");
+
+                CloseRoutes();
+
+                return;
+            }
+
+            _assignedRoutes =
+                assignments;
+        }
+        catch (HttpRequestException)
+        {
+            SetError(
+                "No fue posible cargar las rutas del cobrador.");
+        }
+        catch (Exception)
+        {
+            SetError(
+                "Ocurrió un error al cargar las rutas del cobrador.");
+        }
+        finally
+        {
+            _isLoadingRoutes =
+                false;
+        }
+    }
+
+    private async Task AssignRouteAsync()
+    {
+        if (_selectedCollector is null ||
+            !_routeToAssignId.HasValue)
+        {
+            return;
+        }
+
+        ClearMessage();
+
+        _isSaving =
+            true;
+
+        try
+        {
+            var assigned =
+                await AppUsersService
+                    .AssignCollectionRouteAsync(
+                        _selectedCollector.Id,
+                        _routeToAssignId.Value);
+
+            if (!assigned)
+            {
+                SetError(
+                    "El cobrador o la ruta no fueron encontrados.");
+
+                return;
+            }
+
+            _routeToAssignId =
+                null;
+
+            await ReloadAssignedRoutesAsync();
+
+            SetSuccess(
+                "Ruta asignada correctamente.");
+        }
+        catch (ArgumentException ex)
+        {
+            SetError(
+                ex.Message);
+        }
+        catch (InvalidOperationException ex)
+        {
+            SetError(
+                ex.Message);
+        }
+        catch (HttpRequestException)
+        {
+            SetError(
+                "No fue posible asignar la ruta.");
+        }
+        catch (Exception)
+        {
+            SetError(
+                "Ocurrió un error inesperado al asignar la ruta.");
+        }
+        finally
+        {
+            _isSaving =
+                false;
+        }
+    }
+
+    private async Task UnassignRouteAsync(
+        AppUserCollectionRouteResponse assignment)
+    {
+        if (_selectedCollector is null)
+        {
+            return;
+        }
+
+        ClearMessage();
+
+        _isSaving =
+            true;
+
+        try
+        {
+            var removed =
+                await AppUsersService
+                    .UnassignCollectionRouteAsync(
+                        _selectedCollector.Id,
+                        assignment.CollectionRouteId);
+
+            if (!removed)
+            {
+                SetError(
+                    "La asignación de ruta no fue encontrada.");
+
+                return;
+            }
+
+            await ReloadAssignedRoutesAsync();
+
+            SetSuccess(
+                "Ruta desasignada correctamente.");
+        }
+        catch (HttpRequestException)
+        {
+            SetError(
+                "No fue posible desasignar la ruta.");
+        }
+        catch (Exception)
+        {
+            SetError(
+                "Ocurrió un error inesperado al desasignar la ruta.");
+        }
+        finally
+        {
+            _isSaving =
+                false;
+        }
+    }
+
+    private void CloseRoutes()
+    {
+        _selectedCollector =
+            null;
+
+        _assignedRoutes =
+            [];
+
+        _routeToAssignId =
+            null;
+
+        _isLoadingRoutes =
+            false;
+    }
+
+    private void CloseAllPanels()
+    {
+        _showUserForm =
+            false;
+
+        _editingUser =
+            null;
+
+        _passwordUser =
+            null;
+
+        _pendingDeleteUser =
+            null;
+
+        _selectedCollector =
+            null;
+
+        _assignedRoutes =
+            [];
+
+        _routeToAssignId =
+            null;
+
+        _passwordForm =
+            new AppUserPasswordFormModel();
+
+        _newUserPassword =
+            string.Empty;
+
+        _newUserConfirmPassword =
+            string.Empty;
+    }
+
+    private static bool Contains(
+        string? value,
+        string search)
+    {
+        return !string.IsNullOrWhiteSpace(
+                   value) &&
+               value.Contains(
+                   search,
+                   StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string DisplayValue(
+        string? value)
+    {
+        return string.IsNullOrWhiteSpace(
+            value)
+            ? "—"
+            : value;
+    }
+
+    private static string FormatDateTime(
+        DateTime value)
+    {
+        return value
+            .ToLocalTime()
+            .ToString(
+                "dd/MM/yyyy HH:mm");
+    }
+
+    private void SetSuccess(
+        string message)
+    {
+        _pageMessage =
+            message;
+
+        _pageMessageIsError =
+            false;
+    }
+
+    private void SetError(
+        string message)
+    {
+        _pageMessage =
+            message;
+
+        _pageMessageIsError =
+            true;
+    }
+
+    private void ClearMessage()
+    {
+        _pageMessage =
+            null;
+    }
+}

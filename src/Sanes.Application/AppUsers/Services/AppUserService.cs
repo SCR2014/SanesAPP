@@ -110,6 +110,7 @@ public class AppUserService : IAppUserService
     public async Task<List<AppUserResponse>> GetAllAsync(
         Guid tenantId,
         AppUserRole? role = null,
+        bool includeInactive = false,
         CancellationToken cancellationToken = default)
     {
         if (tenantId == Guid.Empty)
@@ -128,9 +129,10 @@ public class AppUserService : IAppUserService
         }
 
         var appUsers =
-            await _appUserRepository.GetActiveByTenantAsync(
+            await _appUserRepository.GetByTenantAsync(
                 tenantId,
                 role,
+                includeInactive,
                 cancellationToken);
 
         return appUsers
