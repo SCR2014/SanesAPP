@@ -17,9 +17,10 @@ public sealed class PaymentReceiptsWebService
         _apiClient = apiClient;
     }
 
-    public async Task<PaymentReceiptListResponse> GetPagedAsync(
-        PaymentReceiptListRequest request,
-        CancellationToken cancellationToken = default)
+    public async Task<PaymentReceiptListResponse>
+        GetPagedAsync(
+            PaymentReceiptListRequest request,
+            CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(
             request);
@@ -44,7 +45,7 @@ public sealed class PaymentReceiptsWebService
         }
 
         if (!string.IsNullOrWhiteSpace(
-                request.Search))
+            request.Search))
         {
             parameters.Add(
                 "search=" +
@@ -93,9 +94,48 @@ public sealed class PaymentReceiptsWebService
                 "Sanes.Api returned an empty payment receipt list response.");
     }
 
-    public async Task<PaymentReceiptResponse?> GetByIdAsync(
-        Guid receiptId,
-        CancellationToken cancellationToken = default)
+    public async Task<PaymentReceiptResponse?>
+        GetByPaymentAsync(
+            Guid paymentId,
+            CancellationToken cancellationToken = default)
+    {
+        if (paymentId == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "El identificador del pago no es válido.",
+                nameof(paymentId));
+        }
+
+        using var message =
+            new HttpRequestMessage(
+                HttpMethod.Get,
+                $"api/payments/{paymentId:D}/receipt");
+
+        using var response =
+            await _apiClient.SendAsync(
+                message,
+                cancellationToken);
+
+        if (response.StatusCode ==
+            HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+
+        response.EnsureSuccessStatusCode();
+
+        return await response.Content
+            .ReadFromJsonAsync<
+                PaymentReceiptResponse>(
+                    cancellationToken)
+            ?? throw new InvalidOperationException(
+                "Sanes.Api returned an empty payment receipt response.");
+    }
+
+    public async Task<PaymentReceiptResponse?>
+        GetByIdAsync(
+            Guid receiptId,
+            CancellationToken cancellationToken = default)
     {
         if (receiptId == Guid.Empty)
         {
@@ -130,12 +170,13 @@ public sealed class PaymentReceiptsWebService
                 "Sanes.Api returned an empty payment receipt response.");
     }
 
-    public async Task<PaymentReceiptResponse?> GetByNumberAsync(
-        string receiptNumber,
-        CancellationToken cancellationToken = default)
+    public async Task<PaymentReceiptResponse?>
+        GetByNumberAsync(
+            string receiptNumber,
+            CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(
-                receiptNumber))
+            receiptNumber))
         {
             throw new ArgumentException(
                 "El número de recibo es requerido.",
@@ -143,8 +184,7 @@ public sealed class PaymentReceiptsWebService
         }
 
         var normalized =
-            receiptNumber
-                .Trim();
+            receiptNumber.Trim();
 
         using var message =
             new HttpRequestMessage(
@@ -174,9 +214,10 @@ public sealed class PaymentReceiptsWebService
                 "Sanes.Api returned an empty payment receipt response.");
     }
 
-    private static async Task<string> ReadApiErrorAsync(
-        HttpResponseMessage response,
-        CancellationToken cancellationToken)
+    private static async Task<string>
+        ReadApiErrorAsync(
+            HttpResponseMessage response,
+            CancellationToken cancellationToken)
     {
         var content =
             await response.Content
@@ -184,7 +225,7 @@ public sealed class PaymentReceiptsWebService
                     cancellationToken);
 
         if (string.IsNullOrWhiteSpace(
-                content))
+            content))
         {
             return
                 "La consulta de recibos no es válida.";
@@ -200,8 +241,8 @@ public sealed class PaymentReceiptsWebService
                 document.RootElement;
 
             if (root.TryGetProperty(
-                    "message",
-                    out var messageElement) &&
+                "message",
+                out var messageElement) &&
                 messageElement.ValueKind ==
                     JsonValueKind.String)
             {
@@ -209,7 +250,7 @@ public sealed class PaymentReceiptsWebService
                     messageElement.GetString();
 
                 if (!string.IsNullOrWhiteSpace(
-                        message))
+                    message))
                 {
                     return TranslateApiMessage(
                         message);
@@ -217,8 +258,8 @@ public sealed class PaymentReceiptsWebService
             }
 
             if (root.TryGetProperty(
-                    "title",
-                    out var titleElement) &&
+                "title",
+                out var titleElement) &&
                 titleElement.ValueKind ==
                     JsonValueKind.String)
             {
@@ -226,7 +267,7 @@ public sealed class PaymentReceiptsWebService
                     titleElement.GetString();
 
                 if (!string.IsNullOrWhiteSpace(
-                        title))
+                    title))
                 {
                     return title;
                 }
