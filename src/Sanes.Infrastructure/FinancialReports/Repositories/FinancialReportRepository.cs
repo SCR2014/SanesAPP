@@ -140,6 +140,7 @@ public class FinancialReportRepository
                 .AsNoTracking()
                 .Where(x =>
                     x.TenantId == tenantId &&
+                    x.Reversal == null &&
                     x.PaymentDate >= startDate &&
                     x.PaymentDate < endDateExclusive);
 

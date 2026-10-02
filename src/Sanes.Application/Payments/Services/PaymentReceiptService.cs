@@ -246,6 +246,9 @@ public class PaymentReceiptService
     private static PaymentReceiptResponse Map(
         PaymentReceipt receipt)
     {
+        var reversal =
+            receipt.Payment.Reversal;
+
         return new PaymentReceiptResponse
         {
             Id =
@@ -316,6 +319,21 @@ public class PaymentReceiptService
 
             Notes =
                 receipt.Notes,
+
+            IsReversed =
+                reversal is not null,
+
+            ReversedAt =
+                reversal?.CreatedAt,
+
+            ReversedByAppUserId =
+                reversal?.ReversedByAppUserId,
+
+            ReversedByName =
+                reversal?.ReversedByAppUser?.Name,
+
+            ReversalReason =
+                reversal?.Reason,
 
             CreatedAt =
                 receipt.CreatedAt

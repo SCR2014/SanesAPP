@@ -18,6 +18,8 @@ public class SanesDbContext : DbContext
     public DbSet<LoanGuarantee> LoanGuarantees =>
         Set<LoanGuarantee>();
     public DbSet<Payment> Payments => Set<Payment>();
+    public DbSet<PaymentReversal> PaymentReversals =>
+    Set<PaymentReversal>();
     public DbSet<PaymentAllocation> PaymentAllocations =>
     Set<PaymentAllocation>();
     public DbSet<LateFeeCharge> LateFeeCharges =>
@@ -375,6 +377,57 @@ public class SanesDbContext : DbContext
             entity.HasIndex(x => new { x.TenantId, x.LoanId });
 
             entity.HasIndex(x => new { x.TenantId, x.PaymentDate });
+        });
+
+        modelBuilder.Entity<PaymentReversal>(entity =>
+        {
+            entity.ToTable("payment_reversals");
+
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.Reason)
+                .HasMaxLength(500)
+                .IsRequired();
+
+            entity.Property(x => x.CreatedAt)
+                .IsRequired();
+
+            entity.HasOne(x => x.Tenant)
+                .WithMany()
+                .HasForeignKey(x => x.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.Payment)
+                .WithOne(x => x.Reversal)
+                .HasForeignKey<PaymentReversal>(
+                    x => x.PaymentId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.ReversedByAppUser)
+                .WithMany()
+                .HasForeignKey(x => x.ReversedByAppUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(x => x.TenantId);
+
+            entity.HasIndex(x => new
+            {
+                x.TenantId,
+                x.PaymentId
+            })
+            .IsUnique();
+
+            entity.HasIndex(x => new
+            {
+                x.TenantId,
+                x.ReversedByAppUserId
+            });
+
+            entity.HasIndex(x => new
+            {
+                x.TenantId,
+                x.CreatedAt
+            });
         });
 
         modelBuilder.Entity<PaymentAllocation>(entity =>

@@ -62,6 +62,13 @@ public sealed class EscPosReceiptEncoder
             stream,
             "RECIBO DE PAGO");
 
+        if (receipt.IsReversed)
+        {
+            WriteLine(
+                stream,
+                "*** RECIBO ANULADO ***");
+        }
+
         SetBold(
             stream,
             false);
@@ -162,6 +169,52 @@ public sealed class EscPosReceiptEncoder
                 $"Notas: {receipt.Notes}");
         }
 
+        if (receipt.IsReversed)
+        {
+            WriteSeparator(
+                stream);
+
+            SetBold(
+                stream,
+                true);
+
+            WriteLine(
+                stream,
+                "PAGO REVERSADO");
+
+            SetBold(
+                stream,
+                false);
+
+            if (receipt.ReversedAt.HasValue)
+            {
+                WriteWrapped(
+                    stream,
+                    $"Fecha reverso: " +
+                    $"{receipt.ReversedAt.Value.ToLocalTime():dd/MM/yyyy HH:mm}");
+            }
+
+            var reversedBy =
+                !string.IsNullOrWhiteSpace(
+                    receipt.ReversedByName)
+                    ? receipt.ReversedByName
+                    : receipt.ReversedByAppUserId
+                        ?.ToString()
+                      ?? "No especificado";
+
+            WriteWrapped(
+                stream,
+                $"Reversado por: {reversedBy}");
+
+            if (!string.IsNullOrWhiteSpace(
+                    receipt.ReversalReason))
+            {
+                WriteWrapped(
+                    stream,
+                    $"Motivo: {receipt.ReversalReason}");
+            }
+        }
+
         WriteSeparator(
             stream);
 
@@ -171,7 +224,9 @@ public sealed class EscPosReceiptEncoder
 
         WriteLine(
             stream,
-            "Gracias por su pago");
+            receipt.IsReversed
+                ? "DOCUMENTO ANULADO"
+                : "Gracias por su pago");
 
         WriteLine(
             stream,

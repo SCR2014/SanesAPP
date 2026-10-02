@@ -7,15 +7,19 @@ public class Payment
     public Guid Id { get; set; } = Guid.NewGuid();
 
     public Guid TenantId { get; set; }
+
     public Tenant Tenant { get; set; } = null!;
 
     public Guid LoanId { get; set; }
+
     public Loan Loan { get; set; } = null!;
 
     public Guid? CollectedByAppUserId { get; set; }
+
     public AppUser? CollectedByAppUser { get; set; }
 
     public Guid? CollectionRouteId { get; set; }
+
     public CollectionRoute? CollectionRoute { get; set; }
 
     public decimal Amount { get; set; }
@@ -30,6 +34,8 @@ public class Payment
     public EarlySettlement? EarlySettlement { get; set; }
 
     public PaymentReceipt? Receipt { get; set; }
+
+    public PaymentReversal? Reversal { get; set; }
 
     public string? Notes { get; set; }
 

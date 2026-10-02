@@ -13,14 +13,26 @@ namespace Sanes.Api.Controllers;
 public class PaymentsController : ControllerBase
 {
     private readonly IPaymentService _paymentService;
-    private readonly ICurrentUserService _currentUserService;
+
+    private readonly IPaymentReversalService
+        _paymentReversalService;
+
+    private readonly ICurrentUserService
+        _currentUserService;
 
     public PaymentsController(
         IPaymentService paymentService,
+        IPaymentReversalService paymentReversalService,
         ICurrentUserService currentUserService)
     {
-        _paymentService = paymentService;
-        _currentUserService = currentUserService;
+        _paymentService =
+            paymentService;
+
+        _paymentReversalService =
+            paymentReversalService;
+
+        _currentUserService =
+            currentUserService;
     }
 
     [HttpPost]
@@ -50,6 +62,53 @@ public class PaymentsController : ControllerBase
             {
                 message = ex.Message
             });
+        }
+    }
+    [HttpPost("{paymentId:guid}/reversal")]
+    [ProducesResponseType(
+        typeof(PaymentReversalResponse),
+        StatusCodes.Status200OK)]
+    [ProducesResponseType(
+        StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(
+        StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(
+        StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<PaymentReversalResponse>>
+        Reverse(
+            Guid paymentId,
+            [FromBody] PaymentReversalRequest request,
+            CancellationToken cancellationToken)
+    {
+        try
+        {
+            var reversal =
+                await _paymentReversalService
+                    .ReverseAsync(
+                        _currentUserService.TenantId,
+                        _currentUserService.AppUserId,
+                        paymentId,
+                        request,
+                        cancellationToken);
+
+            return Ok(
+                reversal);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(
+                new
+                {
+                    message = ex.Message
+                });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(
+                new
+                {
+                    message = ex.Message
+                });
         }
     }
 

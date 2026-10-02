@@ -186,6 +186,15 @@ else
                                 <strong>
                                     @receipt.ReceiptNumber
                                 </strong>
+
+                                @if (receipt.IsReversed)
+                                {
+                                    <div class="mt-1">
+                                        <span class="badge text-bg-danger">
+                                            REVERSADO
+                                        </span>
+                                    </div>
+                                }
                             </td>
 
                             <td>

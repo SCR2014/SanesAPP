@@ -16,6 +16,13 @@
         RECIBO DE PAGO
     </div>
 
+    @if (Receipt.IsReversed)
+    {
+        <div class="thermal-center thermal-section-title">
+            *** RECIBO ANULADO ***
+        </div>
+    }
+
     <div class="thermal-center thermal-receipt-number">
         @Receipt.ReceiptNumber
     </div>
@@ -135,10 +142,51 @@
         </div>
     }
 
+    @if (Receipt.IsReversed)
+    {
+        <div class="thermal-separator"></div>
+
+        <div class="thermal-center thermal-section-title">
+            PAGO REVERSADO
+        </div>
+
+        <div class="thermal-block">
+            <div>
+                Fecha reverso:
+            </div>
+
+            <strong>
+                @ReversalDate
+            </strong>
+        </div>
+
+        <div class="thermal-block">
+            <div>
+                Reversado por:
+            </div>
+
+            <strong>
+                @ReversalUser
+            </strong>
+        </div>
+
+        <div class="thermal-block">
+            <div>
+                Motivo:
+            </div>
+
+            <span>
+                @ReversalReason
+            </span>
+        </div>
+    }
+
     <div class="thermal-separator"></div>
 
     <div class="thermal-center thermal-footer">
-        Gracias por su pago
+        @(Receipt.IsReversed
+            ? "DOCUMENTO ANULADO"
+            : "Gracias por su pago")
     </div>
 
     <div class="thermal-center thermal-small">
@@ -151,6 +199,28 @@
     [Parameter]
     public PaymentReceiptResponse Receipt { get; set; } =
         default!;
+
+    private string ReversalDate =>
+        Receipt.ReversedAt.HasValue
+            ? Receipt.ReversedAt.Value
+                .ToLocalTime()
+                .ToString(
+                    "dd/MM/yyyy HH:mm")
+            : "No especificada";
+
+    private string ReversalUser =>
+        !string.IsNullOrWhiteSpace(
+            Receipt.ReversedByName)
+            ? Receipt.ReversedByName
+            : Receipt.ReversedByAppUserId
+                ?.ToString()
+              ?? "No especificado";
+
+    private string ReversalReason =>
+        string.IsNullOrWhiteSpace(
+            Receipt.ReversalReason)
+            ? "No especificado"
+            : Receipt.ReversalReason;
 
     private string Money(
         decimal amount)
