@@ -648,21 +648,58 @@ public class PaymentService : IPaymentService
     private static PaymentResponse Map(
         Payment payment)
     {
+        var reversal =
+            payment.Reversal;
+
         return new PaymentResponse
         {
-            Id = payment.Id,
-            TenantId = payment.TenantId,
-            LoanId = payment.LoanId,
+            Id =
+                payment.Id,
+
+            TenantId =
+                payment.TenantId,
+
+            LoanId =
+                payment.LoanId,
+
             CollectedByAppUserId =
                 payment.CollectedByAppUserId,
+
             CollectionRouteId =
                 payment.CollectionRouteId,
-            Amount = payment.Amount,
-            PaymentDate = payment.PaymentDate,
-            PaymentType = payment.PaymentType,
-            Notes = payment.Notes,
-            CreatedAt = payment.CreatedAt,
-            UpdatedAt = payment.UpdatedAt
+
+            Amount =
+                payment.Amount,
+
+            PaymentDate =
+                payment.PaymentDate,
+
+            PaymentType =
+                payment.PaymentType,
+
+            Notes =
+                payment.Notes,
+
+            IsReversed =
+                reversal is not null,
+
+            ReversedAt =
+                reversal?.CreatedAt,
+
+            ReversedByAppUserId =
+                reversal?.ReversedByAppUserId,
+
+            ReversedByName =
+                reversal?.ReversedByAppUser?.Name,
+
+            ReversalReason =
+                reversal?.Reason,
+
+            CreatedAt =
+                payment.CreatedAt,
+
+            UpdatedAt =
+                payment.UpdatedAt
         };
     }
 

@@ -232,6 +232,101 @@ public class EscPosReceiptEncoderTests
     }
 
     [Fact]
+    public void Encode_ReversedReceipt_MarksDocumentAsVoided()
+    {
+        var receipt =
+            CreateReceipt();
+
+        receipt.IsReversed =
+            true;
+
+        receipt.ReversedAt =
+            new DateTime(
+                2026,
+                10,
+                2,
+                16,
+                30,
+                0,
+                DateTimeKind.Utc);
+
+        receipt.ReversedByAppUserId =
+            Guid.NewGuid();
+
+        receipt.ReversedByName =
+            "Administrador Web";
+
+        receipt.ReversalReason =
+            "Pago registrado por duplicado";
+
+        var text =
+            NormalizeWhitespace(
+                Decode(
+                    _encoder.Encode(
+                        receipt)));
+
+        Assert.Contains(
+            "*** RECIBO ANULADO ***",
+            text);
+
+        Assert.Contains(
+            "PAGO REVERSADO",
+            text);
+
+        Assert.Contains(
+            "Reversado por: Administrador Web",
+            text);
+
+        Assert.Contains(
+            "Motivo: Pago registrado por duplicado",
+            text);
+
+        Assert.Contains(
+            "DOCUMENTO ANULADO",
+            text);
+
+        Assert.DoesNotContain(
+            "Gracias por su pago",
+            text);
+    }
+
+    [Fact]
+    public void Encode_ActiveReceipt_DoesNotContainReversalMarkers()
+    {
+        var receipt =
+            CreateReceipt();
+
+        Assert.False(
+            receipt.IsReversed);
+
+        var text =
+            NormalizeWhitespace(
+                Decode(
+                    _encoder.Encode(
+                        receipt)));
+
+        Assert.Contains(
+            "RECIBO DE PAGO",
+            text);
+
+        Assert.Contains(
+            "Gracias por su pago",
+            text);
+
+        Assert.DoesNotContain(
+            "RECIBO ANULADO",
+            text);
+
+        Assert.DoesNotContain(
+            "PAGO REVERSADO",
+            text);
+
+        Assert.DoesNotContain(
+            "DOCUMENTO ANULADO",
+            text);
+    }
+
+    [Fact]
     public void Encode_IncludesEscPosInitializationAndFeedCommands()
     {
         var receipt =

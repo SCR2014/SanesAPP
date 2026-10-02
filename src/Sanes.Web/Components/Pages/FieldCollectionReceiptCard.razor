@@ -1,7 +1,7 @@
 @inject IJSRuntime JS
 @inject IReceiptPrinter ReceiptPrinter
 
-<div class="card border-success mb-4">
+<div class="card @ReceiptBorderClass mb-4">
 
     <div class="card-header">
 
@@ -14,12 +14,21 @@
             <div>
 
                 <strong>
-                    @Heading
+                    @ReceiptHeading
                 </strong>
 
                 <div class="small text-muted">
                     Recibo @Receipt.ReceiptNumber
                 </div>
+
+                @if (Receipt.IsReversed)
+                {
+                    <div class="mt-1">
+                        <span class="badge text-bg-danger">
+                            REVERSADO
+                        </span>
+                    </div>
+                }
 
             </div>
 
@@ -66,6 +75,55 @@
     </div>
 
     <div class="card-body">
+
+        @if (Receipt.IsReversed)
+        {
+            <div class="alert alert-danger">
+
+                <div class="fw-semibold mb-2">
+                    RECIBO ANULADO / PAGO REVERSADO
+                </div>
+
+                <div>
+                    Este recibo se conserva para fines de
+                    auditoría y ya no representa un pago
+                    financiero vigente.
+                </div>
+
+                <hr />
+
+                <div>
+                    <strong>
+                        Fecha del reverso:
+                    </strong>
+
+                    @ReversalDate
+                </div>
+
+                <div>
+                    <strong>
+                        Reversado por:
+                    </strong>
+
+                    @ReversalUser
+                </div>
+
+                <div class="mt-2">
+                    <strong>
+                        Motivo:
+                    </strong>
+
+                    @ReversalReason
+                </div>
+
+                <div class="small mt-2">
+                    Los montos y saldos mostrados debajo
+                    corresponden al estado histórico del
+                    recibo cuando fue emitido.
+                </div>
+
+            </div>
+        }
 
         <div class="row g-3">
 
@@ -259,6 +317,38 @@
 
     [Parameter]
     public EventCallback Closed { get; set; }
+
+    private string ReceiptBorderClass =>
+        Receipt.IsReversed
+            ? "border-danger"
+            : "border-success";
+
+    private string ReceiptHeading =>
+        Receipt.IsReversed
+            ? "Recibo anulado"
+            : Heading;
+
+    private string ReversalDate =>
+        Receipt.ReversedAt.HasValue
+            ? Receipt.ReversedAt.Value
+                .ToLocalTime()
+                .ToString(
+                    "dd/MM/yyyy HH:mm")
+            : "No especificada";
+
+    private string ReversalUser =>
+        !string.IsNullOrWhiteSpace(
+            Receipt.ReversedByName)
+            ? Receipt.ReversedByName
+            : Receipt.ReversedByAppUserId
+                ?.ToString()
+              ?? "No especificado";
+
+    private string ReversalReason =>
+        string.IsNullOrWhiteSpace(
+            Receipt.ReversalReason)
+            ? "No especificado"
+            : Receipt.ReversalReason;
 
     private string Money(
         decimal amount)

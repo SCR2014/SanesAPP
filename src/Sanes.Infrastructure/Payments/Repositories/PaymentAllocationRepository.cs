@@ -60,7 +60,8 @@ public class PaymentAllocationRepository
                 x.TenantId == tenantId &&
                 x.AllocationType ==
                     PaymentAllocationType.LoanBalance &&
-                x.Payment.LoanId == loanId)
+                x.Payment.LoanId == loanId &&
+                x.Payment.Reversal == null)
             .SumAsync(
                 x => (decimal?)x.Amount,
                 cancellationToken)
@@ -87,7 +88,8 @@ public class PaymentAllocationRepository
                 x.TenantId == tenantId &&
                 x.AllocationType ==
                     PaymentAllocationType.LoanBalance &&
-                ids.Contains(x.Payment.LoanId))
+                ids.Contains(x.Payment.LoanId) &&
+                x.Payment.Reversal == null)
             .GroupBy(x => x.Payment.LoanId)
             .Select(group => new
             {
@@ -111,7 +113,8 @@ public class PaymentAllocationRepository
                 x.TenantId == tenantId &&
                 x.AllocationType ==
                     PaymentAllocationType.LateFee &&
-                x.LateFeeChargeId == lateFeeChargeId)
+                x.LateFeeChargeId == lateFeeChargeId &&
+                x.Payment.Reversal == null)
             .SumAsync(
                 x => (decimal?)x.Amount,
                 cancellationToken)
@@ -139,7 +142,8 @@ public class PaymentAllocationRepository
                 x.AllocationType ==
                     PaymentAllocationType.LateFee &&
                 x.LateFeeChargeId.HasValue &&
-                ids.Contains(x.LateFeeChargeId.Value))
+                ids.Contains(x.LateFeeChargeId.Value) &&
+                x.Payment.Reversal == null)
             .GroupBy(x => x.LateFeeChargeId!.Value)
             .Select(group => new
             {
@@ -174,7 +178,8 @@ public class PaymentAllocationRepository
                 x.TenantId == tenantId &&
                 x.AllocationType ==
                     PaymentAllocationType.LoanBalance &&
-                ids.Contains(x.Payment.LoanId))
+                ids.Contains(x.Payment.LoanId) &&
+                x.Payment.Reversal == null)
             .OrderBy(x => x.Payment.PaymentDate)
             .ThenBy(x => x.CreatedAt)
             .ToListAsync(cancellationToken);

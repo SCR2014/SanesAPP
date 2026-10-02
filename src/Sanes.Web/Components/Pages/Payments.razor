@@ -75,6 +75,153 @@
         Closed="CloseReceiptAsync" />
 }
 
+@if (_paymentPendingReversal is not null)
+{
+    <div class="card border-danger mb-4">
+
+        <div class="card-header
+                    bg-danger-subtle
+                    d-flex
+                    justify-content-between
+                    align-items-center
+                    gap-3">
+
+            <strong>
+                Confirmar reverso de pago
+            </strong>
+
+            <button type="button"
+                    class="btn-close"
+                    aria-label="Cancelar reverso"
+                    disabled="@_isReversing"
+                    @onclick="CancelReversal">
+            </button>
+
+        </div>
+
+        <div class="card-body">
+
+            <div class="alert alert-warning">
+
+                Esta operación no elimina el pago.
+
+                El registro y su recibo permanecerán
+                disponibles para auditoría, pero el pago
+                dejará de tener efecto financiero.
+
+            </div>
+
+            <div class="row g-3 mb-3">
+
+                <div class="col-12 col-md-4">
+
+                    <div class="small text-muted">
+                        Fecha
+                    </div>
+
+                    <strong>
+                        @FormatDateTime(
+                            _paymentPendingReversal.PaymentDate)
+                    </strong>
+
+                </div>
+
+                <div class="col-12 col-md-4">
+
+                    <div class="small text-muted">
+                        Tipo
+                    </div>
+
+                    <strong>
+                        @PaymentTypeText(
+                            _paymentPendingReversal.PaymentType)
+                    </strong>
+
+                </div>
+
+                <div class="col-12 col-md-4">
+
+                    <div class="small text-muted">
+                        Monto
+                    </div>
+
+                    <strong>
+                        @Money(
+                            _paymentPendingReversal.Amount)
+                    </strong>
+
+                </div>
+
+            </div>
+
+            <div class="mb-3">
+
+                <label class="form-label">
+                    Motivo del reverso
+                </label>
+
+                <textarea class="form-control"
+                          rows="3"
+                          maxlength="500"
+                          placeholder="Explique por qué se reversa este pago"
+                          disabled="@_isReversing"
+                          @bind="_reversalReason">
+                </textarea>
+
+                <div class="form-text">
+                    Obligatorio. Máximo 500 caracteres.
+                </div>
+
+            </div>
+
+            <div class="d-flex
+                        flex-wrap
+                        justify-content-end
+                        gap-2">
+
+                <button type="button"
+                        class="btn btn-outline-secondary"
+                        disabled="@_isReversing"
+                        @onclick="CancelReversal">
+
+                    Cancelar
+
+                </button>
+
+                <button type="button"
+                        class="btn btn-danger"
+                        disabled="@(_isReversing ||
+                                    string.IsNullOrWhiteSpace(
+                                        _reversalReason))"
+                        @onclick="ConfirmReversalAsync">
+
+                    @if (_isReversing)
+                    {
+                        <span class="spinner-border
+                                     spinner-border-sm
+                                     me-2">
+                        </span>
+
+                        <span>
+                            Reversando...
+                        </span>
+                    }
+                    else
+                    {
+                        <span>
+                            Confirmar reverso
+                        </span>
+                    }
+
+                </button>
+
+            </div>
+
+        </div>
+
+    </div>
+}
+
 <div class="card mb-4">
 
     <div class="card-header">
@@ -797,8 +944,8 @@ else if (_selectedLoan is not null &&
                                     </th>
 
                                     <th class="text-end">
-                                        Recibo
-                                    </th>
+    Acciones
+</th>
                                 </tr>
                             </thead>
 
@@ -825,26 +972,72 @@ else if (_selectedLoan is not null &&
                                         </td>
 
                                         <td>
-                                            @DisplayValue(
-                                                payment.Notes)
-                                        </td>
+    @DisplayValue(
+        payment.Notes)
+
+    @if (payment.IsReversed)
+    {
+        <div class="mt-2">
+            <span class="badge text-bg-danger">
+                REVERSADO
+            </span>
+        </div>
+
+        <div class="small text-danger mt-1">
+            Motivo:
+            @DisplayValue(
+                payment.ReversalReason)
+        </div>
+
+        <div class="small text-muted">
+            @ReversalAuditText(
+                payment)
+        </div>
+    }
+</td>
 
                                         <td class="text-end">
 
-                                            <button type="button"
-                                                    class="btn
-                                                           btn-sm
-                                                           btn-outline-primary"
-                                                    disabled="@_isReceiptLoading"
-                                                    @onclick="() =>
-                                                        ViewReceiptAsync(
-                                                            payment.Id)">
+    <div class="d-flex
+                flex-wrap
+                justify-content-end
+                gap-2">
 
-                                                Ver
+        <button type="button"
+                class="btn
+                       btn-sm
+                       btn-outline-primary"
+                disabled="@(_isReceiptLoading ||
+                            _isReversing)"
+                @onclick="() =>
+                    ViewReceiptAsync(
+                        payment.Id)">
 
-                                            </button>
+            Ver
 
-                                        </td>
+        </button>
+
+        @if (CanReversePayment(
+            payment))
+        {
+            <button type="button"
+                    class="btn
+                           btn-sm
+                           btn-outline-danger"
+                    disabled="@(_isReversing ||
+                                _isReceiptLoading)"
+                    @onclick="() =>
+                        BeginReversal(
+                            payment)">
+
+                Reversar
+
+            </button>
+        }
+
+    </div>
+
+</td>
 
                                     </tr>
                                 }
@@ -898,6 +1091,14 @@ else if (_selectedLoan is not null &&
     private bool _isSubmitting;
 
     private bool _isReceiptLoading;
+
+    private bool _isReversing;
+
+    private PaymentResponse?
+        _paymentPendingReversal;
+
+    private string _reversalReason =
+        string.Empty;
 
     private IEnumerable<LoanResponse>
         FilteredLoans
@@ -967,6 +1168,18 @@ else if (_selectedLoan is not null &&
                 .ThenByDescending(
                     x => x.CreatedAt);
 
+    private Guid? LatestEffectivePaymentId =>
+        _payments
+            .Where(
+                x => !x.IsReversed)
+            .OrderByDescending(
+                x => x.CreatedAt)
+            .ThenByDescending(
+                x => x.Id)
+            .Select(
+                x => (Guid?)x.Id)
+            .FirstOrDefault();
+
     protected override async Task
         OnInitializedAsync()
     {
@@ -1028,6 +1241,8 @@ else if (_selectedLoan is not null &&
         _pageMessage = null;
         _successMessage = null;
         _selectedReceipt = null;
+
+        ClearReversalState();
 
         try
         {
@@ -1130,6 +1345,8 @@ else if (_selectedLoan is not null &&
         _pageMessage = null;
         _successMessage = null;
         _selectedReceipt = null;
+
+        ClearReversalState();
 
         try
         {
@@ -1267,6 +1484,172 @@ else if (_selectedLoan is not null &&
         _pageMessage = null;
     }
 
+    private bool CanReversePayment(
+        PaymentResponse payment)
+    {
+        return
+            !payment.IsReversed &&
+            LatestEffectivePaymentId.HasValue &&
+            LatestEffectivePaymentId.Value ==
+                payment.Id;
+    }
+
+    private void BeginReversal(
+        PaymentResponse payment)
+    {
+        if (!CanReversePayment(
+                payment))
+        {
+            return;
+        }
+
+        _paymentPendingReversal =
+            payment;
+
+        _reversalReason =
+            string.Empty;
+
+        _pageMessage =
+            null;
+
+        _successMessage =
+            null;
+
+        _selectedReceipt =
+            null;
+    }
+
+    private void CancelReversal()
+    {
+        if (_isReversing)
+        {
+            return;
+        }
+
+        ClearReversalState();
+    }
+
+    private async Task ConfirmReversalAsync()
+    {
+        if (_paymentPendingReversal is null)
+        {
+            return;
+        }
+
+        var reason =
+            _reversalReason.Trim();
+
+        if (string.IsNullOrWhiteSpace(
+                reason))
+        {
+            _pageMessage =
+                "El motivo del reverso es requerido.";
+
+            return;
+        }
+
+        if (reason.Length > 500)
+        {
+            _pageMessage =
+                "El motivo del reverso no puede exceder 500 caracteres.";
+
+            return;
+        }
+
+        var paymentId =
+            _paymentPendingReversal.Id;
+
+        var loanId =
+            _paymentPendingReversal.LoanId;
+
+        _isReversing =
+            true;
+
+        _pageMessage =
+            null;
+
+        _successMessage =
+            null;
+
+        _selectedReceipt =
+            null;
+
+        try
+        {
+            await PaymentsService
+                .ReverseAsync(
+                    paymentId,
+                    new PaymentReversalRequest
+                    {
+                        Reason =
+                            reason
+                    });
+
+            ClearReversalState();
+
+            _successMessage =
+                "Pago reversado correctamente.";
+
+            try
+            {
+                await RefreshSelectedLoanAsync(
+                    loanId);
+            }
+            catch
+            {
+                _pageMessage =
+                    "El pago fue reversado, pero no fue posible " +
+                    "actualizar la vista. Presione Actualizar.";
+            }
+        }
+        catch (ArgumentException ex)
+        {
+            _pageMessage =
+                ex.Message;
+        }
+        catch (Exception)
+        {
+            _pageMessage =
+                "No fue posible reversar el pago.";
+        }
+        finally
+        {
+            _isReversing =
+                false;
+        }
+    }
+
+    private void ClearReversalState()
+    {
+        _paymentPendingReversal =
+            null;
+
+        _reversalReason =
+            string.Empty;
+    }
+
+    private static string ReversalAuditText(
+        PaymentResponse payment)
+    {
+        if (!payment.ReversedAt.HasValue)
+        {
+            return string.IsNullOrWhiteSpace(
+                payment.ReversedByName)
+                ? "Pago reversado."
+                : $"Reversado por {payment.ReversedByName}.";
+        }
+
+        var date =
+            FormatDateTime(
+                payment.ReversedAt.Value);
+
+        return string.IsNullOrWhiteSpace(
+            payment.ReversedByName)
+            ? $"Reversado el {date}."
+            : $"Reversado el {date} por " +
+              $"{payment.ReversedByName}.";
+    }
+
     private async Task ViewReceiptAsync(
         Guid paymentId)
     {
@@ -1329,6 +1712,9 @@ else if (_selectedLoan is not null &&
         _summary = null;
         _payments = [];
         _selectedReceipt = null;
+
+        ClearReversalState();
+
         _paymentForm = new();
     }
 

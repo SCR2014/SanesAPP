@@ -65,7 +65,8 @@ public class FinancialDashboardRepository
             await _dbContext.Payments
                 .AsNoTracking()
                 .Where(x =>
-                    x.TenantId == tenantId)
+                    x.TenantId == tenantId &&
+                    x.Reversal == null)
                 .SumAsync(
                     x => (decimal?)x.Amount,
                     cancellationToken)
@@ -77,7 +78,8 @@ public class FinancialDashboardRepository
                 .Where(x =>
                     x.TenantId == tenantId &&
                     x.AllocationType ==
-                        PaymentAllocationType.LoanBalance)
+                        PaymentAllocationType.LoanBalance  &&
+                    x.Payment.Reversal == null)
                 .SumAsync(
                     x => (decimal?)x.Amount,
                     cancellationToken)
@@ -89,7 +91,8 @@ public class FinancialDashboardRepository
                 .Where(x =>
                     x.TenantId == tenantId &&
                     x.AllocationType ==
-                        PaymentAllocationType.LateFee)
+                        PaymentAllocationType.LateFee &&
+                    x.Payment.Reversal == null)
                 .SumAsync(
                     x => (decimal?)x.Amount,
                     cancellationToken)
@@ -192,6 +195,7 @@ public class FinancialDashboardRepository
                 .AsNoTracking()
                 .Where(x =>
                     x.TenantId == tenantId &&
+                    x.Reversal == null &&
                     x.PaymentDate >= fromUtc &&
                     x.PaymentDate < toExclusiveUtc)
                 .GroupBy(x =>
@@ -220,6 +224,7 @@ public class FinancialDashboardRepository
                     x.TenantId == tenantId &&
                     x.AllocationType ==
                         PaymentAllocationType.LoanBalance &&
+                    x.Payment.Reversal == null &&
                     x.Payment.PaymentDate >= fromUtc &&
                     x.Payment.PaymentDate < toExclusiveUtc)
                 .GroupBy(x =>
@@ -244,6 +249,7 @@ public class FinancialDashboardRepository
                     x.TenantId == tenantId &&
                     x.AllocationType ==
                         PaymentAllocationType.LateFee &&
+                    x.Payment.Reversal == null &&
                     x.Payment.PaymentDate >= fromUtc &&
                     x.Payment.PaymentDate < toExclusiveUtc)
                 .GroupBy(x =>
@@ -455,7 +461,8 @@ public class FinancialDashboardRepository
             await _dbContext.Payments
                 .AsNoTracking()
                 .Where(x =>
-                    x.TenantId == tenantId)
+                    x.TenantId == tenantId &&
+                    x.Reversal == null)
                 .GroupBy(x =>
                     x.Loan.InvestorId)
                 .Select(group =>
@@ -494,7 +501,8 @@ public class FinancialDashboardRepository
                 .Where(x =>
                     x.TenantId == tenantId &&
                     x.AllocationType ==
-                        PaymentAllocationType.LoanBalance)
+                        PaymentAllocationType.LoanBalance &&
+                    x.Payment.Reversal == null)
                 .GroupBy(x =>
                     x.Payment.Loan.InvestorId)
                 .Select(group =>
@@ -533,7 +541,8 @@ public class FinancialDashboardRepository
                 .Where(x =>
                     x.TenantId == tenantId &&
                     x.AllocationType ==
-                        PaymentAllocationType.LateFee)
+                        PaymentAllocationType.LateFee &&
+                    x.Payment.Reversal == null)
                 .GroupBy(x =>
                     x.Payment.Loan.InvestorId)
                 .Select(group =>

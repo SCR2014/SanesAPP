@@ -15,4 +15,9 @@ public interface IPaymentsWebService
     Task<PaymentResponse> CreateAsync(
         CreatePaymentRequest request,
         CancellationToken cancellationToken = default);
+
+    Task<PaymentReversalResponse> ReverseAsync(
+        Guid paymentId,
+        PaymentReversalRequest request,
+        CancellationToken cancellationToken = default);
 }

@@ -22,6 +22,16 @@ public class PaymentResponse
 
     public string? Notes { get; set; }
 
+    public bool IsReversed { get; set; }
+
+    public DateTime? ReversedAt { get; set; }
+
+    public Guid? ReversedByAppUserId { get; set; }
+
+    public string? ReversedByName { get; set; }
+
+    public string? ReversalReason { get; set; }
+
     public DateTime CreatedAt { get; set; }
 
     public DateTime UpdatedAt { get; set; }

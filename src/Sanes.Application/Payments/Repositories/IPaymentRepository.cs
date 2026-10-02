@@ -18,6 +18,16 @@ public interface IPaymentRepository
         Guid paymentId,
         CancellationToken cancellationToken = default);
 
+    Task<Payment?> GetByIdForUpdateAsync(
+        Guid tenantId,
+        Guid paymentId,
+        CancellationToken cancellationToken = default);
+
+    Task<Payment?> GetLatestEffectiveByLoanAsync(
+        Guid tenantId,
+        Guid loanId,
+        CancellationToken cancellationToken = default);
+
     Task<decimal> GetTotalPaidAsync(
         Guid tenantId,
         Guid loanId,

@@ -35,6 +35,9 @@ public class PaymentReceiptRepository
     {
         return await _dbContext.PaymentReceipts
             .AsNoTracking()
+            .Include(x => x.Payment)
+                .ThenInclude(x => x.Reversal)
+                    .ThenInclude(x => x!.ReversedByAppUser)
             .FirstOrDefaultAsync(
                 x =>
                     x.TenantId == tenantId &&
@@ -49,6 +52,9 @@ public class PaymentReceiptRepository
     {
         return await _dbContext.PaymentReceipts
             .AsNoTracking()
+            .Include(x => x.Payment)
+                .ThenInclude(x => x.Reversal)
+                    .ThenInclude(x => x!.ReversedByAppUser)
             .FirstOrDefaultAsync(
                 x =>
                     x.TenantId == tenantId &&
@@ -70,6 +76,9 @@ public class PaymentReceiptRepository
         var query =
             _dbContext.PaymentReceipts
                 .AsNoTracking()
+                .Include(x => x.Payment)
+                    .ThenInclude(x => x.Reversal)
+                        .ThenInclude(x => x!.ReversedByAppUser)
                 .Where(x =>
                     x.TenantId == tenantId);
 
@@ -147,6 +156,9 @@ public class PaymentReceiptRepository
     {
         return await _dbContext.PaymentReceipts
             .AsNoTracking()
+            .Include(x => x.Payment)
+                .ThenInclude(x => x.Reversal)
+                    .ThenInclude(x => x!.ReversedByAppUser)
             .FirstOrDefaultAsync(
                 x =>
                     x.TenantId == tenantId &&

@@ -30,6 +30,8 @@ public class PaymentRepository : IPaymentRepository
     {
         return await _dbContext.Payments
             .AsNoTracking()
+            .Include(x => x.Reversal)
+                .ThenInclude(x => x!.ReversedByAppUser)
             .Where(x =>
                 x.TenantId == tenantId &&
                 x.LoanId == loanId)
@@ -45,10 +47,43 @@ public class PaymentRepository : IPaymentRepository
     {
         return await _dbContext.Payments
             .AsNoTracking()
+            .Include(x => x.Reversal)
+                .ThenInclude(x => x!.ReversedByAppUser)
             .FirstOrDefaultAsync(
                 x =>
                     x.TenantId == tenantId &&
                     x.Id == paymentId,
+                cancellationToken);
+    }
+    public async Task<Payment?> GetByIdForUpdateAsync(
+        Guid tenantId,
+        Guid paymentId,
+        CancellationToken cancellationToken = default)
+    {
+        return await _dbContext.Payments
+            .Include(x => x.Reversal)
+            .Include(x => x.EarlySettlement)
+            .FirstOrDefaultAsync(
+                x =>
+                    x.TenantId == tenantId &&
+                    x.Id == paymentId,
+                cancellationToken);
+    }
+
+    public async Task<Payment?> GetLatestEffectiveByLoanAsync(
+        Guid tenantId,
+        Guid loanId,
+        CancellationToken cancellationToken = default)
+    {
+        return await _dbContext.Payments
+            .AsNoTracking()
+            .Where(x =>
+                x.TenantId == tenantId &&
+                x.LoanId == loanId &&
+                x.Reversal == null)
+            .OrderByDescending(x => x.CreatedAt)
+            .ThenByDescending(x => x.Id)
+            .FirstOrDefaultAsync(
                 cancellationToken);
     }
 
@@ -61,17 +96,19 @@ public class PaymentRepository : IPaymentRepository
             .AsNoTracking()
             .Where(x =>
                 x.TenantId == tenantId &&
-                x.LoanId == loanId)
+                x.LoanId == loanId &&
+                x.Reversal == null)
             .SumAsync(
                 x => (decimal?)x.Amount,
                 cancellationToken)
             ?? 0m;
     }
 
-    public async Task<Dictionary<Guid, decimal>> GetTotalPaidByLoansAsync(
-        Guid tenantId,
-        IEnumerable<Guid> loanIds,
-        CancellationToken cancellationToken = default)
+    public async Task<Dictionary<Guid, decimal>>
+        GetTotalPaidByLoansAsync(
+            Guid tenantId,
+            IEnumerable<Guid> loanIds,
+            CancellationToken cancellationToken = default)
     {
         var ids = loanIds
             .Distinct()
@@ -86,7 +123,8 @@ public class PaymentRepository : IPaymentRepository
             .AsNoTracking()
             .Where(x =>
                 x.TenantId == tenantId &&
-                ids.Contains(x.LoanId))
+                ids.Contains(x.LoanId) &&
+                x.Reversal == null)
             .GroupBy(x => x.LoanId)
             .Select(group => new
             {
