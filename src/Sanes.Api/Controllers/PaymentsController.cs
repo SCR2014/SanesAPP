@@ -4,6 +4,8 @@ using Sanes.Application.Authentication.Services;
 using Sanes.Application.Payments.DTOs;
 using Sanes.Application.Payments.Services;
 using Sanes.Domain.Enums;
+using Sanes.Application.Payments.Exceptions;
+using Sanes.Application.Payments.Models;
 
 namespace Sanes.Api.Controllers;
 
@@ -36,18 +38,82 @@ public class PaymentsController : ControllerBase
     }
 
     [HttpPost]
+    [ProducesResponseType(
+        typeof(PaymentResponse),
+        StatusCodes.Status201Created)]
+    [ProducesResponseType(
+        StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(
+        StatusCodes.Status409Conflict)]
+    [ProducesResponseType(
+        StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(
+        StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<PaymentResponse>> Create(
         [FromBody] CreatePaymentRequest request,
+        [FromHeader(Name = "Idempotency-Key")]
+        string? idempotencyKey,
         CancellationToken cancellationToken)
     {
+        /*
+        * Todo cobro iniciado externamente debe tener una identidad
+        * explícita de operación.
+        *
+        * No deduplicamos por monto, préstamo o fecha porque dos
+        * pagos legítimos pueden compartir esos mismos valores.
+        */
+        if (string.IsNullOrWhiteSpace(
+                idempotencyKey))
+        {
+            return BadRequest(
+                new
+                {
+                    message =
+                        "Idempotency-Key header is required."
+                });
+        }
+
+        if (!Guid.TryParse(
+                idempotencyKey.Trim(),
+                out var parsedIdempotencyKey) ||
+            parsedIdempotencyKey == Guid.Empty)
+        {
+            return BadRequest(
+                new
+                {
+                    message =
+                        "Idempotency-Key must be a valid non-empty GUID."
+                });
+        }
+
+        /*
+        * El fingerprint se calcula sobre el request semántico
+        * antes de ejecutar cualquier efecto financiero.
+        */
+        var requestHash =
+            PaymentIdempotencyFingerprint
+                .CreateAdministrative(
+                    request);
+
+        var idempotencyContext =
+            new PaymentIdempotencyContext(
+                parsedIdempotencyKey,
+                requestHash);
+
         try
         {
             var payment =
                 await _paymentService.CreateAsync(
                     _currentUserService.TenantId,
                     request,
+                    idempotencyContext,
                     cancellationToken);
 
+            /*
+            * Tanto la primera ejecución como un retry exitoso
+            * devuelven la misma representación y la misma
+            * Location del Payment original.
+            */
             return CreatedAtAction(
                 nameof(GetById),
                 new
@@ -56,12 +122,28 @@ public class PaymentsController : ControllerBase
                 },
                 payment);
         }
+        catch (PaymentIdempotencyConflictException ex)
+        {
+            /*
+            * Misma key + payload diferente.
+            *
+            * 409 expresa que la solicitud individual puede ser
+            * válida, pero entra en conflicto con el significado
+            * que esa key ya tiene persistido.
+            */
+            return Conflict(
+                new
+                {
+                    message = ex.Message
+                });
+        }
         catch (InvalidOperationException ex)
         {
-            return BadRequest(new
-            {
-                message = ex.Message
-            });
+            return BadRequest(
+                new
+                {
+                    message = ex.Message
+                });
         }
     }
     [HttpPost("{paymentId:guid}/reversal")]

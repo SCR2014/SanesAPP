@@ -1,4 +1,5 @@
 using Sanes.Application.FieldCollections.DTOs;
+using Sanes.Application.Payments.Models;
 
 namespace Sanes.Application.FieldCollections.Services;
 
@@ -14,5 +15,6 @@ public interface IFieldCollectionService
         Guid tenantId,
         Guid appUserId,
         CreateFieldCollectionPaymentRequest request,
+        PaymentIdempotencyContext idempotencyContext,
         CancellationToken cancellationToken = default);
 }

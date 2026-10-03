@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using Sanes.Application.Payments.DTOs;
 using Sanes.Web.Api;
+using Sanes.Application.Payments.Exceptions;
 
 namespace Sanes.Web.Payments;
 
@@ -95,10 +96,18 @@ public sealed class PaymentsWebService
 
     public async Task<PaymentResponse> CreateAsync(
         CreatePaymentRequest request,
+        Guid idempotencyKey,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(
             request);
+
+        if (idempotencyKey == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "La clave de idempotencia no es válida.",
+                nameof(idempotencyKey));
+        }
 
         using var message =
             new HttpRequestMessage(
@@ -110,10 +119,23 @@ public sealed class PaymentsWebService
                         request)
             };
 
+        message.Headers.TryAddWithoutValidation(
+            "Idempotency-Key",
+            idempotencyKey.ToString("D"));
+
         using var response =
             await _apiClient.SendAsync(
                 message,
                 cancellationToken);
+
+        if (response.StatusCode ==
+            HttpStatusCode.Conflict)
+        {
+            throw new PaymentIdempotencyConflictException(
+                await ReadApiErrorAsync(
+                    response,
+                    cancellationToken));
+        }
 
         if (response.StatusCode ==
             HttpStatusCode.BadRequest)

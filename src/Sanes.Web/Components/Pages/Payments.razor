@@ -9,9 +9,11 @@
 @using Sanes.Application.Payments.DTOs
 @using Sanes.Application.Tenants.DTOs
 @using Sanes.Domain.Enums
+@using Sanes.Domain.Entities
 @using Sanes.Web.Loans
 @using Sanes.Web.Payments
 @using Sanes.Web.PaymentReceipts
+@using Sanes.Application.Payments.Exceptions
 
 @inject ILoansWebService LoansService
 @inject IPaymentsWebService PaymentsService
@@ -1099,6 +1101,7 @@ else if (_selectedLoan is not null &&
 
     private string _reversalReason =
         string.Empty;
+    private Guid? _paymentIdempotencyKey;
 
     private IEnumerable<LoanResponse>
         FilteredLoans
@@ -1341,6 +1344,19 @@ else if (_selectedLoan is not null &&
             return;
         }
 
+        /*
+        * Una key representa un único intento lógico de cobro.
+        *
+        * Si el POST o alguno de los pasos posteriores falla,
+        * conservamos esta misma key para que un retry no genere
+        * un segundo Payment.
+        */
+    _paymentIdempotencyKey ??=
+    Guid.NewGuid();
+
+        var idempotencyKey =
+            _paymentIdempotencyKey.Value;
+
         _isSubmitting = true;
         _pageMessage = null;
         _successMessage = null;
@@ -1353,16 +1369,14 @@ else if (_selectedLoan is not null &&
             var payment =
                 await PaymentsService
                     .CreateAsync(
-                        _paymentForm
-                            .ToRequest());
+                    _paymentForm
+                        .ToRequest(),
+                    idempotencyKey);
 
             var receipt =
                 await ReceiptsService
                     .GetByPaymentAsync(
                         payment.Id);
-
-            await RefreshSelectedLoanAsync(
-                payment.LoanId);
 
             if (receipt is null)
             {
@@ -1375,14 +1389,39 @@ else if (_selectedLoan is not null &&
                 return;
             }
 
+            await RefreshSelectedLoanAsync(
+                payment.LoanId);
+
             _selectedReceipt =
                 receipt;
 
             _successMessage =
                 $"Pago registrado correctamente. Recibo {receipt.ReceiptNumber}.";
+
+            /*
+            * El flujo completo terminó correctamente.
+            * El próximo pago debe recibir una nueva identidad.
+            */
+            _paymentIdempotencyKey =
+                null;
         }
         catch (ArgumentException ex)
         {
+            _pageMessage =
+                ex.Message;
+        }
+        catch (PaymentIdempotencyConflictException ex)
+        {
+            /*
+            * La key pertenece a otro payload.
+            *
+            * El usuario modificó la operación después de un intento
+            * anterior. Mostramos el conflicto y liberamos la key;
+            * si vuelve a enviar, será una operación nueva.
+            */
+            _paymentIdempotencyKey =
+                null;
+
             _pageMessage =
                 ex.Message;
         }

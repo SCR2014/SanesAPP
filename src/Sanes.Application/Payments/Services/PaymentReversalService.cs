@@ -103,21 +103,70 @@ public class PaymentReversalService
             CancellationToken cancellationToken)
     {
         /*
-         * Se obtiene como tracked porque el reverso y
-         * cualquier cambio en Loan deben formar parte
-         * de la misma transacción.
-         */
+        * Primera lectura sin lock.
+        *
+        * Solo necesitamos conocer LoanId para poder respetar
+        * el orden global de locks financieros:
+        *
+        *     Loan -> Payment
+        *
+        * No se toma ninguna decisión financiera definitiva con
+        * esta instancia. Todas las condiciones se revalidan después
+        * de adquirir los locks.
+        */
+        var paymentSnapshot =
+            await _paymentRepository.GetByIdAsync(
+                tenantId,
+                paymentId,
+                cancellationToken);
+
+        if (paymentSnapshot is null)
+        {
+            throw new InvalidOperationException(
+                "Payment not found or does not belong to the specified tenant.");
+        }
+
+        /*
+        * El Loan es el recurso financiero raíz.
+        *
+        * Cobros, liquidaciones y reversos sobre el mismo préstamo
+        * deben competir primero por este lock.
+        */
+        var loan =
+            await _loanRepository.GetByIdForUpdateAsync(
+                tenantId,
+                paymentSnapshot.LoanId,
+                cancellationToken);
+
+        if (loan is null)
+        {
+            throw new InvalidOperationException(
+                "The loan associated with the payment could not be found.");
+        }
+
+        /*
+        * Una vez bloqueado el préstamo, bloqueamos el Payment.
+        *
+        * La fila puede haber cambiado mientras esperábamos por
+        * el Loan, por lo que a partir de aquí solo utilizamos esta
+        * instancia tracked y volvemos a validar todo.
+        */
         var payment =
-            await _paymentRepository
-                .GetByIdForUpdateAsync(
-                    tenantId,
-                    paymentId,
-                    cancellationToken);
+            await _paymentRepository.GetByIdForUpdateAsync(
+                tenantId,
+                paymentId,
+                cancellationToken);
 
         if (payment is null)
         {
             throw new InvalidOperationException(
                 "Payment not found or does not belong to the specified tenant.");
+        }
+
+        if (payment.LoanId != loan.Id)
+        {
+            throw new InvalidOperationException(
+                "The payment no longer belongs to the expected loan.");
         }
 
         if (payment.Reversal is not null)
@@ -127,13 +176,13 @@ public class PaymentReversalService
         }
 
         /*
-         * Una liquidación anticipada también genera
-         * LoanBalanceAdjustment y EarlySettlement.
-         *
-         * Reversar solamente el Payment dejaría esos
-         * registros financieros vigentes y rompería
-         * la consistencia de la liquidación.
-         */
+        * Una liquidación anticipada también genera
+        * LoanBalanceAdjustment y EarlySettlement.
+        *
+        * Reversar solamente el Payment dejaría esos registros
+        * financieros vigentes y rompería la consistencia de la
+        * liquidación.
+        */
         if (payment.EarlySettlement is not null)
         {
             throw new InvalidOperationException(
@@ -141,17 +190,17 @@ public class PaymentReversalService
         }
 
         /*
-         * Solamente permitimos reversar el último pago
-         * financiero vigente del préstamo.
-         *
-         * Esto evita tener que redistribuir allocations
-         * pertenecientes a pagos posteriores.
-         */
+        * Esta comprobación se realiza DESPUÉS de bloquear Loan.
+        *
+        * Mientras mantengamos el lock ningún nuevo Payment sobre
+        * este préstamo puede completar su operación financiera,
+        * porque PaymentService también adquiere primero el Loan.
+        */
         var latestEffectivePayment =
             await _paymentRepository
                 .GetLatestEffectiveByLoanAsync(
                     tenantId,
-                    payment.LoanId,
+                    loan.Id,
                     cancellationToken);
 
         if (latestEffectivePayment is null ||
@@ -159,19 +208,6 @@ public class PaymentReversalService
         {
             throw new InvalidOperationException(
                 "Only the latest effective payment of the loan can be reversed.");
-        }
-
-        var loan =
-            await _loanRepository
-                .GetByIdForUpdateAsync(
-                    tenantId,
-                    payment.LoanId,
-                    cancellationToken);
-
-        if (loan is null)
-        {
-            throw new InvalidOperationException(
-                "The loan associated with the payment could not be found.");
         }
 
         var now =

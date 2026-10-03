@@ -9,12 +9,16 @@ using Sanes.Application.LateFees.Services;
 using Sanes.Application.Common.Persistence;
 using Sanes.Domain.Entities;
 using Sanes.Domain.Enums;
+using Sanes.Application.Payments.Exceptions;
+using Sanes.Application.Payments.Models;
 
 namespace Sanes.Application.Payments.Services;
 
 public class PaymentService : IPaymentService
 {
     private readonly IPaymentRepository _paymentRepository;
+    private readonly IPaymentIdempotencyRepository
+    _paymentIdempotencyRepository;
     private readonly ILoanRepository _loanRepository;
     private readonly ITenantRepository _tenantRepository;
     private readonly IAppUserRepository _appUserRepository;
@@ -31,6 +35,7 @@ public class PaymentService : IPaymentService
 
     public PaymentService(
         IPaymentRepository paymentRepository,
+        IPaymentIdempotencyRepository paymentIdempotencyRepository,
         ILoanRepository loanRepository,
         ITenantRepository tenantRepository,
         IAppUserRepository appUserRepository,
@@ -45,6 +50,7 @@ public class PaymentService : IPaymentService
         ITransactionRunner transactionRunner)
     {
         _paymentRepository = paymentRepository;
+        _paymentIdempotencyRepository = paymentIdempotencyRepository;
         _loanRepository = loanRepository;
         _tenantRepository = tenantRepository;
         _appUserRepository = appUserRepository;
@@ -71,6 +77,161 @@ public class PaymentService : IPaymentService
                     request,
                     transactionCancellationToken),
             cancellationToken);
+    }
+    public Task<PaymentResponse> CreateAsync(
+        Guid tenantId,
+        CreatePaymentRequest request,
+        PaymentIdempotencyContext idempotencyContext,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(
+            request);
+
+        ArgumentNullException.ThrowIfNull(
+            idempotencyContext);
+
+        if (idempotencyContext.Key == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "Idempotency key is required.",
+                nameof(idempotencyContext));
+        }
+
+        if (string.IsNullOrWhiteSpace(
+                idempotencyContext.RequestHash) ||
+            idempotencyContext.RequestHash.Length != 64)
+        {
+            throw new ArgumentException(
+                "Idempotency request hash must be a SHA-256 hexadecimal value.",
+                nameof(idempotencyContext));
+        }
+
+        return _transactionRunner.ExecuteAsync(
+            transactionCancellationToken =>
+                CreateIdempotentCoreAsync(
+                    tenantId,
+                    request,
+                    idempotencyContext,
+                    transactionCancellationToken),
+            cancellationToken);
+    }
+
+    private async Task<PaymentResponse>
+        CreateIdempotentCoreAsync(
+            Guid tenantId,
+            CreatePaymentRequest request,
+            PaymentIdempotencyContext idempotencyContext,
+            CancellationToken cancellationToken)
+    {
+        /*
+        * Claim primero.
+        *
+        * Requests con keys diferentes pueden continuar hasta
+        * competir por Loan FOR UPDATE.
+        *
+        * Requests con la misma key son serializados por el
+        * índice UNIQUE de PostgreSQL antes de producir cualquier
+        * efecto financiero.
+        */
+        var claim =
+            await _paymentIdempotencyRepository
+                .ClaimAsync(
+                    tenantId,
+                    idempotencyContext.Key,
+                    idempotencyContext.RequestHash,
+                    cancellationToken);
+
+        /*
+        * La misma key nunca puede representar dos operaciones
+        * semánticamente diferentes.
+        */
+        if (!string.Equals(
+                claim.Record.RequestHash,
+                idempotencyContext.RequestHash,
+                StringComparison.Ordinal))
+        {
+            throw new PaymentIdempotencyConflictException(
+                "The idempotency key has already been used with a different payment request.");
+        }
+
+        /*
+        * Si no ganamos el INSERT, el request original ya terminó
+        * exitosamente.
+        *
+        * Devolvemos exactamente el Payment histórico original
+        * sin recalcular mora, saldo, allocations ni recibo.
+        */
+        if (!claim.WasCreated)
+        {
+            if (!claim.Record.PaymentId.HasValue ||
+                !claim.Record.CompletedAt.HasValue)
+            {
+                throw new InvalidOperationException(
+                    "The existing payment idempotency record is incomplete.");
+            }
+
+            var existingPayment =
+                await _paymentRepository.GetByIdAsync(
+                    tenantId,
+                    claim.Record.PaymentId.Value,
+                    cancellationToken);
+
+            if (existingPayment is null)
+            {
+                throw new InvalidOperationException(
+                    "The payment associated with the idempotency record could not be found.");
+            }
+
+            return Map(
+                existingPayment);
+        }
+
+        /*
+        * Somos propietarios de esta key.
+        *
+        * CreateCoreAsync ejecuta toda la lógica financiera,
+        * incluyendo Loan FOR UPDATE, mora, allocations, recibo
+        * y actualización del préstamo.
+        *
+        * Continúa dentro de ESTA MISMA transacción.
+        */
+        var payment =
+            await CreateCoreAsync(
+                tenantId,
+                request,
+                cancellationToken);
+
+        /*
+        * CreateCoreAsync ya hizo SaveChanges, pero todavía no
+        * existe COMMIT porque ITransactionRunner controla la
+        * transacción exterior.
+        *
+        * Completamos el record idempotente antes del COMMIT.
+        */
+        claim.Record.PaymentId =
+            payment.Id;
+
+        claim.Record.CompletedAt =
+            DateTime.UtcNow;
+
+        /*
+        * El record fue recuperado como tracked por el repositorio.
+        * Este SaveChanges únicamente completa la relación
+        * idempotente dentro de la misma transacción.
+        *
+        * Si falla, ITransactionRunner hará ROLLBACK de TODO:
+        *
+        * - Payment
+        * - allocations
+        * - cambios del Loan
+        * - Receipt
+        * - sequence
+        * - idempotency claim
+        */
+        await _paymentRepository.SaveChangesAsync(
+            cancellationToken);
+
+        return payment;
     }
 
     private async Task<PaymentResponse> CreateCoreAsync(

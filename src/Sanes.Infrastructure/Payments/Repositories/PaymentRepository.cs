@@ -1,7 +1,10 @@
+using System.Data;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore;
 using Sanes.Application.Payments.Repositories;
 using Sanes.Domain.Entities;
 using Sanes.Infrastructure.Persistence;
+
 
 namespace Sanes.Infrastructure.Payments.Repositories;
 
@@ -60,6 +63,82 @@ public class PaymentRepository : IPaymentRepository
         Guid paymentId,
         CancellationToken cancellationToken = default)
     {
+        /*
+        * Igual que Loan.GetByIdForUpdateAsync, este método
+        * representa una lectura destinada a modificar estado
+        * financiero y requiere una transacción activa.
+        *
+        * El SELECT ... FOR UPDATE serializa operaciones que
+        * intenten modificar/reversar el mismo Payment.
+        */
+        var transaction =
+            _dbContext.Database.CurrentTransaction
+            ?? throw new InvalidOperationException(
+                "GetByIdForUpdateAsync requires an active database transaction.");
+
+        var connection =
+            _dbContext.Database.GetDbConnection();
+
+        if (connection.State != ConnectionState.Open)
+        {
+            await connection.OpenAsync(
+                cancellationToken);
+        }
+
+        await using var command =
+            connection.CreateCommand();
+
+        command.CommandText = """
+            SELECT "Id"
+            FROM payments
+            WHERE
+                "TenantId" = @tenantId
+                AND "Id" = @paymentId
+            FOR UPDATE;
+            """;
+
+        command.Transaction =
+            transaction.GetDbTransaction();
+
+        var tenantParameter =
+            command.CreateParameter();
+
+        tenantParameter.ParameterName =
+            "@tenantId";
+
+        tenantParameter.Value =
+            tenantId;
+
+        command.Parameters.Add(
+            tenantParameter);
+
+        var paymentParameter =
+            command.CreateParameter();
+
+        paymentParameter.ParameterName =
+            "@paymentId";
+
+        paymentParameter.Value =
+            paymentId;
+
+        command.Parameters.Add(
+            paymentParameter);
+
+        var lockedPaymentId =
+            await command.ExecuteScalarAsync(
+                cancellationToken);
+
+        if (lockedPaymentId is null ||
+            lockedPaymentId == DBNull.Value)
+        {
+            return null;
+        }
+
+        /*
+        * El lock permanece activo hasta COMMIT/ROLLBACK.
+        * Aquí recuperamos la entidad tracked y las relaciones
+        * requeridas por PaymentReversalService.
+        */
         return await _dbContext.Payments
             .Include(x => x.Reversal)
             .Include(x => x.EarlySettlement)

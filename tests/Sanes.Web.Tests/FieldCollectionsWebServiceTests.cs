@@ -3,8 +3,10 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Sanes.Application.FieldCollections.DTOs;
 using Sanes.Application.Payments.DTOs;
+using Sanes.Application.Payments.Exceptions;
 using Sanes.Domain.Enums;
 using Sanes.Web.FieldCollections;
+using Sanes.Web.Payments;
 
 namespace Sanes.Web.Tests;
 
@@ -90,6 +92,9 @@ public class FieldCollectionsWebServiceTests
         var paymentId =
             Guid.NewGuid();
 
+        var idempotencyKey =
+            Guid.NewGuid();
+
         apiClient.EnqueueResponse(
             JsonResponse(
                 new FieldCollectionPaymentResponse
@@ -153,7 +158,8 @@ public class FieldCollectionsWebServiceTests
 
         var result =
             await service.CreatePaymentAsync(
-                request);
+                request,
+                idempotencyKey);
 
         Assert.Equal(
             paymentId,
@@ -178,6 +184,18 @@ public class FieldCollectionsWebServiceTests
         Assert.Equal(
             "api/field-collections/payments",
             recorded.Uri);
+
+        Assert.True(
+            recorded.Headers.TryGetValue(
+                "Idempotency-Key",
+                out var idempotencyValues));
+
+        Assert.Single(
+            idempotencyValues);
+
+        Assert.Equal(
+            idempotencyKey.ToString("D"),
+            idempotencyValues[0]);
 
         AssertNoIdentityParameters(
             recorded.Uri);
@@ -244,6 +262,51 @@ public class FieldCollectionsWebServiceTests
     }
 
     [Fact]
+    public async Task
+        CreatePaymentAsync_Conflict_ThrowsPaymentIdempotencyConflictException()
+    {
+        var apiClient =
+            new TestSanesApiClient();
+
+        apiClient.EnqueueResponse(
+            new HttpResponseMessage(
+                HttpStatusCode.Conflict)
+            {
+                Content =
+                    JsonContent.Create(
+                        new
+                        {
+                            message =
+                                "The idempotency key was already used for a different payment operation."
+                        })
+            });
+
+        var service =
+            new FieldCollectionsWebService(
+                apiClient);
+
+        await Assert.ThrowsAsync<
+            PaymentIdempotencyConflictException>(
+                () =>
+                    service.CreatePaymentAsync(
+                        new CreateFieldCollectionPaymentRequest
+                        {
+                            CollectionRouteId =
+                                Guid.NewGuid(),
+
+                            LoanId =
+                                Guid.NewGuid(),
+
+                            Amount =
+                                100m,
+
+                            PaymentType =
+                                PaymentType.Regular
+                        },
+                        Guid.NewGuid()));
+    }
+
+    [Fact]
     public async Task CreatePaymentAsync_BadRequest_TranslatesPaymentRule()
     {
         var apiClient =
@@ -287,7 +350,8 @@ public class FieldCollectionsWebServiceTests
                 ArgumentException>(
                 () =>
                     service.CreatePaymentAsync(
-                        request));
+                        request,
+                        Guid.NewGuid()));
 
         Assert.Equal(
             "Un pago parcial debe aplicar al saldo del préstamo menos del monto de una cuota.",

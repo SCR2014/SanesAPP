@@ -4,6 +4,7 @@ using Sanes.Application.Loans.Repositories;
 using Sanes.Application.Payments.Repositories;
 using Sanes.Domain.Entities;
 using Sanes.Domain.Enums;
+using Sanes.Application.Common.Persistence;
 
 namespace Sanes.Application.LateFees.Services;
 
@@ -15,6 +16,7 @@ public class LateFeeAdministrationService
     private readonly ILateFeeBalanceService _lateFeeBalanceService;
     private readonly IPaymentAllocationRepository _paymentAllocationRepository;
     private readonly ILoanRepository _loanRepository;
+    private readonly ITransactionRunner _transactionRunner;
 
     private readonly ILoanBalanceAdjustmentRepository _loanBalanceAdjustmentRepository;
 
@@ -24,6 +26,7 @@ public class LateFeeAdministrationService
         ILateFeeBalanceService lateFeeBalanceService,
         IPaymentAllocationRepository paymentAllocationRepository,
         ILoanRepository loanRepository,
+        ITransactionRunner transactionRunner,
         ILoanBalanceAdjustmentRepository loanBalanceAdjustmentRepository)
     {
         _lateFeeRepository = lateFeeRepository;
@@ -31,6 +34,7 @@ public class LateFeeAdministrationService
         _lateFeeBalanceService = lateFeeBalanceService;
         _paymentAllocationRepository = paymentAllocationRepository;
         _loanRepository = loanRepository;
+        _transactionRunner = transactionRunner;
         _loanBalanceAdjustmentRepository = loanBalanceAdjustmentRepository;
     }
 
@@ -125,7 +129,7 @@ public class LateFeeAdministrationService
         };
     }
 
-    public async Task<LateFeeChargeResponse?>
+    public Task<LateFeeChargeResponse?>
         AddAdjustmentAsync(
             Guid tenantId,
             Guid appUserId,
@@ -133,8 +137,71 @@ public class LateFeeAdministrationService
             LateFeeAdjustmentRequest request,
             CancellationToken cancellationToken = default)
     {
-        ValidateRequest(request);
+        ValidateRequest(
+            request);
 
+        return _transactionRunner.ExecuteAsync(
+            transactionCancellationToken =>
+                AddAdjustmentCoreAsync(
+                    tenantId,
+                    appUserId,
+                    lateFeeChargeId,
+                    request,
+                    transactionCancellationToken),
+            cancellationToken);
+    }
+
+    private async Task<LateFeeChargeResponse?>
+        AddAdjustmentCoreAsync(
+            Guid tenantId,
+            Guid appUserId,
+            Guid lateFeeChargeId,
+            LateFeeAdjustmentRequest request,
+            CancellationToken cancellationToken)
+    {
+
+        /*
+        * Primero obtenemos solamente la identidad del Loan.
+        *
+        * Esta lectura no define todavía ninguna decisión financiera.
+        * Su propósito es descubrir qué recurso financiero raíz
+        * debemos serializar.
+        */
+        var chargeSnapshot =
+            await _lateFeeRepository.GetChargeByIdAsync(
+                tenantId,
+                lateFeeChargeId,
+                cancellationToken);
+
+        if (chargeSnapshot is null)
+        {
+            return null;
+        }
+
+        /*
+        * El Loan es el recurso financiero raíz.
+        *
+        * Payments, settlements, reversals y ajustes de mora deben
+        * competir primero por este mismo lock.
+        */
+        var loan =
+            await _loanRepository.GetByIdForUpdateAsync(
+                tenantId,
+                chargeSnapshot.LoanId,
+                cancellationToken);
+
+        if (loan is null)
+        {
+            throw new InvalidOperationException(
+                "Loan associated with the late fee charge was not found.");
+        }
+
+        /*
+        * Después de obtener el Loan lock releemos el charge tracked.
+        *
+        * Si otra transacción cambió el recurso mientras esperábamos,
+        * a partir de aquí trabajamos con el estado actualizado.
+        */
         var charge =
             await _lateFeeRepository.GetChargeForUpdateAsync(
                 tenantId,
@@ -146,16 +213,10 @@ public class LateFeeAdministrationService
             return null;
         }
 
-        var loan =
-            await _loanRepository.GetByIdForUpdateAsync(
-                tenantId,
-                charge.LoanId,
-                cancellationToken);
-
-        if (loan is null)
+        if (charge.LoanId != loan.Id)
         {
             throw new InvalidOperationException(
-                "Loan associated with the late fee charge was not found.");
+                "The late fee charge no longer belongs to the expected loan.");
         }
 
         var paidAmount =

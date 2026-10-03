@@ -766,8 +766,7 @@ public class PaymentReceiptsTests
             decimal amount)
     {
         var response =
-            await client.PostAsJsonAsync(
-                "/api/payments",
+            await client.PostAsJsonWithIdempotencyAsync("/api/payments",
                 new CreatePaymentRequest
                 {
                     LoanId =
@@ -1297,8 +1296,7 @@ public class PaymentReceiptsTests
                 collector);
 
         var paymentResponse =
-            await collectorClient.PostAsJsonAsync(
-                "/api/field-collections/payments",
+            await collectorClient.PostAsJsonWithIdempotencyAsync("/api/field-collections/payments",
                 new CreateFieldCollectionPaymentRequest
                 {
                     CollectionRouteId =
