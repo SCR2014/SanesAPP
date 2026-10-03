@@ -11,6 +11,7 @@ public interface IFieldCollectionsWebService
 
     Task<FieldCollectionPaymentResponse> CreatePaymentAsync(
         CreateFieldCollectionPaymentRequest request,
+        Guid idempotencyKey,
         CancellationToken cancellationToken = default);
 
     Task<PaymentReceiptResponse?> GetReceiptByPaymentAsync(

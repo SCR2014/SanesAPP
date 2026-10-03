@@ -18,6 +18,8 @@ public class SanesDbContext : DbContext
     public DbSet<LoanGuarantee> LoanGuarantees =>
         Set<LoanGuarantee>();
     public DbSet<Payment> Payments => Set<Payment>();
+    public DbSet<PaymentIdempotencyRecord> PaymentIdempotencyRecords =>
+    Set<PaymentIdempotencyRecord>();
     public DbSet<PaymentReversal> PaymentReversals =>
     Set<PaymentReversal>();
     public DbSet<PaymentAllocation> PaymentAllocations =>
@@ -377,6 +379,70 @@ public class SanesDbContext : DbContext
             entity.HasIndex(x => new { x.TenantId, x.LoanId });
 
             entity.HasIndex(x => new { x.TenantId, x.PaymentDate });
+        });
+
+        modelBuilder.Entity<PaymentIdempotencyRecord>(entity =>
+        {
+            entity.ToTable(
+                "payment_idempotency_records");
+
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.IdempotencyKey)
+                .IsRequired();
+
+            entity.Property(x => x.RequestHash)
+                .HasMaxLength(64)
+                .IsRequired();
+
+            entity.Property(x => x.CreatedAt)
+                .IsRequired();
+
+            entity.Property(x => x.CompletedAt);
+
+            entity.HasOne(x => x.Tenant)
+                .WithMany()
+                .HasForeignKey(x => x.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.Payment)
+                .WithMany()
+                .HasForeignKey(x => x.PaymentId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            /*
+            * La idempotencia se aísla por Tenant.
+            *
+            * Dos tenants pueden usar accidentalmente el mismo GUID
+            * sin interferir entre sí.
+            */
+            entity.HasIndex(x => new
+            {
+                x.TenantId,
+                x.IdempotencyKey
+            })
+            .IsUnique();
+
+            /*
+            * Un Payment creado mediante idempotencia pertenece a
+            * una sola operación lógica.
+            *
+            * PostgreSQL permite múltiples NULL en un índice UNIQUE,
+            * por lo que los records todavía no completados no
+            * colisionan entre sí.
+            */
+            entity.HasIndex(x => new
+            {
+                x.TenantId,
+                x.PaymentId
+            })
+            .IsUnique();
+
+            entity.HasIndex(x => new
+            {
+                x.TenantId,
+                x.CreatedAt
+            });
         });
 
         modelBuilder.Entity<PaymentReversal>(entity =>

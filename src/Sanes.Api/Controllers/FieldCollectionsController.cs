@@ -4,6 +4,9 @@ using Sanes.Application.FieldCollections.Services;
 using Microsoft.AspNetCore.Authorization;
 using Sanes.Application.Authentication.Services;
 using Sanes.Domain.Enums;
+using Sanes.Application.Payments.Exceptions;
+using Sanes.Application.Payments.Models;
+using Sanes.Application.Payments.Services;
 
 namespace Sanes.Api.Controllers;
 
@@ -68,22 +71,93 @@ public class FieldCollectionsController : ControllerBase
         StatusCodes.Status201Created)]
     [ProducesResponseType(
         StatusCodes.Status400BadRequest)]
-    public async Task<ActionResult<FieldCollectionPaymentResponse>> CreatePayment(
-        [FromBody] CreateFieldCollectionPaymentRequest request,
-        CancellationToken cancellationToken)
+    [ProducesResponseType(
+        StatusCodes.Status409Conflict)]
+    [ProducesResponseType(
+        StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(
+        StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<FieldCollectionPaymentResponse>>
+        CreatePayment(
+            [FromBody] CreateFieldCollectionPaymentRequest request,
+            [FromHeader(Name = "Idempotency-Key")]
+            string? idempotencyKey,
+            CancellationToken cancellationToken)
     {
+        /*
+        * Cada cobro iniciado por el dispositivo del cobrador
+        * debe conservar la misma key mientras se reintente
+        * esa misma operación lógica.
+        */
+        if (string.IsNullOrWhiteSpace(
+                idempotencyKey))
+        {
+            return BadRequest(
+                new
+                {
+                    message =
+                        "Idempotency-Key header is required."
+                });
+        }
+
+        if (!Guid.TryParse(
+                idempotencyKey.Trim(),
+                out var parsedIdempotencyKey) ||
+            parsedIdempotencyKey == Guid.Empty)
+        {
+            return BadRequest(
+                new
+                {
+                    message =
+                        "Idempotency-Key must be a valid non-empty GUID."
+                });
+        }
+
+        /*
+        * Para Field Collections el fingerprint contiene:
+        *
+        * - cobrador autenticado
+        * - ruta
+        * - préstamo
+        * - monto
+        * - tipo
+        * - notas
+        *
+        * PaymentDate se excluye porque la genera el servidor.
+        */
+        var requestHash =
+            PaymentIdempotencyFingerprint
+                .CreateFieldCollection(
+                    _currentUserService.AppUserId,
+                    request);
+
+        var idempotencyContext =
+            new PaymentIdempotencyContext(
+                parsedIdempotencyKey,
+                requestHash);
+
         try
         {
             var result =
-                await _fieldCollectionService.CreatePaymentAsync(
-                    _currentUserService.TenantId,
-                    _currentUserService.AppUserId,
-                    request,
-                    cancellationToken);
+                await _fieldCollectionService
+                    .CreatePaymentAsync(
+                        _currentUserService.TenantId,
+                        _currentUserService.AppUserId,
+                        request,
+                        idempotencyContext,
+                        cancellationToken);
 
             return StatusCode(
                 StatusCodes.Status201Created,
                 result);
+        }
+        catch (PaymentIdempotencyConflictException ex)
+        {
+            return Conflict(
+                new
+                {
+                    message = ex.Message
+                });
         }
         catch (ArgumentException ex)
         {

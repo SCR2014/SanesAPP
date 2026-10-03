@@ -652,8 +652,7 @@ public class FinancialReportsTests
                 collector);
 
         var paymentResponse =
-            await collectorClient.PostAsJsonAsync(
-                "/api/field-collections/payments",
+            await collectorClient.PostAsJsonWithIdempotencyAsync("/api/field-collections/payments",
                 new CreateFieldCollectionPaymentRequest
                 {
                     CollectionRouteId =
@@ -1593,8 +1592,7 @@ public class FinancialReportsTests
             DateTime paymentDate)
     {
         var response =
-            await client.PostAsJsonAsync(
-                "/api/payments",
+            await client.PostAsJsonWithIdempotencyAsync("/api/payments",
                 new CreatePaymentRequest
                 {
                     LoanId =

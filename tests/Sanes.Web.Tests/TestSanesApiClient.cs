@@ -14,14 +14,16 @@ internal sealed class TestSanesApiClient
     public void EnqueueResponse(
         HttpResponseMessage response)
     {
-        _responses.Enqueue(response);
+        _responses.Enqueue(
+            response);
     }
 
     public async Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request,
         CancellationToken cancellationToken = default)
     {
-        string? body = null;
+        string? body =
+            null;
 
         if (request.Content is not null)
         {
@@ -31,12 +33,20 @@ internal sealed class TestSanesApiClient
                         cancellationToken);
         }
 
+        var headers =
+            request.Headers
+                .ToDictionary(
+                    x => x.Key,
+                    x => x.Value.ToArray(),
+                    StringComparer.OrdinalIgnoreCase);
+
         Requests.Add(
             new RecordedRequest(
                 request.Method,
                 request.RequestUri?.ToString()
                     ?? string.Empty,
-                body));
+                body,
+                headers));
 
         return _responses.Dequeue();
     }
@@ -44,5 +54,8 @@ internal sealed class TestSanesApiClient
     public sealed record RecordedRequest(
         HttpMethod Method,
         string Uri,
-        string? Body);
+        string? Body,
+        IReadOnlyDictionary<
+            string,
+            string[]> Headers);
 }

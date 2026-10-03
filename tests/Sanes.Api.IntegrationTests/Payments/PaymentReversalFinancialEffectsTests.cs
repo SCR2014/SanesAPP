@@ -736,8 +736,7 @@ public class PaymentReversalFinancialEffectsTests
             PaymentType paymentType)
     {
         var response =
-            await client.PostAsJsonAsync(
-                "/api/payments",
+            await client.PostAsJsonWithIdempotencyAsync("/api/payments",
                 new CreatePaymentRequest
                 {
                     LoanId =

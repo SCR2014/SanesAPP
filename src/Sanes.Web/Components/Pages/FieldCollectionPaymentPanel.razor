@@ -1,4 +1,6 @@
 @inject IFieldCollectionsWebService FieldCollectionsService
+@using Sanes.Application.Payments.Exceptions
+
 
 <div class="border rounded p-3 mt-3 bg-light">
 
@@ -220,6 +222,8 @@
 
     private string? _errorMessage;
 
+    private Guid? _paymentIdempotencyKey;
+
     protected override void OnParametersSet()
     {
         if (_loadedLoanId ==
@@ -235,6 +239,9 @@
             FieldCollectionPaymentFormModel
                 .ForLoan(
                     Loan);
+
+        _paymentIdempotencyKey =
+            null;
 
         _errorMessage = null;
     }
@@ -263,6 +270,12 @@
 
     private async Task SubmitAsync()
     {
+        _paymentIdempotencyKey ??=
+            Guid.NewGuid();
+
+        var idempotencyKey =
+            _paymentIdempotencyKey.Value;
+
         _isSubmitting = true;
         _errorMessage = null;
 
@@ -276,7 +289,8 @@
             var payment =
                 await FieldCollectionsService
                     .CreatePaymentAsync(
-                        request);
+                        request,
+                        idempotencyKey);
 
             var receipt =
                 await FieldCollectionsService
@@ -294,6 +308,18 @@
             await PaymentCompleted
                 .InvokeAsync(
                     receipt);
+
+            _paymentIdempotencyKey =
+                null;
+        }
+
+        catch (PaymentIdempotencyConflictException ex)
+        {
+            _paymentIdempotencyKey =
+                null;
+
+            _errorMessage =
+                ex.Message;
         }
         catch (ArgumentException ex)
         {
@@ -317,6 +343,8 @@
         {
             return;
         }
+        _paymentIdempotencyKey =
+            null;
 
         await Cancelled.InvokeAsync();
     }

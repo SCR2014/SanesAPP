@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Sanes.Application.Loans.DTOs;
 using Sanes.Application.Payments.DTOs;
+using Sanes.Application.Payments.Exceptions;
 using Sanes.Domain.Enums;
 using Sanes.Web.Payments;
 
@@ -235,6 +236,9 @@ public class PaymentsWebServiceTests
         var paymentId =
             Guid.NewGuid();
 
+        var idempotencyKey =
+            Guid.NewGuid();
+
         var paymentDate =
             new DateTime(
                 2026,
@@ -297,7 +301,8 @@ public class PaymentsWebServiceTests
 
                     CollectionRouteId =
                         null
-                });
+                },
+                idempotencyKey);
 
         Assert.Equal(
             paymentId,
@@ -314,6 +319,18 @@ public class PaymentsWebServiceTests
         Assert.Equal(
             "api/payments",
             request.Uri);
+
+        Assert.True(
+            request.Headers.TryGetValue(
+                "Idempotency-Key",
+                out var idempotencyValues));
+
+        Assert.Single(
+            idempotencyValues);
+
+        Assert.Equal(
+            idempotencyKey.ToString("D"),
+            idempotencyValues[0]);
 
         Assert.NotNull(
             request.Body);
@@ -370,6 +387,51 @@ public class PaymentsWebServiceTests
     }
 
     [Fact]
+    public async Task
+        CreateAsync_Conflict_ThrowsPaymentIdempotencyConflictException()
+    {
+        var apiClient =
+            new TestSanesApiClient();
+
+        apiClient.EnqueueResponse(
+            new HttpResponseMessage(
+                HttpStatusCode.Conflict)
+            {
+                Content =
+                    JsonContent.Create(
+                        new
+                        {
+                            message =
+                                "The idempotency key was already used for a different payment operation."
+                        })
+            });
+
+        var service =
+            new PaymentsWebService(
+                apiClient);
+
+        await Assert.ThrowsAsync<
+            PaymentIdempotencyConflictException>(
+                () =>
+                    service.CreateAsync(
+                        new CreatePaymentRequest
+                        {
+                            LoanId =
+                                Guid.NewGuid(),
+
+                            Amount =
+                                100m,
+
+                            PaymentDate =
+                                DateTime.UtcNow,
+
+                            PaymentType =
+                                PaymentType.Regular
+                        },
+                        Guid.NewGuid()));
+    }
+
+    [Fact]
     public async Task CreateAsync_BadRequest_PreservesTranslatedMessage()
     {
         var apiClient =
@@ -410,7 +472,8 @@ public class PaymentsWebServiceTests
 
                                 PaymentType =
                                     PaymentType.Regular
-                            }));
+                            },
+                            Guid.NewGuid()));
 
         Assert.Equal(
             "Solo se pueden registrar pagos en préstamos activos.",

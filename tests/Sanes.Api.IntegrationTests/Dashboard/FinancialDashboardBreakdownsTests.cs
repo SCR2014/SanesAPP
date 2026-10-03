@@ -1056,8 +1056,7 @@ public class FinancialDashboardBreakdownsTests
             DateTime paymentDate,
             PaymentType paymentType)
     {
-        return await client.PostAsJsonAsync(
-            "/api/payments",
+        return await client.PostAsJsonWithIdempotencyAsync("/api/payments",
             new CreatePaymentRequest
             {
                 LoanId =

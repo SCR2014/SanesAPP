@@ -8,6 +8,7 @@ using Sanes.Application.Clients.Repositories;
 using Sanes.Application.CollectionRoutes.Repositories;
 using Sanes.Application.Payments.Repositories;
 using Sanes.Domain.Enums;
+using Sanes.Application.Payments.Models;
 
 namespace Sanes.Application.FieldCollections.Services;
 
@@ -330,41 +331,47 @@ public class FieldCollectionService : IFieldCollectionService
         Guid tenantId,
         Guid appUserId,
         CreateFieldCollectionPaymentRequest request,
+        PaymentIdempotencyContext idempotencyContext,
         CancellationToken cancellationToken = default)
     {
         /*
-        * PaymentService mantiene toda la autoridad sobre
-        * las reglas financieras y las validaciones del
-        * contexto operacional.
+        * La fecha efectiva del pago sigue siendo responsabilidad
+        * del servidor.
+        *
+        * No participa en el fingerprint idempotente de Field
+        * Collections porque cada retry generaría un UtcNow distinto.
         */
+        var paymentRequest =
+            new CreatePaymentRequest
+            {
+                LoanId =
+                    request.LoanId,
+
+                CollectedByAppUserId =
+                    appUserId,
+
+                CollectionRouteId =
+                    request.CollectionRouteId,
+
+                Amount =
+                    request.Amount,
+
+                PaymentDate =
+                    DateTime.UtcNow,
+
+                PaymentType =
+                    request.PaymentType,
+
+                Notes =
+                    request.Notes
+            };
+
         var payment =
             await _paymentService.CreateAsync(
                 tenantId,
-                new CreatePaymentRequest
-                {
-                    LoanId =
-                        request.LoanId,
-
-                    CollectedByAppUserId =
-                        appUserId,
-
-                    CollectionRouteId =
-                        request.CollectionRouteId,
-
-                    Amount =
-                        request.Amount,
-
-                    PaymentDate =
-                        DateTime.UtcNow,
-
-                    PaymentType =
-                        request.PaymentType,
-
-                    Notes =
-                        request.Notes
-                },
+                paymentRequest,
+                idempotencyContext,
                 cancellationToken);
-
         var allocations =
             await _paymentAllocationRepository.GetByPaymentAsync(
                 tenantId,

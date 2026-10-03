@@ -257,6 +257,10 @@ builder.Services.AddScoped<IPaymentRepository, PaymentRepository>();
 builder.Services.AddScoped<IPaymentService, PaymentService>();
 
 builder.Services.AddScoped<
+    IPaymentIdempotencyRepository,
+    PaymentIdempotencyRepository>();
+
+builder.Services.AddScoped<
     IPaymentReversalRepository,
     PaymentReversalRepository>();
 builder.Services.AddScoped<

@@ -598,7 +598,7 @@ public class FieldCollectionsTests
 
         var response =
             await setup.CollectorClient
-                .PostAsJsonAsync(
+                .PostAsJsonWithIdempotencyAsync(
                     "/api/field-collections/payments",
                     request);
 
@@ -690,6 +690,526 @@ public class FieldCollectionsTests
                 receipt.ClientName));
     }
 
+    // ============================================================
+    // FIELD PAYMENT IDEMPOTENCY
+    // ============================================================
+
+    [Fact]
+    public async Task
+        CreatePayment_SameIdempotencyKeyAndSameRequest_ReturnsSamePayment()
+    {
+        var setup =
+            await CreatePaymentScenarioAsync();
+
+        var request =
+            CreatePaymentRequest(
+                setup,
+                100m,
+                PaymentType.Regular,
+                "Field idempotency retry");
+
+        var idempotencyKey =
+            Guid.NewGuid();
+
+        var firstResponse =
+            await setup.CollectorClient
+                .PostAsJsonWithIdempotencyAsync(
+                    "/api/field-collections/payments",
+                    request,
+                    idempotencyKey);
+
+        var secondResponse =
+            await setup.CollectorClient
+                .PostAsJsonWithIdempotencyAsync(
+                    "/api/field-collections/payments",
+                    request,
+                    idempotencyKey);
+
+        Assert.Equal(
+            HttpStatusCode.Created,
+            firstResponse.StatusCode);
+
+        Assert.Equal(
+            HttpStatusCode.Created,
+            secondResponse.StatusCode);
+
+        var firstPayment =
+            await firstResponse.Content
+                .ReadFromJsonAsync<
+                    FieldCollectionPaymentResponse>();
+
+        var secondPayment =
+            await secondResponse.Content
+                .ReadFromJsonAsync<
+                    FieldCollectionPaymentResponse>();
+
+        Assert.NotNull(
+            firstPayment);
+
+        Assert.NotNull(
+            secondPayment);
+
+        /*
+        * FieldCollectionService genera PaymentDate en el servidor.
+        *
+        * Aunque el segundo intento tenga otro DateTime.UtcNow
+        * internamente, el fingerprint del cobro de campo no debe
+        * depender de esa fecha generada por el servidor.
+        */
+        Assert.Equal(
+            firstPayment.PaymentId,
+            secondPayment.PaymentId);
+
+        var paymentsResponse =
+            await setup.AdministratorClient.GetAsync(
+                $"/api/payments?loanId={setup.Loan.Id}");
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            paymentsResponse.StatusCode);
+
+        var payments =
+            await paymentsResponse.Content
+                .ReadFromJsonAsync<
+                    List<PaymentResponse>>();
+
+        Assert.NotNull(
+            payments);
+
+        var storedPayment =
+            Assert.Single(
+                payments);
+
+        Assert.Equal(
+            firstPayment.PaymentId,
+            storedPayment.Id);
+
+        Assert.Equal(
+            100m,
+            storedPayment.Amount);
+
+        Assert.Equal(
+            setup.Collector.Id,
+            storedPayment.CollectedByAppUserId);
+
+        Assert.Equal(
+            setup.RouteId,
+            storedPayment.CollectionRouteId);
+    }
+
+    [Fact]
+    public async Task
+        CreatePayment_SameIdempotencyKeyAndDifferentPayload_ReturnsConflict()
+    {
+        var setup =
+            await CreatePaymentScenarioAsync();
+
+        var idempotencyKey =
+            Guid.NewGuid();
+
+        var originalRequest =
+            CreatePaymentRequest(
+                setup,
+                100m,
+                PaymentType.Regular,
+                "Original field payment");
+
+        var conflictingRequest =
+            CreatePaymentRequest(
+                setup,
+                50m,
+                PaymentType.Partial,
+                "Changed field payment");
+
+        var firstResponse =
+            await setup.CollectorClient
+                .PostAsJsonWithIdempotencyAsync(
+                    "/api/field-collections/payments",
+                    originalRequest,
+                    idempotencyKey);
+
+        Assert.Equal(
+            HttpStatusCode.Created,
+            firstResponse.StatusCode);
+
+        var firstPayment =
+            await firstResponse.Content
+                .ReadFromJsonAsync<
+                    FieldCollectionPaymentResponse>();
+
+        Assert.NotNull(
+            firstPayment);
+
+        var conflictResponse =
+            await setup.CollectorClient
+                .PostAsJsonWithIdempotencyAsync(
+                    "/api/field-collections/payments",
+                    conflictingRequest,
+                    idempotencyKey);
+
+        Assert.Equal(
+            HttpStatusCode.Conflict,
+            conflictResponse.StatusCode);
+
+        var paymentsResponse =
+            await setup.AdministratorClient.GetAsync(
+                $"/api/payments?loanId={setup.Loan.Id}");
+
+        paymentsResponse.EnsureSuccessStatusCode();
+
+        var payments =
+            await paymentsResponse.Content
+                .ReadFromJsonAsync<
+                    List<PaymentResponse>>();
+
+        Assert.NotNull(
+            payments);
+
+        var storedPayment =
+            Assert.Single(
+                payments);
+
+        Assert.Equal(
+            firstPayment.PaymentId,
+            storedPayment.Id);
+
+        Assert.Equal(
+            100m,
+            storedPayment.Amount);
+    }
+
+    [Fact]
+    public async Task
+        CreatePayment_SameIdempotencyKeyConcurrently_ReturnsSamePaymentAndSingleEffect()
+    {
+        var setup =
+            await CreatePaymentScenarioAsync();
+
+        var request =
+            CreatePaymentRequest(
+                setup,
+                100m,
+                PaymentType.Regular,
+                "Concurrent field retry");
+
+        var idempotencyKey =
+            Guid.NewGuid();
+
+        var firstTask =
+            setup.CollectorClient
+                .PostAsJsonWithIdempotencyAsync(
+                    "/api/field-collections/payments",
+                    request,
+                    idempotencyKey);
+
+        var secondTask =
+            setup.CollectorClient
+                .PostAsJsonWithIdempotencyAsync(
+                    "/api/field-collections/payments",
+                    request,
+                    idempotencyKey);
+
+        await Task.WhenAll(
+            firstTask,
+            secondTask);
+
+        using var firstResponse =
+            await firstTask;
+
+        using var secondResponse =
+            await secondTask;
+
+        Assert.Equal(
+            HttpStatusCode.Created,
+            firstResponse.StatusCode);
+
+        Assert.Equal(
+            HttpStatusCode.Created,
+            secondResponse.StatusCode);
+
+        var firstPayment =
+            await firstResponse.Content
+                .ReadFromJsonAsync<
+                    FieldCollectionPaymentResponse>();
+
+        var secondPayment =
+            await secondResponse.Content
+                .ReadFromJsonAsync<
+                    FieldCollectionPaymentResponse>();
+
+        Assert.NotNull(
+            firstPayment);
+
+        Assert.NotNull(
+            secondPayment);
+
+        Assert.Equal(
+            firstPayment.PaymentId,
+            secondPayment.PaymentId);
+
+        var paymentsResponse =
+            await setup.AdministratorClient.GetAsync(
+                $"/api/payments?loanId={setup.Loan.Id}");
+
+        paymentsResponse.EnsureSuccessStatusCode();
+
+        var payments =
+            await paymentsResponse.Content
+                .ReadFromJsonAsync<
+                    List<PaymentResponse>>();
+
+        Assert.NotNull(
+            payments);
+
+        var storedPayment =
+            Assert.Single(
+                payments);
+
+        Assert.Equal(
+            firstPayment.PaymentId,
+            storedPayment.Id);
+
+        Assert.Equal(
+            100m,
+            storedPayment.Amount);
+    }
+
+    [Fact]
+    public async Task
+        CreatePayment_DifferentKeysConcurrently_SerializesFieldLoanState()
+    {
+        var setup =
+            await CreatePaymentScenarioAsync();
+
+        var firstRequest =
+            CreatePaymentRequest(
+                setup,
+                100m,
+                PaymentType.Regular,
+                "Concurrent field payment A");
+
+        var secondRequest =
+            CreatePaymentRequest(
+                setup,
+                100m,
+                PaymentType.Regular,
+                "Concurrent field payment B");
+
+        var firstTask =
+            setup.CollectorClient
+                .PostAsJsonWithIdempotencyAsync(
+                    "/api/field-collections/payments",
+                    firstRequest,
+                    Guid.NewGuid());
+
+        var secondTask =
+            setup.CollectorClient
+                .PostAsJsonWithIdempotencyAsync(
+                    "/api/field-collections/payments",
+                    secondRequest,
+                    Guid.NewGuid());
+
+        await Task.WhenAll(
+            firstTask,
+            secondTask);
+
+        using var firstResponse =
+            await firstTask;
+
+        using var secondResponse =
+            await secondTask;
+
+        Assert.Equal(
+            HttpStatusCode.Created,
+            firstResponse.StatusCode);
+
+        Assert.Equal(
+            HttpStatusCode.Created,
+            secondResponse.StatusCode);
+
+        var firstPayment =
+            await firstResponse.Content
+                .ReadFromJsonAsync<
+                    FieldCollectionPaymentResponse>();
+
+        var secondPayment =
+            await secondResponse.Content
+                .ReadFromJsonAsync<
+                    FieldCollectionPaymentResponse>();
+
+        Assert.NotNull(
+            firstPayment);
+
+        Assert.NotNull(
+            secondPayment);
+
+        Assert.NotEqual(
+            firstPayment.PaymentId,
+            secondPayment.PaymentId);
+
+        /*
+        * El préstamo inicia con saldo contractual 1300.
+        *
+        * No importa cuál request obtenga primero
+        * el FOR UPDATE:
+        *
+        * primero  -> 1300 a 1200
+        * segundo  -> 1200 a 1100
+        */
+        Assert.Equal(
+            new[]
+            {
+                1200m,
+                1300m
+            },
+            new[]
+            {
+                firstPayment.BalanceBefore,
+                secondPayment.BalanceBefore
+            }
+            .OrderBy(x => x)
+            .ToArray());
+
+        Assert.Equal(
+            new[]
+            {
+                1100m,
+                1200m
+            },
+            new[]
+            {
+                firstPayment.BalanceAfter,
+                secondPayment.BalanceAfter
+            }
+            .OrderBy(x => x)
+            .ToArray());
+
+        var paymentsResponse =
+            await setup.AdministratorClient.GetAsync(
+                $"/api/payments?loanId={setup.Loan.Id}");
+
+        paymentsResponse.EnsureSuccessStatusCode();
+
+        var payments =
+            await paymentsResponse.Content
+                .ReadFromJsonAsync<
+                    List<PaymentResponse>>();
+
+        Assert.NotNull(
+            payments);
+
+        Assert.Equal(
+            2,
+            payments.Count);
+
+        Assert.Equal(
+            200m,
+            payments.Sum(
+                x => x.Amount));
+    }
+
+    [Fact]
+    public async Task
+        CreatePayment_WithoutIdempotencyKey_ReturnsBadRequestAndCreatesNoPayment()
+    {
+        var setup =
+            await CreatePaymentScenarioAsync();
+
+        var request =
+            CreatePaymentRequest(
+                setup,
+                100m,
+                PaymentType.Regular);
+
+        using var message =
+            new HttpRequestMessage(
+                HttpMethod.Post,
+                "/api/field-collections/payments")
+            {
+                Content =
+                    JsonContent.Create(
+                        request)
+            };
+
+        using var response =
+            await setup.CollectorClient.SendAsync(
+                message);
+
+        Assert.Equal(
+            HttpStatusCode.BadRequest,
+            response.StatusCode);
+
+        var paymentsResponse =
+            await setup.AdministratorClient.GetAsync(
+                $"/api/payments?loanId={setup.Loan.Id}");
+
+        paymentsResponse.EnsureSuccessStatusCode();
+
+        var payments =
+            await paymentsResponse.Content
+                .ReadFromJsonAsync<
+                    List<PaymentResponse>>();
+
+        Assert.NotNull(
+            payments);
+
+        Assert.Empty(
+            payments);
+    }
+
+    [Fact]
+    public async Task
+        CreatePayment_WithInvalidIdempotencyKey_ReturnsBadRequestAndCreatesNoPayment()
+    {
+        var setup =
+            await CreatePaymentScenarioAsync();
+
+        var request =
+            CreatePaymentRequest(
+                setup,
+                100m,
+                PaymentType.Regular);
+
+        using var message =
+            new HttpRequestMessage(
+                HttpMethod.Post,
+                "/api/field-collections/payments")
+            {
+                Content =
+                    JsonContent.Create(
+                        request)
+            };
+
+        message.Headers.TryAddWithoutValidation(
+            "Idempotency-Key",
+            "invalid-field-key");
+
+        using var response =
+            await setup.CollectorClient.SendAsync(
+                message);
+
+        Assert.Equal(
+            HttpStatusCode.BadRequest,
+            response.StatusCode);
+
+        var paymentsResponse =
+            await setup.AdministratorClient.GetAsync(
+                $"/api/payments?loanId={setup.Loan.Id}");
+
+        paymentsResponse.EnsureSuccessStatusCode();
+
+        var payments =
+            await paymentsResponse.Content
+                .ReadFromJsonAsync<
+                    List<PaymentResponse>>();
+
+        Assert.NotNull(
+            payments);
+
+        Assert.Empty(
+            payments);
+    }
+
     [Fact]
     public async Task CreatePayment_PersistsCollectorAndRouteContext()
     {
@@ -704,7 +1224,7 @@ public class FieldCollectionsTests
 
         var response =
             await setup.CollectorClient
-                .PostAsJsonAsync(
+                .PostAsJsonWithIdempotencyAsync(
                     "/api/field-collections/payments",
                     request);
 
@@ -759,7 +1279,7 @@ public class FieldCollectionsTests
 
         var response =
             await setup.CollectorClient
-                .PostAsJsonAsync(
+                .PostAsJsonWithIdempotencyAsync(
                     "/api/field-collections/payments",
                     request);
 
@@ -799,7 +1319,7 @@ public class FieldCollectionsTests
 
         var response =
             await setup.CollectorClient
-                .PostAsJsonAsync(
+                .PostAsJsonWithIdempotencyAsync(
                     "/api/field-collections/payments",
                     request);
 
@@ -859,7 +1379,7 @@ public class FieldCollectionsTests
 
         var response =
             await setup.CollectorClient
-                .PostAsJsonAsync(
+                .PostAsJsonWithIdempotencyAsync(
                     "/api/field-collections/payments",
                     request);
 
@@ -916,8 +1436,7 @@ public class FieldCollectionsTests
             };
 
         var response =
-            await collectorClient.PostAsJsonAsync(
-                "/api/field-collections/payments",
+            await collectorClient.PostAsJsonWithIdempotencyAsync("/api/field-collections/payments",
                 request);
 
         Assert.Equal(
@@ -983,8 +1502,7 @@ public class FieldCollectionsTests
             };
 
         var response =
-            await collectorClient.PostAsJsonAsync(
-                "/api/field-collections/payments",
+            await collectorClient.PostAsJsonWithIdempotencyAsync("/api/field-collections/payments",
                 request);
 
         Assert.Equal(
@@ -1031,8 +1549,7 @@ public class FieldCollectionsTests
             };
 
         var response =
-            await context.Client.PostAsJsonAsync(
-                "/api/field-collections/payments",
+            await context.Client.PostAsJsonWithIdempotencyAsync("/api/field-collections/payments",
                 request);
 
         Assert.Equal(
@@ -1089,8 +1606,7 @@ public class FieldCollectionsTests
             };
 
         var response =
-            await collectorClient.PostAsJsonAsync(
-                "/api/field-collections/payments",
+            await collectorClient.PostAsJsonWithIdempotencyAsync("/api/field-collections/payments",
                 request);
 
         Assert.Equal(
@@ -1138,7 +1654,7 @@ public class FieldCollectionsTests
 
         var response =
             await setup.CollectorClient
-                .PostAsJsonAsync(
+                .PostAsJsonWithIdempotencyAsync(
                     "/api/field-collections/payments",
                     request);
 
@@ -1220,7 +1736,7 @@ public class FieldCollectionsTests
 
         var response =
             await setup.CollectorClient
-                .PostAsJsonAsync(
+                .PostAsJsonWithIdempotencyAsync(
                     "/api/field-collections/payments",
                     request);
 
@@ -1295,7 +1811,7 @@ public class FieldCollectionsTests
 
         var response =
             await setup.CollectorClient
-                .PostAsJsonAsync(
+                .PostAsJsonWithIdempotencyAsync(
                     "/api/field-collections/payments",
                     request);
 

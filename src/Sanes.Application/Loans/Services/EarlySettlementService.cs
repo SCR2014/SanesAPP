@@ -291,6 +291,28 @@ public class EarlySettlementService
                 async transactionCancellationToken =>
                 {
                     /*
+                    * Early Settlement modifica el mismo estado financiero que
+                    * los cobros normales.
+                    *
+                    * Debemos serializar toda la operación desde ANTES de
+                    * recalcular la cotización.
+                    *
+                    * Mientras esta transacción mantenga el row lock, ningún
+                    * Payment, reverso u otra liquidación que respete el mismo
+                    * lock del Loan puede tomar decisiones sobre un saldo
+                    * concurrentemente desactualizado.
+                    */
+                    var lockedLoan =
+                        await _loanRepository.GetByIdForUpdateAsync(
+                            tenantId,
+                            loanId,
+                            transactionCancellationToken);
+
+                    if (lockedLoan is null)
+                    {
+                        return null;
+                    }
+                    /*
                     * Recalculamos completamente la cotización.
                     * Nunca confiamos en saldos o descuentos enviados
                     * previamente por el cliente.
