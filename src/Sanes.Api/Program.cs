@@ -372,6 +372,71 @@ builder.Services.AddScoped<
 builder.Services.AddSingleton<IFileStorage>(
     _ =>
     {
+        var provider =
+            builder.Configuration[
+                "FileStorage:Provider"];
+
+        if (string.Equals(
+                provider,
+                "AzureBlob",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            var accountName =
+                builder.Configuration[
+                    "FileStorage:AccountName"];
+
+            var containerName =
+                builder.Configuration[
+                    "FileStorage:ContainerName"];
+
+            if (string.IsNullOrWhiteSpace(
+                    accountName))
+            {
+                throw new InvalidOperationException(
+                    "FileStorage:AccountName is required when FileStorage:Provider is AzureBlob.");
+            }
+
+            if (string.IsNullOrWhiteSpace(
+                    containerName))
+            {
+                throw new InvalidOperationException(
+                    "FileStorage:ContainerName is required when FileStorage:Provider is AzureBlob.");
+            }
+
+            var serviceUri =
+                new Uri(
+                    $"https://{accountName}.blob.core.windows.net");
+
+            var credential =
+                new Azure.Identity
+                    .DefaultAzureCredential();
+
+            var blobServiceClient =
+                new Azure.Storage.Blobs
+                    .BlobServiceClient(
+                        serviceUri,
+                        credential);
+
+            var containerClient =
+                blobServiceClient
+                    .GetBlobContainerClient(
+                        containerName);
+
+            return new AzureBlobFileStorage(
+                containerClient);
+        }
+
+        if (
+            !string.IsNullOrWhiteSpace(provider) &&
+            !string.Equals(
+                provider,
+                "Local",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"Unsupported FileStorage provider '{provider}'. Supported values are Local and AzureBlob.");
+        }
+
         var configuredRoot =
             builder.Configuration[
                 "FileStorage:RootPath"];
@@ -389,7 +454,6 @@ builder.Services.AddSingleton<IFileStorage>(
         return new LocalFileStorage(
             rootPath);
     });
-
 builder.Services.AddHttpContextAccessor();
 
 builder.Services.AddControllers();
