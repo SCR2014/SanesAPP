@@ -1,3 +1,5 @@
+using Azure.Monitor.OpenTelemetry.AspNetCore;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
 using Sanes.Application.Clients.Repositories;
 using Sanes.Application.CollectionRoutes.Repositories;
@@ -76,6 +78,31 @@ if (string.IsNullOrWhiteSpace(jwtSettings.Key))
 builder.Services.AddDbContext<SanesDbContext>(options =>
     options.UseNpgsql(
         builder.Configuration.GetConnectionString("DefaultConnection")));
+
+builder.Services
+    .AddHealthChecks()
+    .AddDbContextCheck<SanesDbContext>(
+        name: "postgresql",
+        tags:
+        [
+            "ready"
+        ]);
+
+var applicationInsightsConnectionString =
+    builder.Configuration[
+        "APPLICATIONINSIGHTS_CONNECTION_STRING"];
+
+if (!string.IsNullOrWhiteSpace(
+        applicationInsightsConnectionString))
+{
+    builder.Services
+        .AddOpenTelemetry()
+        .UseAzureMonitor(options =>
+        {
+            options.ConnectionString =
+                applicationInsightsConnectionString;
+        });
+}
 
 builder.Services.AddScoped<
     ITransactionRunner,
@@ -476,6 +503,26 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+
+app.MapHealthChecks(
+    "/health/live",
+    new HealthCheckOptions
+    {
+        Predicate =
+            _ => false
+    });
+
+app.MapHealthChecks(
+    "/health/ready",
+    new HealthCheckOptions
+    {
+        Predicate =
+            healthCheckRegistration =>
+                healthCheckRegistration
+                    .Tags
+                    .Contains(
+                        "ready")
+    });
 
 var summaries = new[]
 {
