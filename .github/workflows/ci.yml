@@ -202,6 +202,11 @@ jobs:
 
       - name: Apply database migrations
         env:
+          ASPNETCORE_ENVIRONMENT: Testing
+          Jwt__Issuer: Sanes.Api
+          Jwt__Audience: Sanes.Client
+          Jwt__ExpirationMinutes: "60"
+          Jwt__Key: deployment-bundle-build-only-key-not-for-runtime
           STAGING_DATABASE_CONNECTION_STRING: ${{ secrets.STAGING_DATABASE_CONNECTION_STRING }}
         run: |
           chmod +x "${EF_BUNDLE_PATH}"
