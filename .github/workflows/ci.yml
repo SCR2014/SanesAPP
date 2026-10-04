@@ -94,3 +94,135 @@ jobs:
           --no-restore
           --configuration Release
           --logger "console;verbosity=normal"
+
+  deploy-staging:
+    name: Deploy to Azure Staging
+    needs:
+      - tests
+
+    if: >
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/develop' &&
+      vars.STAGING_DEPLOYMENT_ENABLED == 'true'
+
+    runs-on: ubuntu-latest
+    environment: staging
+
+    permissions:
+      contents: read
+      id-token: write
+
+    concurrency:
+      group: sanesapp-staging
+      cancel-in-progress: false
+
+    env:
+      DOTNET_VERSION: "10.0.400"
+      API_PUBLISH_PATH: "${{ github.workspace }}/artifacts/api"
+      WEB_PUBLISH_PATH: "${{ github.workspace }}/artifacts/web"
+      EF_BUNDLE_PATH: "${{ github.workspace }}/artifacts/efbundle"
+      API_HEALTH_URL: "https://${{ vars.AZURE_API_APP_NAME }}.azurewebsites.net/health/ready"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore local tools
+        run: dotnet tool restore
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Publish Sanes.Api
+        run: >
+          dotnet publish
+          src/Sanes.Api/Sanes.Api.csproj
+          --configuration Release
+          --no-restore
+          --output "${{ env.API_PUBLISH_PATH }}"
+
+      - name: Publish Sanes.Web
+        run: >
+          dotnet publish
+          src/Sanes.Web/Sanes.Web.csproj
+          --configuration Release
+          --no-restore
+          --output "${{ env.WEB_PUBLISH_PATH }}"
+
+      - name: Build EF migration bundle
+        env:
+          ASPNETCORE_ENVIRONMENT: Testing
+          Jwt__Issuer: Sanes.Api
+          Jwt__Audience: Sanes.Client
+          Jwt__ExpirationMinutes: "60"
+          Jwt__Key: deployment-bundle-build-only-key-not-for-runtime
+        run: >
+          dotnet tool run dotnet-ef migrations bundle
+          --project src/Sanes.Infrastructure/Sanes.Infrastructure.csproj
+          --startup-project src/Sanes.Api/Sanes.Api.csproj
+          --configuration Release
+          --self-contained
+          --target-runtime linux-x64
+          --output "${{ env.EF_BUNDLE_PATH }}"
+          --force
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Apply database migrations
+        env:
+          STAGING_DATABASE_CONNECTION_STRING: ${{ secrets.STAGING_DATABASE_CONNECTION_STRING }}
+        run: |
+          chmod +x "${EF_BUNDLE_PATH}"
+          "${EF_BUNDLE_PATH}" \
+            --connection "${STAGING_DATABASE_CONNECTION_STRING}"
+
+      - name: Deploy Sanes.Api
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ vars.AZURE_API_APP_NAME }}
+          package: ${{ env.API_PUBLISH_PATH }}
+
+      - name: Wait for Sanes.Api readiness
+        shell: bash
+        run: |
+          attempts=18
+
+          for attempt in $(seq 1 "${attempts}"); do
+            echo "Readiness check ${attempt}/${attempts}"
+
+            if curl \
+              --fail \
+              --silent \
+              --show-error \
+              --max-time 15 \
+              "${API_HEALTH_URL}"; then
+              echo
+              echo "Sanes.Api is ready."
+              exit 0
+            fi
+
+            sleep 10
+          done
+
+          echo "Sanes.Api did not become ready in time."
+          exit 1
+
+      - name: Deploy Sanes.Web
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ vars.AZURE_WEB_APP_NAME }}
+          package: ${{ env.WEB_PUBLISH_PATH }}
+
+      - name: Azure logout
+        if: always()
+        run: az logout
