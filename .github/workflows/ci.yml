@@ -122,6 +122,9 @@ jobs:
       WEB_PUBLISH_PATH: "${{ github.workspace }}/artifacts/web"
       EF_BUNDLE_PATH: "${{ github.workspace }}/artifacts/efbundle"
       API_HEALTH_URL: "https://${{ vars.AZURE_API_APP_NAME }}.azurewebsites.net/health/ready"
+      STAGING_RESOURCE_GROUP: "rg-sanes-stg-mxc"
+      STAGING_POSTGRES_SERVER: "psql-sanes-stg-01"
+      STAGING_POSTGRES_FIREWALL_RULE: "github-actions-${{ github.run_id }}-${{ github.run_attempt }}"
 
     steps:
       - name: Checkout repository
@@ -178,6 +181,25 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
+      - name: Allow GitHub runner through PostgreSQL firewall
+        shell: bash
+        run: |
+          RUNNER_IP="$(curl --fail --silent --show-error https://api.ipify.org)"
+
+          if [ -z "${RUNNER_IP}" ]; then
+            echo "Could not determine GitHub runner public IP."
+            exit 1
+          fi
+
+          echo "GitHub runner public IP: ${RUNNER_IP}"
+
+          az postgres flexible-server firewall-rule create \
+            --resource-group "${STAGING_RESOURCE_GROUP}" \
+            --name "${STAGING_POSTGRES_SERVER}" \
+            --rule-name "${STAGING_POSTGRES_FIREWALL_RULE}" \
+            --start-ip-address "${RUNNER_IP}" \
+            --end-ip-address "${RUNNER_IP}"
+
       - name: Apply database migrations
         env:
           STAGING_DATABASE_CONNECTION_STRING: ${{ secrets.STAGING_DATABASE_CONNECTION_STRING }}
@@ -185,6 +207,16 @@ jobs:
           chmod +x "${EF_BUNDLE_PATH}"
           "${EF_BUNDLE_PATH}" \
             --connection "${STAGING_DATABASE_CONNECTION_STRING}"
+
+      - name: Remove GitHub runner PostgreSQL firewall rule
+        if: always()
+        shell: bash
+        run: |
+          az postgres flexible-server firewall-rule delete \
+            --resource-group "${STAGING_RESOURCE_GROUP}" \
+            --name "${STAGING_POSTGRES_SERVER}" \
+            --rule-name "${STAGING_POSTGRES_FIREWALL_RULE}" \
+            --yes || true
 
       - name: Deploy Sanes.Api
         uses: azure/webapps-deploy@v3

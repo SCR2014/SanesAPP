@@ -100,13 +100,42 @@ Esto evita que varias instancias de App Service intenten ejecutar migraciones si
 
 ## Database network requirement
 
-Inicialmente el migration bundle se ejecuta desde un GitHub-hosted runner.
+El migration bundle se ejecuta desde un GitHub-hosted runner.
 
-Ese runner debe poder alcanzar Azure Database for PostgreSQL.
+Para evitar abrir PostgreSQL de forma permanente, el pipeline obtiene la IP pública del runner y crea una regla temporal de firewall limitada exclusivamente a esa dirección.
 
-Si PostgreSQL utiliza acceso privado mediante VNet, deberá usarse un mecanismo que ejecute las migraciones dentro de esa red, por ejemplo un self-hosted runner.
+El flujo es:
 
-No se debe abrir PostgreSQL indiscriminadamente a Internet solo para permitir las migraciones.
+```text
+GitHub runner
+    |
+    +--> obtiene su IP pública
+    |
+    +--> crea regla temporal en PostgreSQL
+    |
+    +--> ejecuta EF migration bundle
+    |
+    +--> elimina la regla temporal
+```
+
+La regla utiliza un nombre único basado en `github.run_id` y `github.run_attempt`.
+
+La eliminación se ejecuta con `if: always()` para intentar retirar la regla incluso si falla la migración o un paso posterior.
+
+La identidad `id-github-sanes-stg` dispone del rol personalizado `Sanes PostgreSQL Firewall Manager` únicamente sobre `psql-sanes-stg-01`.
+
+Ese rol permite exclusivamente:
+
+- leer la configuración del servidor;
+- leer reglas de firewall;
+- crear o actualizar reglas de firewall;
+- eliminar reglas de firewall.
+
+La identidad no recibe permisos generales de administración sobre PostgreSQL.
+
+La base de datos no debe configurarse con una regla global `0.0.0.0 - 255.255.255.255` únicamente para permitir deployments.
+
+Si PostgreSQL utiliza acceso privado mediante VNet en el futuro, este mecanismo deberá sustituirse por un runner o mecanismo de migración con conectividad privada.
 
 ## API readiness
 
