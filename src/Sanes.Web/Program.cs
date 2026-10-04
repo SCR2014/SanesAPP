@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.AspNetCore.HttpOverrides;
+using System.Net;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Options;
 using Sanes.Web.Authentication;
@@ -26,6 +28,29 @@ using Sanes.Web.AppUsers;
 using Sanes.Web.TenantSettings;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.Configure<ForwardedHeadersOptions>(
+    options =>
+    {
+        options.ForwardedHeaders =
+            ForwardedHeaders.XForwardedFor |
+            ForwardedHeaders.XForwardedProto;
+
+        options.KnownIPNetworks.Add(
+            new System.Net.IPNetwork(
+                IPAddress.Parse("::ffff:10.0.0.0"),
+                104));
+
+        options.KnownIPNetworks.Add(
+            new System.Net.IPNetwork(
+                IPAddress.Parse("::ffff:172.16.0.0"),
+                108));
+
+        options.KnownIPNetworks.Add(
+            new System.Net.IPNetwork(
+                IPAddress.Parse("::ffff:192.168.0.0"),
+                112));
+    });
 
 // Razor Components
 builder.Services.AddRazorComponents()
@@ -227,6 +252,8 @@ builder.Services
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
+app.UseForwardedHeaders();
+
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler(

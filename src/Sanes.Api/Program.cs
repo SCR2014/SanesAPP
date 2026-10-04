@@ -1,5 +1,7 @@
 using Azure.Monitor.OpenTelemetry.AspNetCore;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.HttpOverrides;
+using System.Net;
 using Microsoft.EntityFrameworkCore;
 using Sanes.Application.Clients.Repositories;
 using Sanes.Application.CollectionRoutes.Repositories;
@@ -57,6 +59,29 @@ using Sanes.Application.FinancialReports.Exports;
 using Sanes.Infrastructure.FinancialReports.Exports;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.Configure<ForwardedHeadersOptions>(
+    options =>
+    {
+        options.ForwardedHeaders =
+            ForwardedHeaders.XForwardedFor |
+            ForwardedHeaders.XForwardedProto;
+
+        options.KnownIPNetworks.Add(
+            new System.Net.IPNetwork(
+                IPAddress.Parse("::ffff:10.0.0.0"),
+                104));
+
+        options.KnownIPNetworks.Add(
+            new System.Net.IPNetwork(
+                IPAddress.Parse("::ffff:172.16.0.0"),
+                108));
+
+        options.KnownIPNetworks.Add(
+            new System.Net.IPNetwork(
+                IPAddress.Parse("::ffff:192.168.0.0"),
+                112));
+    });
 
 builder.Services.Configure<JwtSettings>(
     builder.Configuration.GetSection(
@@ -496,6 +521,8 @@ if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 }
+
+app.UseForwardedHeaders();
 
 app.UseHttpsRedirection();
 
