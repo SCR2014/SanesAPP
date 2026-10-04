@@ -121,7 +121,6 @@ jobs:
       API_PUBLISH_PATH: "${{ github.workspace }}/artifacts/api"
       WEB_PUBLISH_PATH: "${{ github.workspace }}/artifacts/web"
       EF_BUNDLE_PATH: "${{ github.workspace }}/artifacts/efbundle"
-      API_HEALTH_URL: "https://${{ vars.AZURE_API_APP_NAME }}.azurewebsites.net/health/ready"
       STAGING_RESOURCE_GROUP: "rg-sanes-stg-mxc"
       STAGING_POSTGRES_SERVER: "psql-sanes-stg-01"
       STAGING_POSTGRES_FIREWALL_RULE: "github-actions-${{ github.run_id }}-${{ github.run_attempt }}"
@@ -232,6 +231,20 @@ jobs:
       - name: Wait for Sanes.Api readiness
         shell: bash
         run: |
+          API_DEFAULT_HOSTNAME="$(az webapp show \
+            --resource-group "${STAGING_RESOURCE_GROUP}" \
+            --name "${{ vars.AZURE_API_APP_NAME }}" \
+            --query defaultHostName \
+            --output tsv)"
+
+          if [ -z "${API_DEFAULT_HOSTNAME}" ]; then
+            echo "Could not determine Sanes.Api default hostname."
+            exit 1
+          fi
+
+          API_HEALTH_URL="https://${API_DEFAULT_HOSTNAME}/health/ready"
+          echo "Sanes.Api readiness URL: ${API_HEALTH_URL}"
+
           attempts=18
 
           for attempt in $(seq 1 "${attempts}"); do
