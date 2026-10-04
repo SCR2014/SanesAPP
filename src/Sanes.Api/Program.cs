@@ -100,9 +100,39 @@ if (string.IsNullOrWhiteSpace(jwtSettings.Key))
         "JWT signing key is not configured.");
 }
 
+if (string.IsNullOrWhiteSpace(jwtSettings.Issuer))
+{
+    throw new InvalidOperationException(
+        "JWT issuer is not configured.");
+}
+
+if (string.IsNullOrWhiteSpace(jwtSettings.Audience))
+{
+    throw new InvalidOperationException(
+        "JWT audience is not configured.");
+}
+
+if (jwtSettings.ExpirationMinutes <= 0)
+{
+    throw new InvalidOperationException(
+        "JWT expiration must be greater than zero.");
+}
+
+var defaultConnection =
+    builder.Configuration.GetConnectionString(
+        "DefaultConnection");
+
+if (
+    !builder.Environment.IsEnvironment("Testing") &&
+    string.IsNullOrWhiteSpace(defaultConnection))
+{
+    throw new InvalidOperationException(
+        "ConnectionStrings:DefaultConnection is not configured.");
+}
+
 builder.Services.AddDbContext<SanesDbContext>(options =>
     options.UseNpgsql(
-        builder.Configuration.GetConnectionString("DefaultConnection")));
+        defaultConnection));
 
 builder.Services
     .AddHealthChecks()
